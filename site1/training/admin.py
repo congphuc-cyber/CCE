@@ -47,6 +47,7 @@ role_admin_site = CCEAdminSite(name="admin")
 
 
 class BaseModelAdmin(UnfoldModelAdmin):
+    change_list_template = "training/admin/change_list.html"
     allow_delete = False
     change_list_title = "Danh sách"
     list_per_page = 25

@@ -6,10 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Trung tâm Kỹ thuật Điện toán{% endblock %} | CCE</title>
   <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}">
-  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=sidebar-accordion-20261111">
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
 
   <div class="cce-public-frame">

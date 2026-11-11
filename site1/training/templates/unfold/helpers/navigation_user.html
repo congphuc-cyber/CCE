@@ -1,0 +1,31 @@
+<div class="cce-admin-user-wrap" x-data="{ openUserLinks: false }">
+    <nav class="cce-admin-user-menu" x-cloak x-show="openUserLinks" x-transition x-on:click.outside="openUserLinks = false">
+        {% include "unfold/helpers/theme_switch.html" %}
+
+        {% include "unfold/helpers/language_switch.html" %}
+
+        {% if extra_userlinks %}
+            {{ extra_userlinks }}
+        {% endif %}
+
+        {% include "unfold/helpers/account_links.html" %}
+    </nav>
+
+    <div class="cce-admin-user-card" x-on:click="if (!$event.target.closest('a')) { openUserLinks = !openUserLinks }" x-bind:class="{'is-open': openUserLinks}">
+        <div class="cce-admin-user-identity">
+            {% include "unfold/helpers/avatar.html" with user=request.user %}
+
+            <div class="cce-admin-user-name">
+                {{ request.user.get_full_name|default:request.user.get_username }}
+            </div>
+
+            <span class="material-symbols-outlined cce-admin-user-toggle" aria-hidden="true">
+                unfold_more
+            </span>
+        </div>
+
+        <div class="cce-admin-user-role">
+            {% firstof user_role_label "Chưa được phân vai trò" %}
+        </div>
+    </div>
+</div>

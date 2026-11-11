@@ -1,56 +1,118 @@
 {% extends "training/base_public.html" %}
+{% load ui_components %}
 
 {% block title %}Đăng nhập hệ thống{% endblock %}
-{# Ẩn nút Đăng nhập trên header vì trang này là trang đăng nhập rồi #}
-{% block public_header_actions %}{% endblock %}
+{% block body_class %}cce-login-page{% endblock %}
+{% block public_header_actions %}
+
+{% endblock %}
 
 {% block content %}
-<div class="cce-split-container">
-  <!-- LEFT: Brand panel -->
-  <div class="cce-split-hero">
-    <div class="cce-hero-header">
-      <span class="cce-hero-badge">CỔNG NỘI BỘ</span>
-      <h1 class="cce-hero-title">Đăng nhập<br>tài khoản CCE</h1>
-      <p class="cce-hero-desc">
-        Truy cập hệ thống quản lý đào tạo, thi và cấp chứng chỉ dành cho cán bộ nội bộ.
-      </p>
+<div class="cce-modern-auth-card">
+  <aside class="cce-modern-hero">
+    <div class="cce-modern-hero-body">
+      <span class="cce-modern-kicker">Cổng nội bộ</span>
+      <h1>Đăng nhập<br>tài khoản CCE</h1>
+      <p>Truy cập hệ thống quản lý đào tạo, thi và cấp chứng chỉ dành cho cán bộ nội bộ.</p>
     </div>
 
-    <!-- Role icons strip -->
-    <div class="cce-role-strip">
-      <div class="cce-role-item">
-        <span class="cce-role-icon">🎓</span>
-        <span>Giáo vụ</span>
+    <div class="cce-modern-role-grid" aria-label="Vai trò người dùng">
+      <div class="cce-modern-role-item">
+        <span class="cce-modern-role-label">Giáo vụ</span>
       </div>
-      <div class="cce-role-item">
-        <span class="cce-role-icon">👨‍🏫</span>
-        <span>Giảng viên</span>
+      <div class="cce-modern-role-item">
+        <span class="cce-modern-role-label">Giảng viên</span>
       </div>
-      <div class="cce-role-item">
-        <span class="cce-role-icon">📋</span>
-        <span>Khảo thí</span>
+      <div class="cce-modern-role-item">
+        <span class="cce-modern-role-label">Khảo thí</span>
       </div>
-      <div class="cce-role-item">
-        <span class="cce-role-icon">🔧</span>
-        <span>Quản trị</span>
+      <div class="cce-modern-role-item">
+        <span class="cce-modern-role-label">Quản trị</span>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- RIGHT: Login form -->
-  <div class="cce-split-form-panel">
-    <div class="cce-login-form-header">
-      <div class="cce-login-welcome">Xin chào!</div>
-      <h2 class="cce-login-title">Đăng nhập</h2>
-      <p class="cce-login-sub">Nhập thông tin tài khoản do Trung tâm cấp để tiếp tục.</p>
+  <section class="cce-modern-form-panel">
+    <div class="cce-modern-form-header">
+      <span class="cce-modern-form-eyebrow">Xin chào!</span>
+      <h2>Đăng nhập</h2>
+      <p>Nhập thông tin tài khoản do Trung tâm cấp để tiếp tục.</p>
     </div>
 
-    {% include "training/partials/form_fields.html" with form=form submit_label="Đăng nhập →" %}
+    <form method="post" novalidate class="cce-modern-login-form">
+      {% csrf_token %}
 
-    <div class="cce-login-footer-note">
-      <span class="cce-login-footer-icon">🔒</span>
-      Quên mật khẩu hoặc tài khoản bị khóa? Vui lòng liên hệ <strong>Quản trị viên hệ thống</strong>.
+      {% if form.non_field_errors %}
+        <div class="cce-modern-alert cce-modern-alert-error" role="alert">
+          {% for error in form.non_field_errors %}
+            <span>{{ error }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% for field in form %}
+        <div class="cce-modern-field {% if field.errors %}has-error{% endif %}">
+          <label class="cce-modern-label" for="{{ field.id_for_label }}">
+            {{ field.label }}
+            {% if field.field.required %}<span class="cce-modern-required" aria-hidden="true">*</span>{% endif %}
+          </label>
+
+          <div class="cce-modern-input-shell {% if field.errors %}is-invalid{% endif %}">
+            <span class="cce-modern-input-icon" aria-hidden="true">
+              {% if field.name == "username" %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+              {% else %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3"/></svg>
+              {% endif %}
+            </span>
+            {{ field|accessible_field }}
+            {% if field.name == "password" %}
+              <button type="button" class="cce-toggle-password" aria-label="Hiển thị mật khẩu" data-target="{{ field.id_for_label }}">
+                <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 10.6A2 2 0 0 0 13.4 13.4"/><path d="M9.1 5.5A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.5 17.5 0 0 1-4.1 5.2"/><path d="M6.3 6.3A17.7 17.7 0 0 0 2 12s3.5 7 10 7a11.5 11.5 0 0 0 5.1-1.3"/></svg>
+              </button>
+            {% endif %}
+          </div>
+
+          {% for error in field.errors %}
+            <div class="cce-modern-error" id="{{ field.auto_id }}_error" role="alert">{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+
+      <button type="submit" class="cce-modern-submit-btn">
+        <span>Đăng nhập</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+      </button>
+    </form>
+
+    <div class="cce-modern-note">
+      <span class="cce-modern-note-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      </span>
+      <span>Quên mật khẩu hoặc tài khoản bị khóa?<br>Vui lòng liên hệ <strong>Quản trị viên hệ thống</strong>.</span>
     </div>
-  </div>
+  </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const toggleButtons = document.querySelectorAll('.cce-toggle-password');
+
+    toggleButtons.forEach(function (button) {
+      const targetId = button.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+
+      button.addEventListener('click', function () {
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        button.setAttribute('aria-label', isPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu');
+        button.classList.toggle('is-visible', isPassword);
+      });
+    });
+  });
+</script>
 {% endblock %}

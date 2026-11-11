@@ -26,7 +26,7 @@ from training.forms import (
     VietnameseAuthenticationForm,
 )
 from training.models import AuditLog, ClassAssignment, Enrollment, Learner, RoleFeaturePermission, Teacher, TrainingClass
-from training.navigation import ROLE_MENUS, roles_for_user
+from training.navigation import ROLE_MENUS, group_menu_items, roles_for_user
 
 
 class DemoForm(forms.Form):
@@ -736,6 +736,7 @@ def ui_demo(request):
         {
             'demo_role_label': role_name,
             'demo_sidebar_items': ROLE_MENUS[role_name]['items'],
+            'demo_sidebar_groups': group_menu_items(ROLE_MENUS[role_name]['items']),
             'active_menu': ROLE_MENUS[role_name]['items'][0]['key'],
             'filter_fields': filters,
             'from_date': request.GET.get('from_date', ''),

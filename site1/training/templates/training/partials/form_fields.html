@@ -31,10 +31,9 @@
   {% endfor %}
 
   <div class="cce-form-actions">
-    <button class="cce-btn cce-btn-primary" type="submit">{{ submit_label|default:"Lưu thông tin" }}</button>
+    <button class="cce-btn cce-btn-success" type="submit">{{ submit_label|default:"Lưu thông tin" }}</button>
     {% if cancel_url %}
       <a class="cce-btn cce-btn-secondary" href="{{ cancel_url }}">Hủy bỏ</a>
     {% endif %}
   </div>
 </form>
-

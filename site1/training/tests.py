@@ -1,5 +1,6 @@
 from io import StringIO
 
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import Group, Permission, User
 from django.core.management import call_command
@@ -20,7 +21,7 @@ from training.models import (
     Teacher,
     TrainingClass,
 )
-from training.navigation import ROLE_MENUS, role_for_user
+from training.navigation import FEATURE_ICONS, ROLE_MENUS, group_menu_items, role_for_user
 from training.templatetags.ui_components import status_class
 
 
@@ -66,6 +67,17 @@ class RoleNavigationTests(TestCase):
         self.assertEqual(context["user_role_label"], "Giáo vụ · Giáo viên")
         self.assertIn("courses", keys)
         self.assertIn("my-classes", keys)
+        self.assertEqual(context["sidebar_items"][0]["key"], "dashboard")
+
+    def test_sidebar_items_are_grouped_without_losing_features(self):
+        items = ROLE_MENUS["Giáo vụ"]["items"]
+        groups = group_menu_items(items)
+
+        self.assertEqual([group["key"] for group in groups], ["dashboard", "training"])
+        self.assertEqual(
+            [item["key"] for group in groups for item in group["items"]],
+            [item["key"] for item in items],
+        )
 
     def test_management_command_creates_role_groups_idempotently(self):
         output = StringIO()
@@ -208,6 +220,15 @@ class PhaseThreeTests(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["chart_values"], [])
+        self.assertContains(response, '<section class="cce-nav-group cce-nav-group-static">')
+        self.assertContains(response, '<details class="cce-nav-group">')
+        self.assertContains(response, "material-symbols-outlined cce-nav-icon")
+        self.assertContains(response, "dashboard</span>")
+        self.assertContains(response, "logout-button-shared-20261111")
+        self.assertContains(response, "Quản lý đào tạo")
+        self.assertContains(response, "Hồ sơ & Mật khẩu")
+        self.assertContains(response, "cce-logout-button")
+        self.assertNotContains(response, "Tài khoản</span>")
         self.assertContains(response, "Tổng đăng ký trực tuyến")
         self.assertContains(response, "Chưa có nguồn dữ liệu đăng ký trực tuyến.")
         self.assertContains(response, "Chưa có dữ liệu chứng nhận.")
@@ -276,8 +297,24 @@ class PhaseFourTests(TestCase):
         self.client.force_login(self.education_user)
         response = self.client.get(reverse("admin:training_course_changelist"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="light"')
+        self.assertContains(response, "cce-admin-user-wrap")
+        self.assertContains(response, "cce-admin-user-role")
+        self.assertContains(response, "Giáo vụ")
+        self.assertContains(response, FEATURE_ICONS["courses"])
+        self.assertContains(response, "Quản lý khảo thí")
+        self.assertContains(response, "logout-button-shared-20261111")
+        self.assertContains(response, "Hồ sơ & Mật khẩu")
+        self.assertContains(response, 'class="cce-admin-header-logout"')
+        self.assertContains(response, 'class="cce-logout-button"')
+        self.assertContains(response, 'class="cce-admin-search-actions"')
+        self.assertContains(response, 'class="cce-admin-filter-add"')
         self.assertContains(response, "Danh sách khóa học")
         self.assertContains(response, "Ngưỡng đạt")
+        page = response.content.decode()
+        self.assertLess(page.index("cce-admin-user-wrap"), page.index("nav-sidebar-apps"))
+        self.assertLess(page.index('id="changelist-search"'), page.index('class="addlink'))
+        self.assertNotIn('title="Thêm vào Khóa học"', page[:page.index('id="changelist-search"')])
 
         response = self.client.get(reverse("admin:training_trainingclass_changelist"))
         self.assertEqual(response.status_code, 200)
@@ -285,6 +322,16 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "Xem")
         self.assertContains(response, "training/css/cce-unfold.css")
         self.assertFalse(self.education_user.is_staff)
+
+    def test_admin_dashboard_sidebar_section_is_always_visible(self):
+        sections = settings.UNFOLD["SIDEBAR"]["navigation"]
+        self.assertTrue(sections)
+        self.assertEqual(sections[0]["title"], "Bảng điều khiển")
+        self.assertFalse(sections[0]["collapsible"])
+        self.assertTrue(all(section["collapsible"] for section in sections[1:-1]))
+        self.assertEqual(sections[3]["title"], "Quản lý khảo thí")
+        self.assertEqual(sections[-1]["title"], "")
+        self.assertFalse(sections[-1]["collapsible"])
 
     def test_course_and_class_forms_validate_threshold_schedule_and_capacity(self):
         course_form = CourseAdminForm(data={"name": "Kỹ thuật", "pass_threshold": "101"})
@@ -497,6 +544,7 @@ class PhaseFiveTests(TestCase):
         self.assertEqual(list(account.groups.values_list("name", flat=True)), ["Giáo vụ"])
         account_list = self.client.get(reverse("admin:auth_user_changelist"))
         self.assertContains(account_list, "Sửa")
+        self.assertContains(account_list, "Quản lý khảo thí")
 
         created_log = AuditLog.objects.get(
             action=AuditLog.Action.CREATE,

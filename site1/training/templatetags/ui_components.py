@@ -1,4 +1,5 @@
 from django import template
+from training.navigation import FEATURE_ICONS
 
 register = template.Library()
 
@@ -26,6 +27,16 @@ def get_item(mapping, key):
     if isinstance(mapping, dict):
         return mapping.get(key, "")
     return getattr(mapping, key, "")
+
+
+@register.filter
+def has_active_item(items, active_menu):
+    return any(item.get("key") == active_menu for item in items)
+
+
+@register.filter
+def nav_icon(item_key):
+    return FEATURE_ICONS.get(item_key, "circle")
 
 
 @register.filter

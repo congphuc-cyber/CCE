@@ -1,5 +1,5 @@
 from training.access import all_features, enabled_features_for_user
-from training.navigation import ROLE_MENUS, roles_for_user
+from training.navigation import group_menu_items, roles_for_user
 
 
 def ui_navigation(request):
@@ -14,5 +14,6 @@ def ui_navigation(request):
     return {
         "user_role_label": " · ".join(roles) or "Chưa được phân vai trò",
         "sidebar_items": items,
+        "sidebar_groups": group_menu_items(items),
         "user_roles": roles,
     }

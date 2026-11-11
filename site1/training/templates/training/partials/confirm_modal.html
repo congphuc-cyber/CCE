@@ -2,7 +2,7 @@
   <div class="cce-modal-dialog">
     <div class="cce-modal-header">
       <h3 class="cce-modal-title" id="{{ modal_id }}-title">{{ modal_title|default:"Xác nhận thao tác" }}</h3>
-      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm" onclick="document.getElementById('{{ modal_id }}').classList.remove('is-open')" aria-label="Đóng">&times;</button>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" onclick="document.getElementById('{{ modal_id }}').classList.remove('is-open')" aria-label="Đóng">&times;</button>
     </div>
 
     <form method="post" action="{{ confirm_action|default:'' }}">
@@ -50,4 +50,3 @@
     });
   });
 </script>
-

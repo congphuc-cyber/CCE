@@ -41,6 +41,57 @@ ROLE_MENUS = {
 
 ROLE_ORDER = ("Giáo vụ", "Giáo viên", "Cán bộ thi", "Quản trị viên")
 
+MENU_SECTIONS = (
+    ("dashboard", "Bảng điều khiển"),
+    ("training", "Quản lý đào tạo"),
+    ("teaching", "Giảng dạy"),
+    ("exams", "Quản lý khảo thí"),
+    ("system", "Quản lý hệ thống"),
+    ("other", "Chức năng khác"),
+)
+
+FEATURE_SECTIONS = {
+    "dashboard": "dashboard",
+    "courses": "training",
+    "classes": "training",
+    "teachers": "training",
+    "learners": "training",
+    "certificates": "training",
+    "reports": "training",
+    "my-classes": "teaching",
+    "exam-periods": "exams",
+    "exam-applications": "exams",
+    "exam-rooms": "exams",
+    "exam-scores": "exams",
+    "exam-certificates": "exams",
+    "mybk-export": "exams",
+    "exam-statistics": "exams",
+    "accounts": "system",
+    "permissions": "system",
+    "audit-log": "system",
+}
+
+FEATURE_ICONS = {
+    "dashboard": "dashboard",
+    "courses": "auto_stories",
+    "classes": "groups",
+    "teachers": "person_celebrate",
+    "learners": "badge",
+    "certificates": "workspace_premium",
+    "reports": "analytics",
+    "my-classes": "co_present",
+    "exam-periods": "event",
+    "exam-applications": "assignment",
+    "exam-rooms": "meeting_room",
+    "exam-scores": "grading",
+    "exam-certificates": "workspace_premium",
+    "mybk-export": "upload_file",
+    "exam-statistics": "query_stats",
+    "accounts": "manage_accounts",
+    "permissions": "shield_person",
+    "audit-log": "history",
+}
+
 
 def roles_for_user(user):
     if not getattr(user, "is_authenticated", False):
@@ -54,3 +105,17 @@ def roles_for_user(user):
 
 def role_for_user(user):
     return " · ".join(roles_for_user(user)) or None
+
+
+def group_menu_items(items):
+    items_by_section = {key: [] for key, _ in MENU_SECTIONS}
+    for item in items:
+        section = FEATURE_SECTIONS.get(item["key"], "other")
+        if section in items_by_section:
+            items_by_section[section].append(item)
+
+    return tuple(
+        {"key": key, "title": title, "items": items_by_section[key]}
+        for key, title in MENU_SECTIONS
+        if items_by_section[key]
+    )

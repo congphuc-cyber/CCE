@@ -30,7 +30,7 @@
               <a class="cce-table-btn cce-table-btn-outline" href="{{ row.edit_url }}">Sửa</a>
             {% endif %}
             {% if allow_delete and row.delete_url %}
-              <a class="cce-table-btn table-action-delete" style="color: var(--c-danger);" href="{{ row.delete_url }}">Xóa</a>
+              <a class="cce-table-btn table-action-delete" href="{{ row.delete_url }}">Xóa</a>
             {% endif %}
           </td>
         </tr>
@@ -64,4 +64,3 @@
     </div>
   </nav>
 {% endif %}
-
