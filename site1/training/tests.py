@@ -100,6 +100,10 @@ class FoundationPageTests(TestCase):
         response = self.client.get(reverse("forbidden"))
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, "Không có quyền truy cập", status_code=403)
+        self.assertContains(response, "cce-forbidden-card", status_code=403)
+        self.assertContains(response, "Về trang chủ", status_code=403)
+        self.assertNotContains(response, "Về Bảng điều khiển", status_code=403)
+        self.assertNotContains(response, "Đăng nhập tài khoản khác", status_code=403)
 
     @override_settings(DEBUG=True)
     def test_debug_demo_renders_component_states(self):
@@ -224,7 +228,7 @@ class PhaseThreeTests(TestCase):
         self.assertContains(response, '<details class="cce-nav-group">')
         self.assertContains(response, "material-symbols-outlined cce-nav-icon")
         self.assertContains(response, "dashboard</span>")
-        self.assertContains(response, "roles-delete-ui-20261111")
+        self.assertContains(response, "stat-cards-lighter-20261111")
         self.assertContains(response, "Quản lý đào tạo")
         self.assertContains(response, "Hồ sơ & Mật khẩu")
         self.assertContains(response, "cce-logout-button")

@@ -1,29 +1,20 @@
 {% extends "training/base_public.html" %}
 
 {% block title %}403 · Không có quyền truy cập{% endblock %}
+{% block body_class %}cce-forbidden-page{% endblock %}
 {% block public_header_actions %}{% endblock %}
 
 {% block content %}
-<div class="cce-split-container" style="max-width: 680px;">
-  <div style="padding: var(--space-8); text-align: center; width: 100%;">
-    <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: var(--c-danger-soft); color: var(--c-danger); font-size: 28px; font-weight: bold; margin-bottom: var(--space-4);">
-      403
-    </div>
-
-    <h1 style="font-size: var(--font-size-2xl); margin-bottom: var(--space-2);">Không có quyền truy cập</h1>
-    <p style="color: var(--c-text-muted); font-size: var(--font-size-base); max-width: 440px; margin: 0 auto var(--space-6);">
-      Tài khoản hiện tại của bạn không được cấp quyền để truy cập chức năng này hoặc dữ liệu này thuộc vai trò khác.
-    </p>
-
-    <div style="display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap;">
-      <a class="cce-btn cce-btn-primary" href="{% url 'home' %}">Về trang chủ</a>
-      {% if user.is_authenticated %}
-        <a class="cce-btn cce-btn-secondary" href="{% url 'dashboard' %}">Về Bảng điều khiển</a>
-      {% else %}
-        <a class="cce-btn cce-btn-secondary" href="{% url 'login' %}">Đăng nhập tài khoản khác</a>
-      {% endif %}
-    </div>
-  </div>
-</div>
+<section class="cce-forbidden-card" aria-labelledby="forbidden-title">
+  <div class="cce-forbidden-mark" aria-hidden="true">403</div>
+  <p class="cce-forbidden-eyebrow">Truy cập bị giới hạn</p>
+  <h1 id="forbidden-title">Không có quyền truy cập</h1>
+  <p class="cce-forbidden-description">
+    Tài khoản hiện tại chưa được cấp quyền truy cập chức năng này.
+    Nếu bạn cho rằng đây là nhầm lẫn, vui lòng liên hệ quản trị viên hệ thống.
+  </p>
+  <a class="cce-btn cce-btn-primary cce-forbidden-home" href="{% url 'home' %}">
+    Về trang chủ
+  </a>
+</section>
 {% endblock %}
-

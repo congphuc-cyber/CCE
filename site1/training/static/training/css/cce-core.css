@@ -190,6 +190,96 @@ code, pre {
   padding: 1.25rem 1rem 0.8rem;
 }
 
+.cce-forbidden-page .cce-public-frame {
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(59, 130, 246, 0.07), transparent 42%),
+    linear-gradient(180deg, #F8FAFC 0%, #EEF4FA 100%);
+}
+
+.cce-forbidden-page .cce-public-main {
+  padding: clamp(2rem, 7vh, 5rem) 1rem;
+}
+
+.cce-forbidden-page .cce-public-main > div {
+  display: flex;
+  justify-content: center;
+}
+
+.cce-forbidden-card {
+  position: relative;
+  width: min(100%, 560px);
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 3.5rem);
+  border: 1px solid var(--c-border);
+  border-radius: 20px;
+  background: var(--c-surface);
+  box-shadow: 0 24px 64px rgba(23, 59, 87, 0.1), 0 4px 12px rgba(23, 59, 87, 0.04);
+  text-align: center;
+}
+
+.cce-forbidden-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--c-primary), var(--c-highlight), var(--c-accent));
+  content: "";
+}
+
+.cce-forbidden-mark {
+  display: inline-flex;
+  min-width: 72px;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--c-danger-border);
+  border-radius: 22px;
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
+  font-size: 1.55rem;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.04em;
+}
+
+.cce-forbidden-eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--c-primary-mid);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cce-forbidden-card h1 {
+  margin: 0 0 var(--space-3);
+  color: var(--c-text);
+  font-size: clamp(1.55rem, 4vw, 2rem);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.035em;
+  line-height: var(--line-height-tight);
+}
+
+.cce-forbidden-description {
+  max-width: 42ch;
+  margin: 0 auto var(--space-6);
+  color: var(--c-text-muted);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+}
+
+.cce-forbidden-home {
+  min-height: 46px;
+  padding: 0 1.5rem;
+  box-shadow: 0 8px 18px rgba(23, 59, 87, 0.16);
+}
+
+.cce-forbidden-home:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(23, 59, 87, 0.2);
+}
+
 /* ============================================================
    FOOTER: compact premium corporate footer
    ============================================================ */
@@ -1160,53 +1250,50 @@ code, pre {
 }
 
 .cce-stat-card {
-  --stat-accent: var(--c-primary);
-  --stat-tint: var(--c-primary-soft);
-  background: linear-gradient(135deg, var(--stat-tint), var(--c-surface) 68%);
-  border: 1px solid var(--c-border);
-  border-top: 3px solid var(--stat-accent);
+  --stat-tint: #4F7B94;
+  background-color: var(--stat-tint);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: var(--radius-md);
   padding: var(--space-5);
-  box-shadow: var(--shadow-xs);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 .cce-stat-card:nth-child(2) {
-  --stat-accent: var(--c-accent);
-  --stat-tint: var(--c-accent-soft);
+  --stat-tint: #308279;
 }
 .cce-stat-card:nth-child(3) {
-  --stat-accent: var(--c-highlight);
-  --stat-tint: var(--c-highlight-soft);
+  --stat-tint: #4075CF;
 }
 .cce-stat-card:nth-child(4) {
-  --stat-accent: var(--c-violet);
-  --stat-tint: var(--c-violet-soft);
+  --stat-tint: #7A68C9;
 }
 .cce-stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
 }
 
 .cce-stat-label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--c-text-muted);
+  font-size: calc(var(--font-size-xs) + 2pt);
+  font-weight: var(--font-weight-bold);
+  color: #FFFFFF;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: var(--space-2);
 }
 
 .cce-stat-value {
-  font-size: var(--font-size-3xl);
+  font-size: calc(var(--font-size-3xl) + 2pt);
   font-weight: var(--font-weight-extrabold);
-  color: var(--stat-accent);
+  color: #FFFFFF;
   line-height: 1.1;
   margin-bottom: var(--space-2);
 }
 
 .cce-stat-note {
-  font-size: var(--font-size-xs);
-  color: var(--c-text-subtle);
+  font-size: calc(var(--font-size-xs) + 2pt);
+  font-weight: var(--font-weight-bold);
+  color: #FFFFFF;
+  line-height: var(--line-height-normal);
   margin: 0;
 }
 
