@@ -1,0 +1,62 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Chi tiết nhật ký thao tác{% endblock %}
+{% block breadcrumb_title %}Chi tiết nhật ký{% endblock %}
+{% block page_title %}Chi tiết nhật ký #{{ log_entry.pk }}{% endblock %}
+{% block page_description %}Đối chiếu giá trị cũ và mới của dữ liệu được thay đổi.{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{% url 'audit-log-list' %}">Quay lại danh sách</a>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Card -->
+<section class="cce-card" aria-label="Thông tin thao tác">
+  <dl style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4); margin: 0; font-size: var(--font-size-sm);">
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 2px;">Thời điểm:</dt>
+      <dd style="margin: 0; font-family: var(--font-family-mono); font-weight: var(--font-weight-bold);">{{ log_entry.created_at|date:"d/m/Y H:i:s" }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 2px;">Người thực hiện:</dt>
+      <dd style="margin: 0; font-weight: var(--font-weight-bold);">{{ log_entry.actor.get_full_name|default:log_entry.actor_username }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 2px;">Loại thao tác:</dt>
+      <dd style="margin: 0;"><span class="cce-badge cce-badge-published">{{ log_entry.get_action_display }}</span></dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 2px;">Loại đối tượng:</dt>
+      <dd style="margin: 0;">{{ object_type_label }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 2px;">Đối tượng:</dt>
+      <dd style="margin: 0; font-weight: var(--font-weight-semibold); color: var(--c-primary);">{{ log_entry.object_label }}</dd>
+    </div>
+  </dl>
+
+  {% if log_entry.reason %}
+    <div style="margin-top: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--c-surface-muted); border-radius: var(--radius-md); font-size: var(--font-size-sm);">
+      <strong style="color: var(--c-danger);">Lý do thực hiện:</strong> {{ log_entry.reason }}
+    </div>
+  {% endif %}
+</section>
+
+<!-- Values Diff Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-6);">
+  <section class="cce-card" aria-labelledby="old-val-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="old-val-title" style="color: var(--c-danger);">Giá trị cũ (Trước thay đổi)</h2>
+    </div>
+    <pre style="background: var(--c-surface-muted); padding: var(--space-4); border-radius: var(--radius-md); overflow-x: auto; margin: 0; border: 1px solid var(--c-border);">{{ old_values_json }}</pre>
+  </section>
+
+  <section class="cce-card" aria-labelledby="new-val-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="new-val-title" style="color: var(--c-success);">Giá trị mới (Sau thay đổi)</h2>
+    </div>
+    <pre style="background: var(--c-surface-muted); padding: var(--space-4); border-radius: var(--radius-md); overflow-x: auto; margin: 0; border: 1px solid var(--c-border);">{{ new_values_json }}</pre>
+  </section>
+</div>
+{% endblock %}
+

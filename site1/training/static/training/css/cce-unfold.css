@@ -1,0 +1,218 @@
+/* ==========================================================================
+   CCE Unfold Theme Customization — Concept 3 "Chính Xác"
+   Trung tâm Kỹ thuật Điện toán — ĐH Bách Khoa TP.HCM
+   ========================================================================== */
+
+@import url('tokens.css');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Nunito+Sans:ital,opsz,wght@0,6..12,300..800;1,6..12,300..800&display=swap');
+
+:root {
+  --font-sans: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  font-family: var(--font-sans) !important;
+}
+
+/* ==========================================================================
+   CCE Unfold Sidebar Customization — Light Theme & High-Contrast Hover
+   ========================================================================== */
+
+#nav-sidebar, 
+#nav-sidebar-inner, 
+aside.sidebar, 
+aside[aria-label="Sidebar"],
+div[id="nav-sidebar"] {
+  background-color: var(--c-sidebar-bg) !important;
+  border-right: 1px solid var(--c-sidebar-border) !important;
+  color: var(--c-sidebar-text) !important;
+}
+
+#nav-sidebar-apps {
+  background-color: transparent !important;
+  padding: 8px 6px !important;
+}
+
+/* Sidebar App Titles & Group Headers */
+#nav-sidebar h2,
+#nav-sidebar .group-title,
+#nav-sidebar span[class*="text-xs"][class*="uppercase"],
+aside.sidebar span[class*="text-xs"][class*="uppercase"] {
+  color: var(--c-sidebar-text-muted) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  font-size: 11px !important;
+  padding: 12px 10px 4px !important;
+}
+
+/* Navigation Links inside Unfold Sidebar */
+#nav-sidebar a,
+aside.sidebar a {
+  color: var(--c-sidebar-text) !important;
+  border-radius: 6px !important;
+  transition: all 0.16s ease-in-out !important;
+  border: 1px solid transparent !important;
+  font-weight: 500 !important;
+}
+
+#nav-sidebar a .material-symbols-outlined,
+aside.sidebar a .material-symbols-outlined {
+  color: var(--c-sidebar-text-muted) !important;
+  transition: all 0.16s ease-in-out !important;
+}
+
+/* HOVER STATE: ĐẬM MÀU HƠN RÕ RỆT (TĂNG TƯƠNG PHẢN, DỄ THAO TÁC) */
+#nav-sidebar a:hover,
+aside.sidebar a:hover {
+  background-color: var(--c-sidebar-hover) !important;
+  border-color: var(--c-sidebar-hover-border) !important;
+  color: var(--c-sidebar-hover-text) !important;
+  font-weight: 700 !important;
+  transform: translateX(2px) !important;
+  box-shadow: 0 1px 3px rgba(30, 77, 107, 0.08) !important;
+}
+
+#nav-sidebar a:hover .material-symbols-outlined,
+#nav-sidebar a:hover svg,
+aside.sidebar a:hover .material-symbols-outlined {
+  color: var(--c-primary) !important;
+  transform: scale(1.1) !important;
+}
+
+/* ACTIVE STATE: MÀU XANH CCE ĐẬM RÕ RÀNG */
+#nav-sidebar a[class*="bg-primary"],
+#nav-sidebar a[class*="active"],
+#nav-sidebar a[aria-current="page"],
+aside.sidebar a[aria-current="page"] {
+  background-color: var(--c-sidebar-active) !important;
+  color: var(--c-sidebar-active-text) !important;
+  border-color: var(--c-sidebar-active) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(30, 77, 107, 0.25) !important;
+}
+
+#nav-sidebar a[class*="bg-primary"] .material-symbols-outlined,
+#nav-sidebar a[class*="active"] .material-symbols-outlined,
+#nav-sidebar a[aria-current="page"] .material-symbols-outlined {
+  color: #FFFFFF !important;
+}
+
+/* HOVER Ở TAGS & BADGES ĐẬM MÀU HƠN */
+.cce-badge,
+.badge,
+[class*="badge"],
+[class*="tag"] {
+  transition: all 0.18s ease-in-out !important;
+}
+
+.cce-badge:hover,
+.badge:hover,
+[class*="badge"]:hover,
+[class*="tag"]:hover {
+  filter: brightness(0.82) contrast(1.2) saturate(1.25) !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.14) !important;
+  transform: translateY(-1px) !important;
+  cursor: default;
+}
+
+/* Badge classes inside Unfold table */
+.cce-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.35;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.cce-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cce-badge-open, .status-open {
+  color: var(--c-badge-open-text) !important;
+  background-color: var(--c-badge-open-bg) !important;
+  border-color: var(--c-badge-open-border) !important;
+}
+.cce-badge-closed, .status-closed {
+  color: var(--c-badge-closed-text) !important;
+  background-color: var(--c-badge-closed-bg) !important;
+  border-color: var(--c-badge-closed-border) !important;
+}
+.cce-badge-draft, .status-unpublished {
+  color: var(--c-badge-draft-text) !important;
+  background-color: var(--c-badge-draft-bg) !important;
+  border-color: var(--c-badge-draft-border) !important;
+}
+.cce-badge-published, .status-published {
+  color: var(--c-badge-published-text) !important;
+  background-color: var(--c-badge-published-bg) !important;
+  border-color: var(--c-badge-published-border) !important;
+}
+.cce-badge-new, .status-new {
+  color: var(--c-badge-new-text) !important;
+  background-color: var(--c-badge-new-bg) !important;
+  border-color: var(--c-badge-new-border) !important;
+}
+.cce-badge-valid, .status-valid, .account-status-active {
+  color: var(--c-badge-valid-text) !important;
+  background-color: var(--c-badge-valid-bg) !important;
+  border-color: var(--c-badge-valid-border) !important;
+}
+.cce-badge-duplicate, .status-duplicate, .account-status-locked {
+  color: var(--c-badge-duplicate-text) !important;
+  background-color: var(--c-badge-duplicate-bg) !important;
+  border-color: var(--c-badge-duplicate-border) !important;
+}
+.cce-badge-issued, .status-issued {
+  color: var(--c-badge-issued-text) !important;
+  background-color: var(--c-badge-issued-bg) !important;
+  border-color: var(--c-badge-issued-border) !important;
+}
+.cce-badge-revoked, .status-revoked {
+  color: var(--c-badge-revoked-text) !important;
+  background-color: var(--c-badge-revoked-bg) !important;
+  border-color: var(--c-badge-revoked-border) !important;
+}
+.cce-badge-replaced, .status-replaced {
+  color: var(--c-badge-replaced-text) !important;
+  background-color: var(--c-badge-replaced-bg) !important;
+  border-color: var(--c-badge-replaced-border) !important;
+}
+
+/* Action button inside Unfold table cells */
+.cce-table-btn {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-sm);
+  background: var(--c-primary-soft);
+  color: var(--c-primary) !important;
+  border: 1px solid transparent;
+  text-decoration: none !important;
+  transition: all var(--transition-fast);
+}
+.cce-table-btn:hover {
+  background: var(--c-primary) !important;
+  color: #FFFFFF !important;
+}
+.cce-table-btn-outline {
+  background: transparent;
+  border-color: var(--c-border);
+  color: var(--c-text) !important;
+}
+.cce-table-btn-outline:hover {
+  background: var(--c-surface-muted) !important;
+  color: var(--c-text) !important;
+}
+

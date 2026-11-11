@@ -1,0 +1,75 @@
+<div class="cce-card" style="margin-top: var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">{{ chart_title|default:"Đăng ký trực tuyến theo ngày" }}</h2>
+    {% if date_form %}
+      <form method="get" class="cce-filter-actions" style="margin: 0;">
+        <div style="display: flex; gap: var(--space-2); align-items: center;">
+          <label style="font-size: var(--font-size-xs);" for="{{ date_form.from_date.id_for_label }}">Từ:</label>
+          {{ date_form.from_date }}
+          <label style="font-size: var(--font-size-xs);" for="{{ date_form.to_date.id_for_label }}">Đến:</label>
+          {{ date_form.to_date }}
+          <button class="cce-btn cce-btn-secondary cce-btn-sm" type="submit">Lọc</button>
+        </div>
+        {% if date_form.errors %}
+          <div class="cce-form-error" role="alert" style="margin-top: 4px;">
+            {% for field in date_form %}{% for err in field.errors %}<div>{{ err }}</div>{% endfor %}{% endfor %}
+            {% for err in date_form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+          </div>
+        {% endif %}
+      </form>
+    {% endif %}
+  </div>
+
+  <div style="position: relative; min-height: 260px; display: flex; align-items: center; justify-content: center;">
+    {% if chart_values and chart_values|length > 0 %}
+      <canvas id="{{ chart_id|default:'cce-chart' }}" style="max-height: 280px; width: 100%;"></canvas>
+    {% else %}
+      <div class="cce-empty-state">
+        <p style="margin: 0; font-size: var(--font-size-sm); color: var(--c-text-muted);">
+          Chưa có dữ liệu trong khoảng thời gian này.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if chart_values and chart_values|length > 0 %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const ctx = document.getElementById("{{ chart_id|default:'cce-chart' }}");
+      if (ctx) {
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+              label: "{{ chart_title|default:'Đăng ký trực tuyến' }}",
+              data: {{ chart_values|safe }},
+              borderColor: '#1E4D6B',
+              backgroundColor: 'rgba(30, 77, 107, 0.08)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.3,
+              pointBackgroundColor: '#D4612A',
+              pointRadius: 4,
+              pointHoverRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: { grid: { display: false } },
+              y: { beginAtZero: true, grid: { color: '#E2E8F0' } }
+            }
+          }
+        });
+      }
+    });
+  </script>
+{% endif %}
+

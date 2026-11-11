@@ -1,0 +1,51 @@
+================================================================================
+HỆ THỐNG QUẢN LÝ ĐÀO TẠO, THI VÀ CẤP CHỨNG CHỈ (CCE)
+TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN - TRƯỜNG ĐẠI HỌC BÁCH KHOA ĐHQG-HCM
+================================================================================
+
+1. CÁCH CHẠY DỰ ÁN (CHỈ 1 LỆNH DUY NHẤT)
+--------------------------------------------------------------------------------
+Từ thư mục gốc dự án (lmssss), mở PowerShell và chạy:
+    .\scripts\run.ps1
+
+Hoặc nếu muốn khởi tạo lại môi trường và dữ liệu mẫu:
+    .\scripts\setup.ps1 -Demo
+    .\scripts\run.ps1
+
+Hoặc chạy thủ công qua manage.py:
+    cd site1
+    ..\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8001
+
+Các địa chỉ truy cập:
+- Trang chủ:              http://127.0.0.1:8001/
+- Đăng nhập:              http://127.0.0.1:8001/login/
+- Khu vực Quản trị Admin: http://127.0.0.1:8001/admin/
+- Dashboard thống kê:     http://127.0.0.1:8001/dashboard/
+- Kiểm tra Design Tokens: http://127.0.0.1:8001/ui-demo/
+
+
+2. DANH SÁCH TÀI KHOẢN THỬ NGHIỆM THEO VAI TRÒ
+--------------------------------------------------------------------------------
+Tất cả tài khoản dưới đây đều dùng chung mật khẩu:
+    CCEtest@2026!
+
+[1] Quản trị viên (Superuser / Quản trị hệ thống):
+    - Tài khoản chuẩn mới: cce_admin
+    - Tài khoản kế thừa:   cce_tester_d9e8db
+    -> Có toàn quyền hệ thống, xem Audit Log (giá trị cũ/mới), quản trị phân quyền vai trò.
+
+[2] Giáo vụ (Đào tạo & Quản lý lớp):
+    - Tài khoản chuẩn mới: cce_giaovu
+    - Tài khoản kế thừa:   cce_giaovu_test_1461
+    -> Quản lý khóa học, lớp học, học viên, ghi danh, phân công giáo viên, dashboard thống kê.
+
+[3] Giáo viên (Giảng dạy):
+    - Tài khoản chuẩn mới: cce_giaovien
+    - Tài khoản kế thừa:   cce_giaovien_test_65df
+    -> Xem danh sách lớp giảng dạy của mình (/my-classes/), lịch dạy, sĩ số, danh sách học viên.
+
+[4] Cán bộ thi (Khảo thí & Điểm):
+    - Tài khoản chuẩn mới: cce_canbothi
+    - Tài khoản kế thừa:   cce_canbothi_test_0656
+    -> Quản lý lịch thi, phòng thi, công bố kết quả, cấp chứng chỉ.
+================================================================================

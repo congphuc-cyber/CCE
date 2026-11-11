@@ -1,0 +1,56 @@
+{% extends "training/base_public.html" %}
+
+{% block title %}Đăng nhập hệ thống{% endblock %}
+{# Ẩn nút Đăng nhập trên header vì trang này là trang đăng nhập rồi #}
+{% block public_header_actions %}{% endblock %}
+
+{% block content %}
+<div class="cce-split-container">
+  <!-- LEFT: Brand panel -->
+  <div class="cce-split-hero">
+    <div class="cce-hero-header">
+      <span class="cce-hero-badge">CỔNG NỘI BỘ</span>
+      <h1 class="cce-hero-title">Đăng nhập<br>tài khoản CCE</h1>
+      <p class="cce-hero-desc">
+        Truy cập hệ thống quản lý đào tạo, thi và cấp chứng chỉ dành cho cán bộ nội bộ.
+      </p>
+    </div>
+
+    <!-- Role icons strip -->
+    <div class="cce-role-strip">
+      <div class="cce-role-item">
+        <span class="cce-role-icon">🎓</span>
+        <span>Giáo vụ</span>
+      </div>
+      <div class="cce-role-item">
+        <span class="cce-role-icon">👨‍🏫</span>
+        <span>Giảng viên</span>
+      </div>
+      <div class="cce-role-item">
+        <span class="cce-role-icon">📋</span>
+        <span>Khảo thí</span>
+      </div>
+      <div class="cce-role-item">
+        <span class="cce-role-icon">🔧</span>
+        <span>Quản trị</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Login form -->
+  <div class="cce-split-form-panel">
+    <div class="cce-login-form-header">
+      <div class="cce-login-welcome">Xin chào!</div>
+      <h2 class="cce-login-title">Đăng nhập</h2>
+      <p class="cce-login-sub">Nhập thông tin tài khoản do Trung tâm cấp để tiếp tục.</p>
+    </div>
+
+    {% include "training/partials/form_fields.html" with form=form submit_label="Đăng nhập →" %}
+
+    <div class="cce-login-footer-note">
+      <span class="cce-login-footer-icon">🔒</span>
+      Quên mật khẩu hoặc tài khoản bị khóa? Vui lòng liên hệ <strong>Quản trị viên hệ thống</strong>.
+    </div>
+  </div>
+</div>
+{% endblock %}

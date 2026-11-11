@@ -1,0 +1,69 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Trung tâm Kỹ thuật Điện toán{% endblock %} | CCE</title>
+  <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
+
+  <div class="cce-public-frame">
+    <header class="cce-public-header" role="banner">
+      <a class="cce-brand" href="{% url 'home' %}" aria-label="Trang chủ Trung tâm Kỹ thuật Điện toán">
+        <span class="cce-brand-badge" aria-hidden="true">CCE</span>
+        <div class="cce-brand-info">
+          <span class="cce-brand-title">Trung tâm Kỹ thuật Điện toán</span>
+          <span class="cce-brand-sub">Trường Đại học Bách Khoa — ĐHQG-HCM</span>
+        </div>
+      </a>
+
+
+      <nav class="cce-public-nav" aria-label="Tài khoản">
+        {% block public_header_actions %}
+          {% if user.is_authenticated %}
+            <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'dashboard' %}">Bảng điều khiển</a>
+          {% else %}
+            <a class="cce-btn cce-btn-primary cce-btn-sm" href="{% url 'login' %}">Đăng nhập</a>
+          {% endif %}
+        {% endblock %}
+      </nav>
+    </header>
+
+    <main class="cce-public-main" id="main-content" role="main">
+      <div style="width: 100%; max-width: 960px;">
+        {% include "training/partials/messages.html" %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+    <footer class="cce-public-footer" role="contentinfo">
+      <div class="cce-footer-inner">
+        <!-- Col 1: Identity -->
+        <div class="cce-footer-col cce-footer-brand-col">
+          <div class="cce-footer-brand">
+            <span class="cce-brand-badge cce-brand-badge-sm" aria-hidden="true">CCE</span>
+            <div>
+              <div class="cce-footer-brand-name">Trung tâm Kỹ thuật Điện toán</div>
+              <div class="cce-footer-brand-sub">ĐH Bách Khoa ĐHQG-HCM</div>
+            </div>
+          </div>
+          <p class="cce-footer-tagline">Đào tạo kỹ năng công nghệ, tổ chức khảo thí và cấp chứng chỉ chuẩn quốc tế.</p>
+        </div>
+
+      </div>
+      <div class="cce-footer-bottom">
+        <span>© {% now "Y" %} Trung tâm Kỹ thuật Điện toán — Trường Đại học Bách Khoa ĐHQG-HCM</span>
+        <span class="cce-footer-sep" aria-hidden="true">·</span>
+        <span>Hệ thống Quản lý Đào tạo, Thi & Cấp chứng chỉ</span>
+      </div>
+    </footer>
+  </div>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

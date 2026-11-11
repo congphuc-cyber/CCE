@@ -1,0 +1,128 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ page_title|default:"Quản lý đào tạo và thi" }}{% endblock %} | CCE</title>
+  <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
+
+  <div class="cce-internal-frame">
+    <!-- Sidebar -->
+    <aside class="cce-sidebar" aria-label="Menu chức năng">
+      <div class="cce-sidebar-header">
+        <a class="cce-brand" href="{% url 'home' %}">
+          <span class="cce-brand-badge" aria-hidden="true">CCE</span>
+          <div class="cce-brand-info">
+            <span class="cce-brand-title">Trung tâm KT Điện toán</span>
+            <span class="cce-brand-sub">ĐH Bách Khoa TP.HCM</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="cce-sidebar-user">
+        <div class="cce-user-name">
+          {% if user.is_authenticated %}{{ user.get_full_name|default:user.username }}{% else %}Khách thử nghiệm{% endif %}
+        </div>
+        <div class="cce-user-role">
+          Vai trò: {% firstof demo_role_label user_role_label "Chưa phân vai trò" %}
+        </div>
+      </div>
+
+      <nav class="cce-sidebar-nav">
+        <div class="cce-nav-group-title">Chức năng khả dụng</div>
+        {% for item in demo_sidebar_items|default:sidebar_items %}
+          {% if item.url_name %}
+            {% url item.url_name as item_url %}
+            {% if item_url %}
+              <a class="cce-nav-link {% if active_menu == item.key %}is-active{% endif %}" href="{{ item_url }}">
+                <span>{{ item.label }}</span>
+              </a>
+            {% else %}
+              <span class="cce-nav-link" style="opacity: 0.5; cursor: not-allowed;">
+                <span>{{ item.label }}</span>
+              </span>
+            {% endif %}
+          {% else %}
+            <span class="cce-nav-link" style="opacity: 0.5; cursor: not-allowed;">
+              <span>{{ item.label }}</span>
+            </span>
+          {% endif %}
+        {% empty %}
+          <div style="padding: var(--space-4) var(--space-5); font-size: var(--font-size-xs); color: var(--c-sidebar-text-muted);">
+            Tài khoản chưa có chức năng được kích hoạt.
+          </div>
+        {% endfor %}
+
+        <div class="cce-nav-group-title" style="margin-top: var(--space-4);">Tài khoản</div>
+        <a class="cce-nav-link {% if active_menu == 'profile' %}is-active{% endif %}" href="{% url 'profile' %}">
+          <span>Hồ sơ & Mật khẩu</span>
+        </a>
+      </nav>
+
+      <div class="cce-sidebar-footer">
+        {% if user.is_authenticated %}
+          <form action="{% url 'logout' %}" method="post" style="margin: 0;">
+            {% csrf_token %}
+            <button class="cce-btn cce-btn-secondary cce-btn-sm cce-btn-block" type="submit">Đăng xuất</button>
+          </form>
+        {% else %}
+          <a class="cce-btn cce-btn-primary cce-btn-sm cce-btn-block" href="{% url 'login' %}">Đăng nhập</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="cce-content-area">
+      <header class="cce-topbar">
+        <nav class="cce-breadcrumbs" aria-label="Đường dẫn điều hướng">
+          <a href="{% url 'home' %}">Trang chủ</a>
+          {% for crumb in breadcrumbs %}
+            <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
+            {% if crumb.url %}
+              <a href="{{ crumb.url }}">{{ crumb.label }}</a>
+            {% else %}
+              <span class="cce-breadcrumbs-current" aria-current="page">{{ crumb.label }}</span>
+            {% endif %}
+          {% empty %}
+            <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
+            <span class="cce-breadcrumbs-current" aria-current="page">{% block breadcrumb_title %}{{ page_title|default:"Bảng điều khiển" }}{% endblock %}</span>
+          {% endfor %}
+        </nav>
+
+        <div style="display: flex; align-items: center; gap: var(--space-3);">
+          {% block topbar_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <main class="cce-page-container" id="main-content" role="main">
+        {% include "training/partials/messages.html" %}
+
+        <div class="cce-page-header">
+          <div class="cce-page-title-block">
+            <h1>{% block page_title %}{{ page_title|default:"Bảng điều khiển" }}{% endblock %}</h1>
+            {% block page_description %}
+              {% if page_description %}
+                <p class="cce-page-subtitle">{{ page_description }}</p>
+              {% endif %}
+            {% endblock %}
+          </div>
+          <div class="cce-page-actions">
+            {% block page_actions %}{% endblock %}
+          </div>
+        </div>
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
+

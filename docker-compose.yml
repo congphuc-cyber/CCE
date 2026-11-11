@@ -1,0 +1,26 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cce_training_app
+    ports:
+      - "${PORT:-8001}:8001"
+    environment:
+      - DJANGO_SETTINGS_MODULE=site1.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-cce-dev-insecure-key-docker-local-2026}
+      - DJANGO_ENV=${DJANGO_ENV:-development}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-127.0.0.1,localhost,0.0.0.0}
+      - PORT=8001
+      - BOOTSTRAP_SUPERUSER_USERNAME=${BOOTSTRAP_SUPERUSER_USERNAME:-cce_admin}
+      - BOOTSTRAP_SUPERUSER_PASSWORD=${BOOTSTRAP_SUPERUSER_PASSWORD:-CCEtest@2026!}
+      - BOOTSTRAP_SUPERUSER_EMAIL=${BOOTSTRAP_SUPERUSER_EMAIL:-admin@cce.edu.vn}
+      - BOOTSTRAP_EXTRA_ARGS=${BOOTSTRAP_EXTRA_ARGS:---demo}
+    volumes:
+      - cce_db_data:/app/site1/data
+      - cce_media_data:/app/site1/media
+    restart: unless-stopped
+
+volumes:
+  cce_db_data:
+  cce_media_data:

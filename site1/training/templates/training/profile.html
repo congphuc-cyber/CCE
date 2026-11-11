@@ -1,0 +1,47 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Hồ sơ cá nhân{% endblock %}
+{% block breadcrumb_title %}Hồ sơ cá nhân{% endblock %}
+{% block page_title %}Hồ sơ tài khoản & Bảo mật{% endblock %}
+{% block page_description %}Xem thông tin định danh và cập nhật mật khẩu đăng nhập.{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-6);">
+  <!-- Account Info Card -->
+  <section class="cce-card" aria-labelledby="acc-info-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="acc-info-title">Thông tin tài khoản</h2>
+    </div>
+
+    <dl style="display: grid; grid-template-columns: 140px 1fr; gap: var(--space-3) var(--space-4); margin: 0; font-size: var(--font-size-sm);">
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Họ và tên:</dt>
+      <dd style="margin: 0; font-weight: var(--font-weight-bold);">{{ request.user.get_full_name|default:"Chưa cập nhật" }}</dd>
+
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Tên đăng nhập:</dt>
+      <dd style="margin: 0; font-family: var(--font-family-mono);">{{ request.user.get_username }}</dd>
+
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Địa chỉ email:</dt>
+      <dd style="margin: 0;">{{ request.user.email|default:"Chưa cập nhật" }}</dd>
+
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Vai trò hệ thống:</dt>
+      <dd style="margin: 0;">
+        <span class="cce-badge cce-badge-published">{{ profile_role_label }}</span>
+      </dd>
+    </dl>
+  </section>
+
+  <!-- Password Change Card -->
+  <section class="cce-card" aria-labelledby="pwd-change-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="pwd-change-title">Đổi mật khẩu</h2>
+    </div>
+
+    <p style="font-size: var(--font-size-xs); color: var(--c-text-muted); margin-bottom: var(--space-4);">
+      Nhập mật khẩu hiện tại, sau đó nhập mật khẩu mới với tối thiểu 8 ký tự và độ phức tạp an toàn.
+    </p>
+
+    {% include "training/partials/form_fields.html" with form=form submit_label="Lưu thay đổi" cancel_url=request.path %}
+  </section>
+</div>
+{% endblock %}
+

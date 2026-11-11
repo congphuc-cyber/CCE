@@ -1,0 +1,125 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Kiểm tra giao diện (UI Demo){% endblock %}
+{% block breadcrumb_title %}Kiểm tra giao diện{% endblock %}
+{% block page_title %}Thư viện thành phần dùng chung{% endblock %}
+{% block page_description %}Trang kiểm tra trực quan các thành phần giao diện theo Concept 3 "Chính Xác" (Precision & Clarity).{% endblock %}
+
+{% block content %}
+<!-- 1. Filter Bar -->
+<section class="cce-card" aria-labelledby="demo-filters-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-filters-title">1. Thanh lọc danh sách & Tìm kiếm</h2>
+  </div>
+  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields add_url="#" %}
+</section>
+
+<!-- 2. Data Table with Data -->
+<section class="cce-card" aria-labelledby="demo-table-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-table-title">2. Bảng dữ liệu có phân trang & hành động Xóa</h2>
+  </div>
+  {% include "training/partials/data_table.html" with columns=demo_columns rows=demo_rows page_obj=demo_page_obj allow_delete=demo_allow_delete %}
+</section>
+
+<!-- 3. Empty Table State -->
+<section class="cce-card" aria-labelledby="demo-empty-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-empty-title">3. Trạng thái bảng rỗng</h2>
+  </div>
+  {% include "training/partials/data_table.html" with columns=demo_columns rows=empty_rows %}
+</section>
+
+<!-- 4. Messages & Alerts -->
+<section class="cce-card" aria-labelledby="demo-alerts-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-alerts-title">4. Thông báo hệ thống (Alerts)</h2>
+  </div>
+  <div class="cce-alert cce-alert-success" role="status">
+    <strong>Thành công:</strong> Thông tin lớp học và phân công đã được cập nhật an toàn.
+  </div>
+  <div class="cce-alert cce-alert-danger" role="alert">
+    <strong>Lỗi:</strong> Không thể lưu biểu mẫu vì dữ liệu nhập vào chưa hợp lệ.
+  </div>
+  <div class="cce-alert cce-alert-warning" role="alert">
+    <strong>Cảnh báo:</strong> Lớp học sắp đạt sĩ số tối đa quy định.
+  </div>
+  <div class="cce-alert cce-alert-info" role="status">
+    <strong>Thông tin:</strong> Dữ liệu kỳ thi đã được đồng bộ từ cổng đào tạo.
+  </div>
+</section>
+
+<!-- 5. 10 Status Badges -->
+<section class="cce-card" aria-labelledby="demo-badges-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-badges-title">5. Toàn bộ 10 nhãn trạng thái nghiệp vụ</h2>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center;">
+    {% include "training/partials/status_badge.html" with status="Đang mở" %}
+    {% include "training/partials/status_badge.html" with status="Đã đóng" %}
+    {% include "training/partials/status_badge.html" with status="Chưa công bố" %}
+    {% include "training/partials/status_badge.html" with status="Đã công bố" %}
+    {% include "training/partials/status_badge.html" with status="Mới" %}
+    {% include "training/partials/status_badge.html" with status="Hợp lệ" %}
+    {% include "training/partials/status_badge.html" with status="Trùng" %}
+    {% include "training/partials/status_badge.html" with status="Đã cấp" %}
+    {% include "training/partials/status_badge.html" with status="Thu hồi" %}
+    {% include "training/partials/status_badge.html" with status="Đã thay thế" %}
+  </div>
+</section>
+
+<!-- 6. Forms: Normal & Invalid -->
+<section class="cce-card" aria-labelledby="demo-forms-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-forms-title">6. Biểu mẫu dùng chung</h2>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-6);">
+    <div style="background: var(--c-surface-muted); padding: var(--space-5); border-radius: var(--radius-md);">
+      <h3 style="font-size: var(--font-size-md); margin-bottom: var(--space-4);">Biểu mẫu mặc định</h3>
+      {% include "training/partials/form_fields.html" with form=normal_form cancel_url="#" %}
+    </div>
+
+    <div style="background: var(--c-surface-muted); padding: var(--space-5); border-radius: var(--radius-md);">
+      <h3 style="font-size: var(--font-size-md); margin-bottom: var(--space-4); color: var(--c-danger);">Biểu mẫu có lỗi</h3>
+      {% include "training/partials/form_fields.html" with form=invalid_form cancel_url="#" %}
+    </div>
+  </div>
+</section>
+
+<!-- 7. Stats & Chart -->
+<section class="cce-card" aria-labelledby="demo-stats-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-stats-title">7. Thẻ số liệu và biểu đồ</h2>
+  </div>
+  <div class="cce-stat-grid">
+    {% include "training/partials/stat_card.html" with stat_label="Hồ sơ dự thi" stat_value="128" stat_note="Trong đợt thi hiện tại" %}
+    {% include "training/partials/stat_card.html" with stat_label="Chứng chỉ đã cấp" stat_value="96" stat_note="Cập nhật trong tháng" %}
+    {% include "training/partials/stat_card.html" with stat_label="Lớp đang mở" stat_value="12" stat_note="Trên toàn Trung tâm" %}
+  </div>
+
+  {% include "training/partials/daily_chart.html" with chart_id=chart_id chart_title=chart_title chart_labels=chart_labels chart_values=chart_values from_date=from_date to_date=to_date %}
+</section>
+
+<!-- 8. Confirmation Modal with Mandatory Reason -->
+<section class="cce-card" aria-labelledby="demo-modal-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-modal-title">8. Hộp thoại xác nhận có ô lý do bắt buộc</h2>
+  </div>
+  <p style="font-size: var(--font-size-sm); color: var(--c-text-muted);">
+    Thao tác nhạy cảm (như thu hồi chứng chỉ, đóng lớp, xóa phân công) bắt buộc người dùng nhập lý do để ghi nhận vào nhật ký thao tác:
+  </p>
+  <button class="cce-btn cce-btn-danger" type="button" data-bs-target="#demo-confirm">Thu hồi chứng chỉ</button>
+  {% include "training/partials/confirm_modal.html" with modal_id="demo-confirm" modal_title="Xác nhận thu hồi chứng chỉ" modal_message="Bạn có chắc chắn muốn thu hồi chứng chỉ này? Thao tác này không thể hoàn tác." reason_required=True confirm_label="Xác nhận thu hồi" %}
+</section>
+
+<!-- 9. Loading Spinner State -->
+<section class="cce-card" aria-labelledby="demo-loading-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="demo-loading-title">9. Trạng thái tải dữ liệu (Loading State)</h2>
+  </div>
+  <div style="display: flex; align-items: center; gap: var(--space-3); color: var(--c-text-muted); font-size: var(--font-size-sm);" role="status" aria-live="polite" aria-busy="true">
+    <span class="cce-spinner" aria-hidden="true"></span>
+    <span>Đang tải dữ liệu...</span>
+  </div>
+</section>
+{% endblock %}

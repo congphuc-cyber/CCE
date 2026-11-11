@@ -1,0 +1,184 @@
+/* ==========================================================================
+   CCE Design Tokens — Concept 3 "Chính Xác" (Precision & Clarity)
+   Trung tâm Kỹ thuật Điện toán — ĐH Bách Khoa TP.HCM
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Primary Brand — Thạch anh sẫm / Deep Slate Blue */
+  --c-primary: #1E4D6B;
+  --c-primary-mid: #2D6A93;
+  --c-primary-hover: #163B54;
+  --c-primary-light: #4A8EB8;
+  --c-primary-soft: #E8F4FD;
+  --c-on-primary: #FFFFFF;
+
+  /* Accent — Đất nung / Terracotta Amber */
+  --c-accent: #D4612A;
+  --c-accent-hover: #B84E1C;
+  --c-accent-soft: #FDF0EA;
+  --c-on-accent: #FFFFFF;
+
+  /* Surfaces & Backgrounds */
+  --c-bg: #F7F8FA;
+  --c-surface: #FFFFFF;
+  --c-surface-muted: #EFF2F6;
+  --c-surface-card: #FFFFFF;
+  --c-surface-subtle: #F1F5F9;
+
+  /* Sidebar Theme (Admin & Internal) - Light, High Clarity, Rich Tactile Hover */
+  --c-sidebar-bg: #FFFFFF;
+  --c-sidebar-surface: #F8FAFC;
+  --c-sidebar-user-bg: #F1F5F9;
+  --c-sidebar-border: #E2E8F0;
+  --c-sidebar-hover: #E0EEF8;
+  --c-sidebar-hover-border: #9DC4DF;
+  --c-sidebar-hover-text: #0B2538;
+  --c-sidebar-active: #1E4D6B;
+  --c-sidebar-active-text: #FFFFFF;
+  --c-sidebar-text: #334155;
+  --c-sidebar-text-dark: #0F172A;
+  --c-sidebar-text-muted: #64748B;
+
+  /* Typography Colors */
+  --c-text: #111827;
+  --c-text-muted: #4B5563;
+  --c-text-subtle: #6B7280;
+  --c-text-inverse: #FFFFFF;
+
+  /* Borders & Dividers */
+  --c-border: #E2E8F0;
+  --c-border-subtle: #F1F5F9;
+  --c-border-strong: #CBD5E1;
+
+  /* Focus & Interactive */
+  --c-focus-ring: rgba(30, 77, 107, 0.35);
+  --c-focus-border: #1E4D6B;
+
+  /* Semantic Feedback Colors */
+  --c-danger: #C0392B;
+  --c-danger-hover: #A93226;
+  --c-danger-soft: #FDF2F2;
+  --c-danger-border: #F8B4B4;
+  --c-on-danger: #FFFFFF;
+
+  --c-success: #1A6E39;
+  --c-success-hover: #14552C;
+  --c-success-soft: #ECFBF1;
+  --c-success-border: #A7F3D0;
+  --c-on-success: #FFFFFF;
+
+  --c-warning: #B05E00;
+  --c-warning-hover: #964F00;
+  --c-warning-soft: #FFF3E0;
+  --c-warning-border: #FED7AA;
+  --c-on-warning: #FFFFFF;
+
+  --c-info: #0E6EB2;
+  --c-info-hover: #0B568B;
+  --c-info-soft: #E0F2FE;
+  --c-info-border: #BAE6FD;
+  --c-on-info: #FFFFFF;
+
+  /* 10 Distinct Status Badges (Strictly separated from Primary) */
+  --c-badge-open-text: #1A6E39;
+  --c-badge-open-bg: #ECFBF1;
+  --c-badge-open-border: #A7F3D0;
+
+  --c-badge-closed-text: #5C3D96;
+  --c-badge-closed-bg: #F3EEFF;
+  --c-badge-closed-border: #DDD6FE;
+
+  --c-badge-draft-text: #57534E;
+  --c-badge-draft-bg: #F5F5F4;
+  --c-badge-draft-border: #E7E5E4;
+
+  --c-badge-published-text: #0E6EB2;
+  --c-badge-published-bg: #E0F2FE;
+  --c-badge-published-border: #BAE6FD;
+
+  --c-badge-new-text: #B05E00;
+  --c-badge-new-bg: #FFF3E0;
+  --c-badge-new-border: #FED7AA;
+
+  --c-badge-valid-text: #1A6E39;
+  --c-badge-valid-bg: #ECFBF1;
+  --c-badge-valid-border: #A7F3D0;
+
+  --c-badge-duplicate-text: #B82C2C;
+  --c-badge-duplicate-bg: #FFEBEB;
+  --c-badge-duplicate-border: #FECACA;
+
+  --c-badge-issued-text: #0E6EB2;
+  --c-badge-issued-bg: #E0F2FE;
+  --c-badge-issued-border: #BAE6FD;
+
+  --c-badge-revoked-text: #B82C2C;
+  --c-badge-revoked-bg: #FFEBEB;
+  --c-badge-revoked-border: #FECACA;
+
+  --c-badge-replaced-text: #57534E;
+  --c-badge-replaced-bg: #F5F5F4;
+  --c-badge-replaced-border: #E7E5E4;
+
+  /* Typography Scales */
+  --font-family-sans: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-base: 0.9375rem; /* 15px */
+  --font-size-md: 1rem;        /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.375rem;    /* 22px */
+  --font-size-2xl: 1.625rem;   /* 26px */
+  --font-size-3xl: 2rem;       /* 32px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+
+  /* Spacing Scale (4, 8, 12, 16, 20, 24, 32, 48, 64) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+  --shadow-card: 0 2px 8px rgba(14, 30, 37, 0.06), 0 1px 2px rgba(14, 30, 37, 0.04);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+  }
+}
+

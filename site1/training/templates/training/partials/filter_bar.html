@@ -1,0 +1,30 @@
+<div class="cce-filter-bar">
+  <form method="get" style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; width: 100%;">
+    {% for filter in filter_fields %}
+      <div class="cce-filter-item">
+        <label for="filter-{{ filter.name }}">{{ filter.label }}</label>
+        {% if filter.options %}
+          <select class="cce-select" id="filter-{{ filter.name }}" name="{{ filter.name }}">
+            <option value="">{{ filter.placeholder|default:"Tất cả" }}</option>
+            {% for opt in filter.options %}
+              <option value="{{ opt.value }}" {% if filter.value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        {% elif filter.type == 'date' %}
+          <input class="cce-input" type="date" id="filter-{{ filter.name }}" name="{{ filter.name }}" value="{{ filter.value }}">
+        {% else %}
+          <input class="cce-input" type="text" id="filter-{{ filter.name }}" name="{{ filter.name }}" placeholder="{{ filter.placeholder|default:'' }}" value="{{ filter.value }}">
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="cce-filter-actions">
+      <button class="cce-btn cce-btn-primary" type="submit">Áp dụng lọc</button>
+      <a class="cce-btn cce-btn-secondary" href="?">Đặt lại</a>
+      {% if add_url %}
+        <a class="cce-btn cce-btn-accent" href="{{ add_url }}" style="margin-left: auto;">+ Thêm mới</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+

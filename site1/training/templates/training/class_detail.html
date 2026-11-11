@@ -1,0 +1,95 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}{{ training_class.name }}{% endblock %}
+{% block breadcrumb_title %}{{ training_class.name }}{% endblock %}
+{% block page_title %}{{ training_class.name }}{% endblock %}
+{% block page_description %}Thông tin chi tiết lớp học, danh sách giảng viên phụ trách và học viên ghi danh.{% endblock %}
+
+{% block page_actions %}
+  {% if can_manage %}
+    <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{{ class_change_url }}">Sửa thông tin</a>
+    <a class="cce-btn cce-btn-outline cce-btn-sm" href="{{ assignment_url }}">Phân công giáo viên</a>
+
+    {% if training_class.status == "open" %}
+      {% if can_enroll %}
+        <a class="cce-btn cce-btn-primary cce-btn-sm" href="{{ enrollment_url }}">Ghi danh học viên</a>
+      {% else %}
+        <button class="cce-btn cce-btn-secondary cce-btn-sm" type="button" disabled>Đã đủ sĩ số</button>
+      {% endif %}
+      <button class="cce-btn cce-btn-danger cce-btn-sm" type="button" data-bs-target="#close-class-modal">Đóng lớp</button>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Class Information Card -->
+<section class="cce-card" aria-labelledby="class-info-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="class-info-title">Thông tin lớp học</h2>
+    {% include "training/partials/status_badge.html" with status=training_class.get_status_display %}
+  </div>
+
+  <dl style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin: 0; font-size: var(--font-size-sm);">
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 4px;">Khóa học:</dt>
+      <dd style="margin: 0; font-weight: var(--font-weight-bold); font-size: var(--font-size-md); color: var(--c-primary);">{{ training_class.course.name }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 4px;">Hình thức học:</dt>
+      <dd style="margin: 0;">{{ training_class.get_learning_format_display }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 4px;">Lịch học:</dt>
+      <dd style="margin: 0;">{{ training_class.schedule }}</dd>
+    </div>
+    <div>
+      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted); margin-bottom: 4px;">Sĩ số hiện tại:</dt>
+      <dd style="margin: 0; font-weight: var(--font-weight-bold);">{{ training_class.enrolled_count }} / {{ training_class.max_students }}</dd>
+    </div>
+  </dl>
+
+  {% if training_class.close_reason %}
+    <div style="margin-top: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--c-surface-muted); border-radius: var(--radius-md); font-size: var(--font-size-sm);">
+      <strong style="color: var(--c-danger);">Lý do đóng lớp:</strong> {{ training_class.close_reason }}
+    </div>
+  {% endif %}
+</section>
+
+<!-- Assigned Teachers Card -->
+<section class="cce-card" aria-labelledby="class-teachers-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="class-teachers-title">Giáo viên phụ trách</h2>
+  </div>
+
+  <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-3);">
+    {% for assignment in assignments %}
+      <li style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3); background: var(--c-surface-muted); border-radius: var(--radius-md);">
+        <div>
+          <strong style="font-size: var(--font-size-sm);">{{ assignment.teacher.full_name }}</strong>
+          <span style="font-size: var(--font-size-xs); color: var(--c-text-muted); margin-left: 12px;">
+            {% if assignment.teacher.phone %}{{ assignment.teacher.phone }}{% endif %}
+            {% if assignment.teacher.email %} · {{ assignment.teacher.email }}{% endif %}
+          </span>
+        </div>
+      </li>
+    {% empty %}
+      <li class="cce-empty-state" style="padding: var(--space-4);">Chưa có giáo viên được phân công.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<!-- Enrolled Learners Card -->
+<section class="cce-card" aria-labelledby="class-learners-title">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" id="class-learners-title">Học viên đã ghi danh ({{ training_class.enrolled_count }} / {{ training_class.max_students }})</h2>
+  </div>
+
+  {% include "training/partials/data_table.html" with columns=columns rows=learners page_obj=page_obj %}
+</section>
+
+<!-- Modal for Closing Class with Mandatory Reason -->
+{% if can_manage and training_class.status == "open" %}
+  {% include "training/partials/confirm_modal.html" with modal_id="close-class-modal" modal_title="Xác nhận đóng lớp học" modal_message="Lớp đã đóng sẽ không thể tiếp nhận thêm học viên ghi danh mới. Vui lòng nhập lý do đóng lớp bên dưới." confirm_label="Xác nhận đóng lớp" confirm_action=close_url reason_required=True %}
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,10 @@
+{% if messages %}
+  <div class="cce-messages-stack" role="region" aria-label="Thông báo hệ thống">
+    {% for message in messages %}
+      <div class="cce-alert cce-alert-{{ message.tags|default:'info' }}" role="alert">
+        <span>{{ message }}</span>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+

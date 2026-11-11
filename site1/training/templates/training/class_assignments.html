@@ -1,0 +1,75 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Phân công giáo viên · {{ training_class.name }}{% endblock %}
+{% block breadcrumb_title %}Phân công giáo viên{% endblock %}
+{% block page_title %}Phân công giảng dạy{% endblock %}
+{% block page_description %}Lớp: {{ training_class.name }}. Giảng viên chỉ được xem và quản lý những lớp được phân công.{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-6);">
+  <!-- Add Assignment Form -->
+  <section class="cce-card" aria-labelledby="assign-form-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="assign-form-title">Thêm phân công mới</h2>
+    </div>
+
+    {% if form.fields.teacher.queryset %}
+      {% include "training/partials/form_fields.html" with form=form submit_label="Phân công giáo viên" cancel_url=request.path %}
+    {% else %}
+      <div class="cce-empty-state" style="padding: var(--space-4);">
+        <p>Không còn giáo viên chưa được phân công cho lớp này.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- Current Assignments List -->
+  <section class="cce-card" aria-labelledby="current-assign-title">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="current-assign-title">Danh sách phân công hiện tại</h2>
+    </div>
+
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col">Họ và tên</th>
+            <th scope="col">Số điện thoại</th>
+            <th scope="col">Email</th>
+            <th scope="col">Thời điểm</th>
+            <th scope="col" style="text-align: right;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for assignment in assignments %}
+            <tr>
+              <td><strong>{{ assignment.teacher.full_name }}</strong></td>
+              <td>{{ assignment.teacher.phone|default:"—" }}</td>
+              <td>{{ assignment.teacher.email|default:"—" }}</td>
+              <td>{{ assignment.assigned_at|date:"d/m/Y H:i" }}</td>
+              <td style="text-align: right;">
+                <button
+                  class="cce-btn cce-btn-danger cce-btn-sm"
+                  type="button"
+                  data-bs-target="#remove-assignment-{{ assignment.pk }}"
+                >
+                  Bỏ phân công
+                </button>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="cce-empty-state">Chưa có phân công giáo viên.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- Modals with Mandatory Reason for Removing Assignments -->
+{% for assignment in assignments %}
+  {% include "training/partials/confirm_modal.html" with modal_id=assignment.modal_id modal_title="Xác nhận bỏ phân công giáo viên" modal_message="Bạn có chắc chắn muốn bỏ phân công giáo viên "|add:assignment.teacher.full_name|add:" khỏi lớp này?" confirm_label="Bỏ phân công" confirm_action=assignment.remove_url reason_required=True %}
+{% endfor %}
+{% endblock %}
+

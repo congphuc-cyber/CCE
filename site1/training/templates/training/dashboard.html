@@ -1,0 +1,21 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Bảng điều khiển{% endblock %}
+{% block breadcrumb_title %}Bảng điều khiển{% endblock %}
+{% block page_title %}Bảng điều khiển hoạt động{% endblock %}
+{% block page_description %}Tổng quan các chỉ số đào tạo, tiến độ lớp học và đăng ký của Trung tâm.{% endblock %}
+
+{% block content %}
+<div class="cce-dashboard-view">
+  <!-- Stats Grid -->
+  <section class="cce-stat-grid" aria-label="Các số liệu tổng quan">
+    {% for stat in stats %}
+      {% include "training/partials/stat_card.html" with stat_label=stat.label stat_value=stat.value stat_note=stat.note %}
+    {% endfor %}
+  </section>
+
+  <!-- Daily Registration Chart -->
+  {% include "training/partials/daily_chart.html" with chart_id=chart_id chart_title=chart_title chart_labels=chart_labels chart_values=chart_values date_form=date_form %}
+</div>
+{% endblock %}
+

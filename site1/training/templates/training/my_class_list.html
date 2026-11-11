@@ -1,0 +1,13 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Lớp của tôi{% endblock %}
+{% block breadcrumb_title %}Lớp của tôi{% endblock %}
+{% block page_title %}Danh sách lớp giảng dạy{% endblock %}
+{% block page_description %}Chỉ hiển thị những lớp được phân công cho tài khoản giáo viên hiện tại.{% endblock %}
+
+{% block content %}
+<section class="cce-card" aria-label="Danh sách lớp giảng dạy">
+  {% include "training/partials/data_table.html" with columns=columns rows=rows page_obj=page_obj %}
+</section>
+{% endblock %}
+

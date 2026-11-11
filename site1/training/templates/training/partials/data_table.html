@@ -1,0 +1,67 @@
+{% load ui_components %}
+
+<div class="cce-table-wrap">
+  <table class="cce-table" role="table">
+    <thead>
+      <tr>
+        {% for col in columns %}
+          <th scope="col">{{ col.label }}</th>
+        {% endfor %}
+        <th scope="col" style="text-align: right;">Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for col in columns %}
+            <td>
+              {% if col.key == 'status' %}
+                {% include "training/partials/status_badge.html" with status=row|get_item:col.key %}
+              {% else %}
+                {{ row|get_item:col.key }}
+              {% endif %}
+            </td>
+          {% endfor %}
+          <td style="text-align: right; white-space: nowrap;">
+            {% if row.view_url %}
+              <a class="cce-table-btn" href="{{ row.view_url }}">Xem</a>
+            {% endif %}
+            {% if row.edit_url %}
+              <a class="cce-table-btn cce-table-btn-outline" href="{{ row.edit_url }}">Sửa</a>
+            {% endif %}
+            {% if allow_delete and row.delete_url %}
+              <a class="cce-table-btn table-action-delete" style="color: var(--c-danger);" href="{{ row.delete_url }}">Xóa</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="{{ columns|length|add:1 }}" class="cce-empty-state">
+            Không có dữ liệu
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+  <nav class="cce-pagination" aria-label="Phân trang dữ liệu">
+    <div>
+      Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+      ({{ page_obj.paginator.count }} mục)
+    </div>
+    <div class="cce-pagination-links">
+      {% if page_obj.has_previous %}
+        <a class="cce-page-link" href="{% page_url request page_obj.previous_page_number %}">&laquo; Trước</a>
+      {% endif %}
+
+      <span class="cce-page-link is-active">{{ page_obj.number }}</span>
+
+      {% if page_obj.has_next %}
+        <a class="cce-page-link" href="{% page_url request page_obj.next_page_number %}">Sau &raquo;</a>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}
+

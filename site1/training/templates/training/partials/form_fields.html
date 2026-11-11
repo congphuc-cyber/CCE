@@ -1,0 +1,40 @@
+{% load ui_components %}
+
+{% if form.non_field_errors %}
+  <div class="cce-alert cce-alert-danger" role="alert">
+    {% for error in form.non_field_errors %}
+      <div>{{ error }}</div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" novalidate {% if form_id %}id="{{ form_id }}"{% endif %}>
+  {% csrf_token %}
+
+  {% for field in form %}
+    <div class="cce-form-group {% if field.errors %}has-error{% endif %}">
+      <label class="cce-label" for="{{ field.id_for_label }}">
+        {{ field.label }}
+        {% if field.field.required %}<span class="cce-required" aria-hidden="true">*</span>{% endif %}
+      </label>
+
+      {{ field|accessible_field }}
+
+      {% if field.help_text %}
+        <div class="cce-form-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</div>
+      {% endif %}
+
+      {% for error in field.errors %}
+        <div class="cce-form-error" id="{{ field.auto_id }}_error" role="alert">{{ error }}</div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  <div class="cce-form-actions">
+    <button class="cce-btn cce-btn-primary" type="submit">{{ submit_label|default:"Lưu thông tin" }}</button>
+    {% if cancel_url %}
+      <a class="cce-btn cce-btn-secondary" href="{{ cancel_url }}">Hủy bỏ</a>
+    {% endif %}
+  </div>
+</form>
+

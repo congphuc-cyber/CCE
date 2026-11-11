@@ -1,0 +1,84 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Nhật ký thao tác{% endblock %}
+{% block breadcrumb_title %}Nhật ký thao tác{% endblock %}
+{% block page_title %}Nhật ký thao tác hệ thống{% endblock %}
+{% block page_description %}Theo dõi lịch sử và chi tiết các thay đổi dữ liệu nhạy cảm trong hệ thống.{% endblock %}
+
+{% block content %}
+<!-- Filter Form -->
+<section class="cce-filter-bar" aria-label="Bộ lọc nhật ký">
+  <form method="get" style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; width: 100%;">
+    {% for field in filter_form %}
+      <div class="cce-filter-item">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% for error in field.errors %}
+          <div class="cce-form-error" role="alert">{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <div class="cce-filter-actions">
+      <button class="cce-btn cce-btn-primary" type="submit">Lọc</button>
+      <a class="cce-btn cce-btn-secondary" href="{% url 'audit-log-list' %}">Xóa bộ lọc</a>
+    </div>
+  </form>
+</section>
+
+<!-- Audit Table -->
+<section class="cce-card" style="padding: 0; overflow: hidden;">
+  <div class="cce-table-wrap" style="border: none;">
+    <table class="cce-table" role="table">
+      <thead>
+        <tr>
+          <th scope="col">Thời điểm</th>
+          <th scope="col">Người thực hiện</th>
+          <th scope="col">Thao tác</th>
+          <th scope="col">Đối tượng</th>
+          <th scope="col" style="text-align: right;">Chi tiết</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in page_obj %}
+          <tr>
+            <td>
+              <a href="{% url 'audit-log-detail' entry.pk %}" style="font-family: var(--font-family-mono); font-weight: var(--font-weight-semibold);">
+                {{ entry.created_at|date:"d/m/Y H:i:s" }}
+              </a>
+            </td>
+            <td><strong>{{ entry.actor.get_full_name|default:entry.actor_username }}</strong></td>
+            <td>
+              <span class="cce-badge cce-badge-published">{{ entry.get_action_display }}</span>
+            </td>
+            <td>{{ entry.object_label }}</td>
+            <td style="text-align: right;">
+              <a class="cce-table-btn" href="{% url 'audit-log-detail' entry.pk %}">Xem giá trị cũ và mới</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="cce-empty-state">Không có dữ liệu</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if page_obj.paginator.num_pages > 1 %}
+  <nav class="cce-pagination" aria-label="Phân trang nhật ký">
+    <div>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} bản ghi)</div>
+    <div class="cce-pagination-links">
+      {% if page_obj.has_previous %}
+        <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}">&laquo; Trước</a>
+      {% endif %}
+      <span class="cce-page-link is-active">{{ page_obj.number }}</span>
+      {% if page_obj.has_next %}
+        <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}">Sau &raquo;</a>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}
+{% endblock %}
+
