@@ -1,4 +1,3 @@
-import json
 from functools import wraps
 
 from django import forms
@@ -17,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from training.access import all_features, role_feature_states, user_has_feature
-from training.audit import record_audit, snapshot_instance
+from training.audit import audit_values_for_display, record_audit, snapshot_instance
 from training.forms import (
     ClassAssignmentForm,
     DashboardDateRangeForm,
@@ -652,15 +651,13 @@ def audit_log_detail(request, log_id):
                 log_entry.object_type,
                 log_entry.object_type,
             ),
-            "old_values_json": json.dumps(
+            "old_values_display": audit_values_for_display(
                 log_entry.old_values,
-                ensure_ascii=False,
-                indent=2,
+                log_entry.object_type,
             ),
-            "new_values_json": json.dumps(
+            "new_values_display": audit_values_for_display(
                 log_entry.new_values,
-                ensure_ascii=False,
-                indent=2,
+                log_entry.object_type,
             ),
         },
     )

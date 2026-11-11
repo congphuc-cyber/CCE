@@ -121,7 +121,7 @@ UNFOLD = {
     },
     "STYLES": [
         lambda request: static("training/css/tokens.css") + "?v=shared-sidebar-20261111",
-        lambda request: static("training/css/cce-core.css") + "?v=avatar-profile-gap-20261111",
-        lambda request: static("training/css/cce-unfold.css") + "?v=active-filters-20261111",
+        lambda request: static("training/css/cce-core.css") + "?v=audit-permission-status-20261111",
+        lambda request: static("training/css/cce-unfold.css") + "?v=vietnamese-title-line-height-20261111",
     ],
 }

@@ -48,14 +48,14 @@
     <div class="cce-card-header">
       <h2 class="cce-card-title" id="old-val-title" style="color: var(--c-danger);">Giá trị cũ (Trước thay đổi)</h2>
     </div>
-    <pre style="background: var(--c-surface-muted); padding: var(--space-4); border-radius: var(--radius-md); overflow-x: auto; margin: 0; border: 1px solid var(--c-border);">{{ old_values_json }}</pre>
+    {% include "training/partials/audit_values.html" with values=old_values_display %}
   </section>
 
   <section class="cce-card" aria-labelledby="new-val-title">
     <div class="cce-card-header">
       <h2 class="cce-card-title" id="new-val-title" style="color: var(--c-success);">Giá trị mới (Sau thay đổi)</h2>
     </div>
-    <pre style="background: var(--c-surface-muted); padding: var(--space-4); border-radius: var(--radius-md); overflow-x: auto; margin: 0; border: 1px solid var(--c-border);">{{ new_values_json }}</pre>
+    {% include "training/partials/audit_values.html" with values=new_values_display %}
   </section>
 </div>
 {% endblock %}

@@ -1661,6 +1661,35 @@ select.form-control:focus, textarea.form-control:focus {
   text-align: center;
 }
 
+.cce-audit-permission {
+  display: inline-flex;
+  min-width: 104px;
+  justify-content: center;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.cce-audit-permission.is-allowed {
+  border-color: var(--c-success-border);
+  background-color: var(--c-success-soft);
+  color: var(--c-success);
+}
+
+.cce-audit-permission.is-denied {
+  border-color: var(--c-danger-border);
+  background-color: var(--c-danger-soft);
+  color: var(--c-danger);
+}
+
+.cce-audit-permission.is-unknown {
+  border-color: var(--c-border);
+  background-color: var(--c-surface-muted);
+  color: var(--c-text-muted);
+}
+
 .cce-permissions-check-label {
   display: inline-flex;
   width: 100%;

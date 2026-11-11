@@ -864,8 +864,8 @@ class PhaseFiveTests(TestCase):
             object_type="home.Course",
             object_id="7",
             object_label="An toàn điện",
-            old_values={"name": "Tên cũ"},
-            new_values={"name": "Tên mới"},
+            old_values={"name": "Tên cũ", "pass_threshold": "60.00"},
+            new_values={"name": "Tên mới", "pass_threshold": "75.00"},
         )
         self.client.force_login(self.admin_user)
         response = self.client.get(
@@ -879,8 +879,38 @@ class PhaseFiveTests(TestCase):
         response = self.client.get(reverse("audit-log-detail", args=(entry.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Khóa học")
-        self.assertContains(response, '&quot;name&quot;: &quot;Tên cũ&quot;')
-        self.assertContains(response, '&quot;name&quot;: &quot;Tên mới&quot;')
+        self.assertContains(response, "Tên khóa học")
+        self.assertContains(response, "Tên cũ")
+        self.assertContains(response, "Tên mới")
+        self.assertContains(response, "Ngưỡng đạt (%)")
+        self.assertNotContains(response, "&quot;name&quot;")
+        self.assertNotContains(response, "<pre")
+        self.assertNotContains(response, 'type="checkbox"')
+
+    def test_permission_audit_displays_system_function_names_read_only(self):
+        entry = AuditLog.objects.create(
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            action=AuditLog.Action.EDIT,
+            object_type="auth.Group",
+            object_id="1",
+            object_label="Ma trận phân quyền theo vai trò",
+            old_values={"Giáo vụ": {"courses": False, "classes": True}},
+            new_values={"Giáo vụ": {"courses": True, "classes": False}},
+        )
+        self.client.force_login(self.admin_user)
+
+        response = self.client.get(reverse("audit-log-detail", args=(entry.pk,)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chức năng hệ thống")
+        self.assertContains(response, "Chương trình đào tạo")
+        self.assertContains(response, "Được phép")
+        self.assertContains(response, "Không được phép")
+        self.assertContains(response, "cce-audit-permission is-allowed")
+        self.assertContains(response, "cce-audit-permission is-denied")
+        self.assertNotContains(response, "courses")
+        self.assertNotContains(response, 'type="checkbox"')
 
     def test_audit_filter_rejects_reversed_date_range(self):
         self.client.force_login(self.admin_user)

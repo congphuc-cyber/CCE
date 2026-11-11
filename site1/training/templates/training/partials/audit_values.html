@@ -1,0 +1,53 @@
+{% if values.is_matrix %}
+  <div class="cce-table-wrap" role="region" aria-label="Ma trận quyền chỉ đọc">
+    <table class="cce-table cce-permissions-table">
+      <thead>
+        <tr>
+          <th scope="col" class="cce-permissions-feature-heading">Chức năng hệ thống</th>
+          {% for role in values.roles %}
+            <th scope="col" class="cce-permissions-role-heading">{{ role }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in values.rows %}
+          <tr>
+            <th scope="row" class="cce-permissions-feature">{{ row.label }}</th>
+            {% for value in row.values %}
+              <td class="cce-permissions-cell">
+                <span class="cce-audit-permission {{ value.css_class }}">{{ value.label }}</span>
+              </td>
+            {% endfor %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="100">Không có dữ liệu ghi nhận.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="cce-table-wrap" role="region" aria-label="Các giá trị chỉ đọc">
+    <table class="cce-table">
+      <thead>
+        <tr>
+          <th scope="col">Thông tin</th>
+          <th scope="col">Giá trị</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in values.entries %}
+          <tr>
+            <th scope="row">{{ entry.label }}</th>
+            <td>{{ entry.value }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="2">Không có dữ liệu ghi nhận.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

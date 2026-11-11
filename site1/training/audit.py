@@ -1,8 +1,131 @@
 import json
 
+from django.apps import apps
+from django.core.exceptions import FieldDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 
 from training.models import AuditLog
+from training.navigation import ROLE_MENUS
+
+
+AUDIT_FEATURE_LABELS = {
+    item["key"]: item["label"]
+    for role in ROLE_MENUS.values()
+    for item in role["items"]
+}
+
+ACCOUNT_FIELD_LABELS = {
+    "full_name": "Họ và tên",
+    "username": "Tên đăng nhập",
+    "email": "Email",
+    "role": "Vai trò",
+    "is_active": "Trạng thái",
+}
+
+
+def _audit_model(object_type):
+    app_label, _, model_name = object_type.rpartition(".")
+    for candidate in (app_label, "training"):
+        if not candidate:
+            continue
+        try:
+            return apps.get_model(candidate, model_name)
+        except LookupError:
+            continue
+    return None
+
+
+def _audit_field_label(object_type, key, model):
+    model_name = object_type.rsplit(".", 1)[-1]
+    if model_name == "User" and key in ACCOUNT_FIELD_LABELS:
+        return ACCOUNT_FIELD_LABELS[key]
+    if model_name == "Group" and key == "name":
+        return "Tên vai trò"
+    if key == "feature":
+        return "Chức năng hệ thống"
+    if key == "allowed":
+        return "Quyền truy cập"
+    if key == "id":
+        return "Mã"
+
+    if model:
+        try:
+            return str(model._meta.get_field(key).verbose_name)
+        except FieldDoesNotExist:
+            pass
+    return key.replace("_", " ").capitalize()
+
+
+def _audit_value_label(value, key, field=None):
+    if value is None:
+        return "—"
+    if key == "feature" and isinstance(value, str):
+        return AUDIT_FEATURE_LABELS.get(value, value.replace("-", " ").capitalize())
+    if isinstance(value, bool):
+        if key == "is_active":
+            return "Đang hoạt động" if value else "Ngừng hoạt động"
+        if key == "allowed":
+            return "Được phép" if value else "Không được phép"
+        return "Có" if value else "Không"
+    if field and field.choices:
+        choices = dict(field.flatchoices)
+        if value in choices:
+            return str(choices[value])
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value) or "—"
+    if isinstance(value, dict):
+        return ", ".join(
+            f"{key.replace('_', ' ').capitalize()}: {_audit_value_label(item, key)}"
+            for key, item in value.items()
+        )
+    return str(value)
+
+
+def _permission_state_display(value):
+    if value is True:
+        return {"label": "Được phép", "css_class": "is-allowed"}
+    if value is False:
+        return {"label": "Không được phép", "css_class": "is-denied"}
+    return {"label": "—", "css_class": "is-unknown"}
+
+
+def audit_values_for_display(values, object_type):
+    values = values if isinstance(values, dict) else {}
+    model = _audit_model(object_type)
+    role_names = [role for role in ROLE_MENUS if role in values]
+    is_permission_matrix = bool(role_names) and all(
+        isinstance(values[role], dict) for role in role_names
+    ) and len(role_names) == len(values)
+
+    if is_permission_matrix:
+        rows = []
+        for feature_key, label in AUDIT_FEATURE_LABELS.items():
+            if not any(feature_key in values[role] for role in role_names):
+                continue
+            rows.append(
+                {
+                    "label": label,
+                    "values": [
+                        _permission_state_display(values[role].get(feature_key))
+                        for role in role_names
+                    ],
+                }
+            )
+        return {"is_matrix": True, "roles": role_names, "rows": rows}
+
+    entries = []
+    for key, value in values.items():
+        try:
+            field = model._meta.get_field(key) if model else None
+        except FieldDoesNotExist:
+            field = None
+        entries.append(
+            {
+                "label": _audit_field_label(object_type, key, model),
+                "value": _audit_value_label(value, key, field),
+            }
+        )
+    return {"is_matrix": False, "entries": entries}
 
 
 def snapshot_instance(instance):
