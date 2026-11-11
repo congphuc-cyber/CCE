@@ -70,11 +70,11 @@ Máy chủ mặc định lắng nghe tại: `http://127.0.0.1:8001/`
 | **Kiểm tra giao diện** | `http://127.0.0.1:8001/ui-demo/` | Showcase toàn bộ thành phần Design Tokens (khi DEBUG=True) |
 
 ### Danh sách tài khoản kiểm thử mặc định:
-> Mật khẩu dùng chung cho tất cả tài khoản bên dưới: **`CCEtest@2026!`**
+> Chạy `python manage.py seed_demo_data` trong môi trường DEBUG (hoặc `python manage.py bootstrap --demo`) để tạo các tài khoản vai trò và dữ liệu mẫu. Đặt `DEMO_TEST_PASSWORD` trước khi chạy để chọn mật khẩu; nếu không đặt, lệnh tạo mật khẩu ngẫu nhiên và in ra một lần. Lệnh không đổi mật khẩu của tài khoản đã tồn tại. Tài khoản quản trị dùng `BOOTSTRAP_SUPERUSER_PASSWORD`.
 
 | Vai trò | Tên đăng nhập (Username) | Quyền hạn chính |
 |---------|-------------------------|-----------------|
-| **Quản trị viên (Superuser)** | `cce_admin` hoặc `cce_tester_d9e8db` | Toàn quyền hệ thống, phân quyền vai trò, tài khoản, nhật ký thao tác |
+| **Quản trị viên (Superuser)** | `cce_admin` | Toàn quyền hệ thống, phân quyền vai trò, tài khoản, nhật ký thao tác |
 | **Giáo vụ** | `cce_giaovu_test_1461` | Quản lý khóa học, lớp học, học viên, phân công giáo viên, đóng lớp |
 | **Giáo viên** | `cce_giaovien_test_65df` | Xem danh sách và chi tiết các lớp được phân công giảng dạy |
 | **Cán bộ thi** | `cce_canbothi_test_0656` | Quản trị đợt thi, phòng thi, điểm thi và chứng chỉ |
@@ -154,6 +154,7 @@ lmssss/
 | `BOOTSTRAP_SUPERUSER_USERNAME` | `cce_admin` | Tên tài khoản Superuser tự tạo khi chạy bootstrap. |
 | `BOOTSTRAP_SUPERUSER_PASSWORD` | `CCEtest@2026!` | Mật khẩu cho Superuser. |
 | `BOOTSTRAP_SUPERUSER_EMAIL` | `admin@cce.edu.vn` | Email liên hệ cho Superuser. |
+| `DEMO_TEST_PASSWORD` | *(tạo ngẫu nhiên nếu bỏ trống)* | Mật khẩu cho các tài khoản vai trò mẫu được tạo mới bằng `seed_demo_data`. |
 
 ---
 

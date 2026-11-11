@@ -1,6 +1,7 @@
 from io import StringIO
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import Group, Permission, User
 from django.core.management import call_command
@@ -8,6 +9,7 @@ from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
+from training.access import all_features, default_features_for_role
 from training.admin import BaseModelAdmin
 from training.context_processors import ui_navigation
 from training.forms import CourseAdminForm, TrainingClassAdminForm
@@ -33,6 +35,28 @@ class RoleNavigationTests(TestCase):
                 user = User.objects.create_user(username=role["key"])
                 user.groups.add(group)
                 self.assertEqual(role_for_user(user), role_name)
+
+    def test_feature_routes_select_their_sidebar_item(self):
+        user = User.objects.create_user(username="exam-nav-user")
+        user.groups.add(Group.objects.create(name="Cán bộ thi"))
+        route_features = {
+            "exam-period-list": "exam-periods",
+            "exam-application-list": "exam-applications",
+            "exam-room-list": "exam-rooms",
+            "exam-score-list": "exam-scores",
+            "exam-certificate-list": "exam-certificates",
+            "mybk-export": "mybk-export",
+            "exam-statistics": "exam-statistics",
+        }
+        for route_name, feature in route_features.items():
+            with self.subTest(route=route_name):
+                request = RequestFactory().get("/")
+                request.user = user
+                request.resolver_match = SimpleNamespace(
+                    url_name=route_name,
+                    namespaces=(),
+                )
+                self.assertEqual(ui_navigation(request)["active_menu"], feature)
 
     def test_superuser_is_administrator(self):
         user = User.objects.create_superuser(
@@ -68,6 +92,38 @@ class RoleNavigationTests(TestCase):
         self.assertIn("courses", keys)
         self.assertIn("my-classes", keys)
         self.assertEqual(context["sidebar_items"][0]["key"], "dashboard")
+
+    def test_sidebar_shows_only_role_groups_except_for_administrators(self):
+        teacher = User.objects.create_user(username="teacher-sidebar")
+        teacher.groups.add(Group.objects.create(name="Giáo viên"))
+        request = RequestFactory().get("/")
+        request.user = teacher
+        teacher_navigation = ui_navigation(request)
+        self.assertEqual(
+            [group["key"] for group in teacher_navigation["sidebar_groups"]],
+            ["teaching"],
+        )
+        self.assertEqual(
+            [item["key"] for item in teacher_navigation["sidebar_items"]],
+            ["my-classes"],
+        )
+
+        administrator = User.objects.create_user(username="administrator-sidebar")
+        administrator.groups.add(Group.objects.create(name="Quản trị viên"))
+        request.user = administrator
+        administrator_navigation = ui_navigation(request)
+        self.assertEqual(
+            [group["key"] for group in administrator_navigation["sidebar_groups"]],
+            ["dashboard", "training", "teaching", "exams", "system"],
+        )
+        self.assertEqual(
+            {item["key"] for item in administrator_navigation["sidebar_items"]},
+            {item["key"] for item in all_features()},
+        )
+        self.assertEqual(
+            default_features_for_role("Quản trị viên"),
+            {item["key"] for item in all_features()},
+        )
 
     def test_sidebar_items_are_grouped_without_losing_features(self):
         items = ROLE_MENUS["Giáo vụ"]["items"]
@@ -228,9 +284,9 @@ class PhaseThreeTests(TestCase):
         self.assertContains(response, '<details class="cce-nav-group">')
         self.assertContains(response, "material-symbols-outlined cce-nav-icon")
         self.assertContains(response, "dashboard</span>")
-        self.assertContains(response, "stat-cards-lighter-20261111")
+        self.assertContains(response, "avatar-profile-gap-20261111")
         self.assertContains(response, "Quản lý đào tạo")
-        self.assertContains(response, "Hồ sơ & Mật khẩu")
+        self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
         self.assertContains(response, "cce-logout-button")
         self.assertNotContains(response, "Tài khoản</span>")
         self.assertContains(response, "Tổng đăng ký trực tuyến")
@@ -302,13 +358,14 @@ class PhaseFourTests(TestCase):
         response = self.client.get(reverse("admin:training_course_changelist"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="light"')
-        self.assertContains(response, "cce-admin-user-wrap")
-        self.assertContains(response, "cce-admin-user-role")
+        self.assertContains(response, 'class="cce-sidebar-user"')
+        self.assertNotContains(response, "cce-user-status")
+        self.assertContains(response, 'class="cce-user-role"')
         self.assertContains(response, "Giáo vụ")
         self.assertContains(response, FEATURE_ICONS["courses"])
-        self.assertContains(response, "Quản lý khảo thí")
-        self.assertContains(response, "roles-delete-ui-20261111")
-        self.assertContains(response, "Hồ sơ & Mật khẩu")
+        self.assertNotContains(response, "Quản lý khảo thí")
+        self.assertContains(response, "avatar-profile-gap-20261111")
+        self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
         self.assertContains(response, 'class="cce-admin-header-logout"')
         self.assertContains(response, 'class="cce-logout-button"')
         self.assertContains(response, 'class="cce-admin-search-actions"')
@@ -316,7 +373,17 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "Danh sách khóa học")
         self.assertContains(response, "Ngưỡng đạt")
         page = response.content.decode()
-        self.assertLess(page.index("cce-admin-user-wrap"), page.index("nav-sidebar-apps"))
+        self.assertLess(
+            page.index('class="cce-user-name"'),
+            page.index('class="cce-user-role"'),
+        )
+        self.assertLess(page.index("cce-sidebar-user"), page.index("nav-sidebar-apps"))
+        self.assertIn(
+            '<a class="cce-nav-link is-active active" href="/admin/training/course/" aria-current="page">',
+            page,
+        )
+        self.assertIn('<details class="cce-nav-group" open>', page)
+        self.assertEqual(page.count('id="nav-sidebar-apps"'), 1)
         self.assertLess(page.index('id="changelist-search"'), page.index('class="addlink'))
         self.assertNotIn('title="Thêm vào Khóa học"', page[:page.index('id="changelist-search"')])
 
@@ -325,17 +392,53 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "ATD-01")
         self.assertContains(response, "Xem")
         self.assertContains(response, "training/css/cce-unfold.css")
+        for route_name, path in (
+            ("admin:training_teacher_changelist", "/admin/training/teacher/"),
+            ("admin:training_learner_changelist", "/admin/training/learner/"),
+        ):
+            response = self.client.get(reverse(route_name))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(
+                response,
+                f'<a class="cce-nav-link is-active active" href="{path}" aria-current="page">',
+            )
         self.assertFalse(self.education_user.is_staff)
 
-    def test_admin_dashboard_sidebar_section_is_always_visible(self):
-        sections = settings.UNFOLD["SIDEBAR"]["navigation"]
-        self.assertTrue(sections)
-        self.assertEqual(sections[0]["title"], "Bảng điều khiển")
-        self.assertFalse(sections[0]["collapsible"])
-        self.assertTrue(all(section["collapsible"] for section in sections[1:-1]))
-        self.assertEqual(sections[3]["title"], "Quản lý khảo thí")
-        self.assertEqual(sections[-1]["title"], "")
-        self.assertFalse(sections[-1]["collapsible"])
+    def test_education_dashboard_sidebar_shows_only_education_groups(self):
+        self.client.force_login(self.education_user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Bảng điều khiển")
+        self.assertContains(response, "Quản lý đào tạo")
+        self.assertNotContains(response, "Giảng dạy")
+        self.assertNotContains(response, "Quản lý khảo thí")
+        self.assertNotContains(response, "Quản lý hệ thống")
+        self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
+        self.assertContains(
+            response,
+            '<a class="cce-nav-link is-active active" href="/dashboard/" aria-current="page">',
+        )
+
+    def test_active_admin_filter_has_a_clear_filters_button(self):
+        self.client.force_login(self.education_user)
+        Course.objects.create(name="Mạng máy tính", pass_threshold=60)
+        changelist_url = reverse("admin:training_trainingclass_changelist")
+        filtered_response = self.client.get(
+            changelist_url,
+            {"course__id__exact": self.course.pk},
+        )
+
+        self.assertEqual(filtered_response.status_code, 200)
+        self.assertTrue(filtered_response.context["cl"].has_active_filters)
+        self.assertContains(filtered_response, 'class="cce-clear-filters"')
+        self.assertContains(filtered_response, "Xóa bộ lọc")
+
+        clear_filters_url = filtered_response.context["cl"].clear_all_filters_qs
+        if clear_filters_url.startswith("?"):
+            clear_filters_url = f"{changelist_url}{clear_filters_url}"
+        cleared_response = self.client.get(clear_filters_url)
+        self.assertEqual(cleared_response.status_code, 200)
+        self.assertFalse(cleared_response.context["cl"].has_active_filters)
+        self.assertNotContains(cleared_response, 'class="cce-clear-filters"')
 
     def test_course_and_class_forms_validate_threshold_schedule_and_capacity(self):
         course_form = CourseAdminForm(data={"name": "Kỹ thuật", "pass_threshold": "101"})
@@ -438,6 +541,11 @@ class PhaseFourTests(TestCase):
         response = self.client.get(reverse("my-class-list"))
         self.assertContains(response, "ATD-01")
         self.assertNotContains(response, "ATD-02")
+        self.assertContains(response, '<details class="cce-nav-group" open>')
+        self.assertContains(
+            response,
+            '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
+        )
         self.assertEqual(
             self.client.get(reverse("class-detail", args=(self.training_class.pk,))).status_code,
             200,
@@ -526,6 +634,18 @@ class PhaseFiveTests(TestCase):
             password="Education-pass-9517#",
         )
         self.education_user.groups.add(self.groups["Giáo vụ"])
+
+    def test_account_admin_uses_shared_sidebar_with_active_system_menu(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("admin:auth_user_changelist"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="cce-sidebar-user"')
+        self.assertContains(
+            response,
+            '<a class="cce-nav-link is-active active" href="/admin/auth/user/" aria-current="page">',
+        )
+        self.assertContains(response, '<details class="cce-nav-group" open>')
+        self.assertEqual(response.content.decode().count('id="nav-sidebar-apps"'), 1)
 
     def test_account_admin_creates_and_updates_account_without_logging_password(self):
         self.client.force_login(self.admin_user)
@@ -783,7 +903,8 @@ class DemoDataCommandTests(TestCase):
             teacher_user = User.objects.create_user(username=f"seed-teacher-{index}")
             teacher_user.groups.add(teacher_group)
 
-        call_command("seed_demo_data")
+        with patch.dict("os.environ", {"DEMO_TEST_PASSWORD": "demo-test-password"}):
+            call_command("seed_demo_data")
         counts_after_first_run = (
             Course.objects.count(),
             TrainingClass.objects.count(),
@@ -797,9 +918,43 @@ class DemoDataCommandTests(TestCase):
         self.assertGreater(counts_after_first_run[4], 200)
         self.assertGreater(counts_after_first_run[5], 24)
         self.assertGreater(counts_after_first_run[6], 40)
-        self.assertEqual(Teacher.objects.filter(user__groups=teacher_group).count(), 3)
+        self.assertEqual(Teacher.objects.filter(user__groups=teacher_group).count(), 4)
 
-        call_command("seed_demo_data")
+        teacher_user = User.objects.get(username="cce_giaovien_test_65df")
+        exam_user = User.objects.get(username="cce_canbothi_test_0656")
+        self.assertTrue(teacher_user.check_password("demo-test-password"))
+        self.assertTrue(exam_user.check_password("demo-test-password"))
+        self.assertTrue(Teacher.objects.filter(user=teacher_user).exists())
+        self.assertTrue(
+            ClassAssignment.objects.filter(
+                teacher__user=teacher_user,
+                is_active=True,
+            ).exists()
+        )
+
+        login_response = self.client.post(
+            reverse("login"),
+            {
+                "username": teacher_user.username,
+                "password": "demo-test-password",
+            },
+        )
+        self.assertRedirects(login_response, reverse("my-class-list"))
+
+        self.client.logout()
+        login_response = self.client.post(
+            reverse("login"),
+            {
+                "username": exam_user.username,
+                "password": "demo-test-password",
+            },
+            follow=True,
+        )
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(login_response.redirect_chain[-1][0], reverse("profile"))
+
+        with patch.dict("os.environ", {"DEMO_TEST_PASSWORD": "demo-test-password"}):
+            call_command("seed_demo_data")
         counts_after_second_run = (
             Course.objects.count(),
             TrainingClass.objects.count(),

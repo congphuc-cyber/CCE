@@ -12,6 +12,12 @@
 {% block filters %}
     <div class="cce-admin-filter-add">
         {% include "unfold/helpers/change_list_filter_button.html" %}
+        {% if cl.has_active_filters %}
+            <a class="cce-clear-filters" href="{{ cl.clear_all_filters_qs }}" aria-label="Xóa tất cả bộ lọc">
+                <span class="material-symbols-outlined" aria-hidden="true">filter_alt_off</span>
+                <span>Xóa bộ lọc</span>
+            </a>
+        {% endif %}
         {% include "admin/change_list_object_tools.html" %}
     </div>
 {% endblock %}

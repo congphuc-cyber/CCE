@@ -11,6 +11,9 @@ def all_features():
 
 
 def default_features_for_role(role_name):
+    if role_name == "Quản trị viên":
+        return frozenset(item["key"] for item in all_features())
+
     role = ROLE_MENUS.get(role_name)
     if not role:
         return frozenset()

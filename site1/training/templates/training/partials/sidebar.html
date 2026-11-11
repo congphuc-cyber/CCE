@@ -1,0 +1,65 @@
+{% load ui_components %}
+<div class="cce-sidebar-header">
+  <a class="cce-brand" href="{% url 'home' %}">
+    <span class="cce-brand-badge material-symbols-outlined" aria-hidden="true">school</span>
+    <div class="cce-brand-info">
+      <span class="cce-brand-title">Trung tâm KT Điện toán</span>
+      <span class="cce-brand-sub">ĐH Bách Khoa TP.HCM</span>
+    </div>
+  </a>
+</div>
+
+<div class="cce-sidebar-user">
+  <div class="cce-sidebar-user-identity">
+    <span class="cce-user-avatar" aria-hidden="true">
+      {% if user.is_authenticated %}{{ user.get_full_name|default:user.username|first|upper }}{% else %}K{% endif %}
+    </span>
+    <div class="cce-user-details">
+      <div class="cce-user-name">
+        {% if user.is_authenticated %}{{ user.get_full_name|default:user.username }}{% else %}Khách thử nghiệm{% endif %}
+      </div>
+      <div class="cce-user-meta">
+        <span class="cce-user-role">
+          {% firstof demo_role_label user_role_label "Chưa phân vai trò" %}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cce-sidebar-nav" id="nav-sidebar-apps" role="navigation" aria-label="Menu chức năng">
+  {% for group in demo_sidebar_groups|default:sidebar_groups %}
+    {% if group.key == "dashboard" %}
+      {% if group.items %}
+        <section class="cce-nav-group cce-nav-group-static">
+          <div class="cce-nav-group-items">
+            {% for item in group.items %}
+              {% include "training/partials/sidebar_item.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% else %}
+      <details class="cce-nav-group"{% if group.items|has_active_item:active_menu %} open{% endif %}>
+        <summary class="cce-nav-group-title">
+          <span>{{ group.title }}</span>
+          <span class="cce-nav-group-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="cce-nav-group-items">
+          {% for item in group.items %}
+            {% include "training/partials/sidebar_item.html" %}
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+  {% endfor %}
+
+  <section class="cce-nav-group cce-nav-group-static cce-nav-group-untitled">
+    <div class="cce-nav-group-items">
+      <a class="cce-nav-link{% if active_menu == 'profile' %} is-active active{% endif %}" href="{% url 'profile' %}"{% if active_menu == "profile" %} aria-current="page"{% endif %}>
+        <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">manage_accounts</span>
+        <span>Hồ sơ &amp; Mật khẩu</span>
+      </a>
+    </div>
+  </section>
+</div>

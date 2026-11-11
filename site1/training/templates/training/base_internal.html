@@ -1,4 +1,4 @@
-{% load static ui_components %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -7,7 +7,7 @@
   <title>{% block title %}{{ page_title|default:"Quản lý đào tạo và thi" }}{% endblock %} | CCE</title>
   <link rel="stylesheet" href="{% static 'unfold/fonts/material-symbols/styles.css' %}">
   <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}?v=edtech-rich-surfaces-20261111">
-  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=stat-cards-lighter-20261111">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=avatar-profile-gap-20261111">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -16,85 +16,7 @@
   <div class="cce-internal-frame">
     <!-- Sidebar -->
     <aside class="cce-sidebar" aria-label="Menu chức năng">
-      <div class="cce-sidebar-header">
-        <a class="cce-brand" href="{% url 'home' %}">
-          <span class="cce-brand-badge material-symbols-outlined" aria-hidden="true">school</span>
-          <div class="cce-brand-info">
-            <span class="cce-brand-title">Trung tâm KT Điện toán</span>
-            <span class="cce-brand-sub">ĐH Bách Khoa TP.HCM</span>
-          </div>
-        </a>
-      </div>
-
-      <div class="cce-sidebar-user">
-        <div class="cce-sidebar-user-identity">
-          <span class="cce-user-avatar" aria-hidden="true">
-            {% if user.is_authenticated %}{{ user.get_full_name|default:user.username|first|upper }}{% else %}K{% endif %}
-          </span>
-          <div class="cce-user-name">
-            {% if user.is_authenticated %}{{ user.get_full_name|default:user.username }}{% else %}Khách thử nghiệm{% endif %}
-          </div>
-        </div>
-        <div class="cce-user-role">
-          {% firstof demo_role_label user_role_label "Chưa phân vai trò" %}
-        </div>
-      </div>
-
-      <nav class="cce-sidebar-nav">
-        {% for group in demo_sidebar_groups|default:sidebar_groups %}
-          {% if group.key == 'dashboard' %}
-            <section class="cce-nav-group cce-nav-group-static">
-          {% else %}
-            <details class="cce-nav-group"{% if group.items|has_active_item:active_menu %} open{% endif %}>
-              <summary class="cce-nav-group-title">
-                <span>{{ group.title }}</span>
-                <span class="cce-nav-group-chevron" aria-hidden="true"></span>
-              </summary>
-          {% endif %}
-            <div class="cce-nav-group-items">
-              {% for item in group.items %}
-                {% if item.url_name %}
-                  {% url item.url_name as item_url %}
-                  {% if item_url %}
-                    <a class="cce-nav-link {% if active_menu == item.key %}is-active{% endif %}" href="{{ item_url }}">
-                      <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">{{ item.key|nav_icon }}</span>
-                      <span>{{ item.label }}</span>
-                    </a>
-                  {% else %}
-                    <span class="cce-nav-link" style="opacity: 0.5; cursor: not-allowed;">
-                      <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">{{ item.key|nav_icon }}</span>
-                      <span>{{ item.label }}</span>
-                    </span>
-                  {% endif %}
-                {% else %}
-                  <span class="cce-nav-link" style="opacity: 0.5; cursor: not-allowed;">
-                    <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">{{ item.key|nav_icon }}</span>
-                    <span>{{ item.label }}</span>
-                  </span>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% if group.key == 'dashboard' %}
-            </section>
-          {% else %}
-            </details>
-          {% endif %}
-        {% empty %}
-          <div style="padding: var(--space-4) var(--space-5); font-size: var(--font-size-xs); color: var(--c-sidebar-text-muted);">
-            Tài khoản chưa có chức năng được kích hoạt.
-          </div>
-        {% endfor %}
-
-        <section class="cce-nav-group cce-nav-group-static cce-nav-group-untitled">
-          <div class="cce-nav-group-items">
-            <a class="cce-nav-link {% if active_menu == 'profile' %}is-active{% endif %}" href="{% url 'profile' %}">
-              <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">manage_accounts</span>
-              <span>Hồ sơ & Mật khẩu</span>
-            </a>
-          </div>
-        </section>
-      </nav>
-
+      {% include "training/partials/sidebar.html" %}
     </aside>
 
     <!-- Main Content Area -->

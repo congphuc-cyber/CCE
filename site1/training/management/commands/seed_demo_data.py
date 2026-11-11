@@ -1,3 +1,6 @@
+import os
+import secrets
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -70,6 +73,11 @@ TEACHERS = (
 )
 
 SAMPLE_REASON = "Dữ liệu mẫu kiểm thử, tạo bằng lệnh seed_demo_data."
+DEMO_ROLE_USERS = {
+    "Giáo vụ": "cce_giaovu_test_1461",
+    "Giáo viên": "cce_giaovien_test_65df",
+    "Cán bộ thi": "cce_canbothi_test_0656",
+}
 
 
 class Command(BaseCommand):
@@ -82,14 +90,19 @@ class Command(BaseCommand):
         self.audit_entries_created = 0
         groups = {
             name: Group.objects.get_or_create(name=name)[0]
-            for name in ("Giáo vụ", "Giáo viên")
+            for name in DEMO_ROLE_USERS
         }
-        education_user = self._role_user(groups["Giáo vụ"])
+        demo_users = self._create_demo_role_users(groups)
+        education_user = demo_users["Giáo vụ"]
         teacher_users = list(
             get_user_model()
             .objects.filter(groups=groups["Giáo viên"], is_active=True)
             .order_by("username")
         )
+        teacher_users = [
+            demo_users["Giáo viên"],
+            *(user for user in teacher_users if user.pk != demo_users["Giáo viên"].pk),
+        ]
 
         courses = self._create_courses(education_user)
         teachers = self._create_teachers(teacher_users, education_user)
@@ -108,13 +121,34 @@ class Command(BaseCommand):
             )
         )
 
-    def _role_user(self, group):
-        return (
-            get_user_model()
-            .objects.filter(groups=group, is_active=True)
-            .order_by("username")
-            .first()
-        )
+    def _create_demo_role_users(self, groups):
+        user_model = get_user_model()
+        password = os.environ.get("DEMO_TEST_PASSWORD") or None
+        generated_password = None
+        created_usernames = []
+        users = {}
+        for role_name, username in DEMO_ROLE_USERS.items():
+            user, created = user_model.objects.get_or_create(
+                username=username,
+                defaults={"is_active": True},
+            )
+            if created:
+                if password is None:
+                    password = secrets.token_urlsafe(18)
+                    generated_password = password
+                user.set_password(password)
+                user.save(update_fields=["password"])
+                created_usernames.append(username)
+            user.groups.add(groups[role_name])
+            users[role_name] = user
+        if generated_password:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Generated demo password for newly created accounts "
+                    f"({', '.join(created_usernames)}): {generated_password}"
+                )
+            )
+        return users
 
     def _create_courses(self, actor):
         courses = []

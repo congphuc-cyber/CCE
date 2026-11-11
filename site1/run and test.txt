@@ -26,26 +26,23 @@ Các địa chỉ truy cập:
 
 2. DANH SÁCH TÀI KHOẢN THỬ NGHIỆM THEO VAI TRÒ
 --------------------------------------------------------------------------------
-Tất cả tài khoản dưới đây đều dùng chung mật khẩu:
-    CCEtest@2026!
+Các tài khoản vai trò được tạo khi chạy seed_demo_data (chỉ trong DEBUG) hoặc
+setup.ps1 -Demo. Đặt DEMO_TEST_PASSWORD trước khi tạo tài khoản để chọn mật khẩu;
+nếu không đặt, lệnh sẽ tạo mật khẩu ngẫu nhiên và in ra một lần.
 
 [1] Quản trị viên (Superuser / Quản trị hệ thống):
-    - Tài khoản chuẩn mới: cce_admin
-    - Tài khoản kế thừa:   cce_tester_d9e8db
+    - Tài khoản: cce_admin
     -> Có toàn quyền hệ thống, xem Audit Log (giá trị cũ/mới), quản trị phân quyền vai trò.
 
 [2] Giáo vụ (Đào tạo & Quản lý lớp):
-    - Tài khoản chuẩn mới: cce_giaovu
-    - Tài khoản kế thừa:   cce_giaovu_test_1461
+    - Tài khoản: cce_giaovu_test_1461
     -> Quản lý khóa học, lớp học, học viên, ghi danh, phân công giáo viên, dashboard thống kê.
 
 [3] Giáo viên (Giảng dạy):
-    - Tài khoản chuẩn mới: cce_giaovien
-    - Tài khoản kế thừa:   cce_giaovien_test_65df
+    - Tài khoản: cce_giaovien_test_65df
     -> Xem danh sách lớp giảng dạy của mình (/my-classes/), lịch dạy, sĩ số, danh sách học viên.
 
 [4] Cán bộ thi (Khảo thí & Điểm):
-    - Tài khoản chuẩn mới: cce_canbothi
-    - Tài khoản kế thừa:   cce_canbothi_test_0656
-    -> Quản lý lịch thi, phòng thi, công bố kết quả, cấp chứng chỉ.
+    - Tài khoản: cce_canbothi_test_0656
+    -> Có thể đăng nhập; các URL và màn hình nghiệp vụ khảo thí chưa được triển khai trong phiên bản này.
 ================================================================================

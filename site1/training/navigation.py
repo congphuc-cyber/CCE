@@ -107,7 +107,7 @@ def role_for_user(user):
     return " · ".join(roles_for_user(user)) or None
 
 
-def group_menu_items(items):
+def group_menu_items(items, include_empty=False):
     items_by_section = {key: [] for key, _ in MENU_SECTIONS}
     for item in items:
         section = FEATURE_SECTIONS.get(item["key"], "other")
@@ -117,5 +117,5 @@ def group_menu_items(items):
     return tuple(
         {"key": key, "title": title, "items": items_by_section[key]}
         for key, title in MENU_SECTIONS
-        if items_by_section[key]
+        if items_by_section[key] or (include_empty and key != "other")
     )

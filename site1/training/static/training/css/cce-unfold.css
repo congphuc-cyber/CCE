@@ -3,7 +3,7 @@
    Trung tâm Kỹ thuật Điện toán — ĐH Bách Khoa TP.HCM
    ========================================================================== */
 
-@import url('tokens.css?v=roles-delete-ui-20261111');
+@import url('tokens.css?v=shared-sidebar-20261111');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Nunito+Sans:ital,opsz,wght@0,6..12,300..800;1,6..12,300..800&display=swap');
 
 :root {
@@ -28,87 +28,18 @@ body.change-list {
   display: none !important;
 }
 
-/* ==========================================================================
-   CCE Unfold Sidebar Customization — Light Theme & High-Contrast Hover
-   ========================================================================== */
-
-#nav-sidebar, 
-#nav-sidebar-inner, 
-aside.sidebar, 
-aside[aria-label="Sidebar"],
+#nav-sidebar,
 div[id="nav-sidebar"] {
   background-color: var(--c-sidebar-bg) !important;
   border-right: 1px solid var(--c-sidebar-border) !important;
   color: var(--c-sidebar-text) !important;
 }
 
-#nav-sidebar-apps {
-  background-color: transparent !important;
-  padding: 8px 6px !important;
-}
-
-#nav-sidebar-apps > div {
-  margin: 0 0 4px !important;
-  padding: 0 0 8px !important;
-  border-bottom: 1px solid var(--c-border) !important;
-}
-
-#nav-sidebar-apps > div:last-child {
-  margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
-  border-bottom: 0 !important;
-}
-
-#nav-sidebar-apps > div > hr {
-  display: none !important;
-}
-
-#nav-sidebar-apps > div > h2 {
-  display: flex !important;
-  align-items: center !important;
-  min-height: 25px !important;
-  margin: 0 !important;
-  padding: 6px 12px !important;
-  font-size: 14px !important;
-  line-height: 1.2 !important;
-  text-transform: none !important;
-  border-radius: var(--radius-sm);
-  background-color: var(--c-primary-soft);
-  color: var(--c-primary) !important;
-}
-
-#nav-sidebar-apps > div:first-child > h2 {
-  display: none !important;
-}
-
-#nav-sidebar-apps > div > ol {
-  gap: 3px !important;
-}
-
-#nav-sidebar-apps h2.cursor-pointer {
-  border-radius: var(--radius-sm);
-  transition: color 0.16s ease-in-out, background-color 0.16s ease-in-out;
-}
-
-#nav-sidebar-apps h2.cursor-pointer:hover {
-  color: var(--c-primary) !important;
-  background-color: var(--c-sidebar-surface) !important;
-}
-
-#nav-sidebar-apps h2.cursor-pointer > span.material-symbols-outlined {
-  width: 7px !important;
-  height: 7px !important;
-  flex: 0 0 7px !important;
-  margin-left: auto !important;
-  border-right: 1.5px solid currentColor !important;
-  border-bottom: 1.5px solid currentColor !important;
-  font-size: 0 !important;
-  transform: rotate(45deg) translateY(-2px) !important;
-  transition: transform 0.16s ease-in-out !important;
-}
-
-#nav-sidebar-apps h2.cursor-pointer > span.material-symbols-outlined.rotate-90 {
-  transform: rotate(225deg) translate(-1px, -1px) !important;
+#nav-sidebar-inner.cce-sidebar {
+  width: 100% !important;
+  min-height: 100vh;
+  border-right: 0;
+  box-shadow: none;
 }
 
 .cce-admin-header-logout {
@@ -175,9 +106,71 @@ div[id="nav-sidebar"] {
   background-color: var(--c-primary-hover) !important;
 }
 
+body.change-list .filter-open-button.bg-primary-600 {
+  border-color: #B9E4E8 !important;
+  background-color: #B9E4E8 !important;
+  color: #0F172A !important;
+  font-weight: var(--font-weight-bold);
+}
+
+body.change-list .filter-open-button.bg-primary-600:hover {
+  border-color: #A9D9DE !important;
+  background-color: #A9D9DE !important;
+  color: #0F172A !important;
+}
+
+.cce-clear-filters {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #A3D5DA;
+  border-radius: var(--radius-md);
+  background-color: #B9E4E8;
+  color: #0F172A !important;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none !important;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.cce-clear-filters:hover {
+  border-color: #A9D9DE;
+  background-color: #A9D9DE;
+  color: #0F172A !important;
+}
+
+.cce-clear-filters:focus-visible {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
 body.change-list #result_list thead th {
   background-color: var(--c-table-header) !important;
   color: var(--c-primary) !important;
+}
+
+body.change-list #result_list {
+  border-collapse: separate !important;
+  border-spacing: 0;
+}
+
+body.change-list #result_list thead th,
+body.change-list #result_list tbody td {
+  text-align: center !important;
+  vertical-align: middle;
+  border-right: 1px solid var(--c-border-subtle) !important;
+}
+
+body.change-list #result_list thead th > div {
+  justify-content: center !important;
+}
+
+body.change-list #result_list thead th:last-child,
+body.change-list #result_list tbody td:last-child {
+  border-right: 0 !important;
 }
 
 body.change-list #result_list tbody tr:nth-child(even) td {
@@ -186,175 +179,6 @@ body.change-list #result_list tbody tr:nth-child(even) td {
 
 body.change-list #result_list tbody tr:hover td {
   background-color: var(--c-table-row-hover) !important;
-}
-
-.cce-admin-user-wrap {
-  position: relative;
-  margin: 0 12px 8px;
-  padding: 8px 10px 10px;
-  border: 1px solid var(--c-sidebar-border);
-  border-radius: var(--radius-md);
-  background: var(--c-sidebar-user-bg);
-}
-
-.cce-admin-user-card {
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background-color var(--transition-fast);
-}
-
-.cce-admin-user-card:hover,
-.cce-admin-user-card.is-open {
-  background: var(--c-surface);
-}
-
-.cce-admin-user-identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: 4px 2px;
-}
-
-.cce-admin-user-identity > div:first-child {
-  width: 36px !important;
-  min-width: 36px !important;
-  height: 36px !important;
-  flex: 0 0 36px;
-  border: 1px solid rgba(30, 77, 107, 0.12);
-  border-radius: 50% !important;
-  background-color: var(--c-primary) !important;
-  color: #FFFFFF !important;
-}
-
-.cce-admin-user-name {
-  min-width: 0;
-  flex: 1;
-  color: var(--c-sidebar-text-dark);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
-}
-
-.cce-admin-user-toggle {
-  color: var(--c-sidebar-text-muted);
-  font-size: 18px;
-  transition: transform var(--transition-fast);
-}
-
-.cce-admin-user-card.is-open .cce-admin-user-toggle {
-  transform: rotate(180deg);
-}
-
-.cce-admin-user-role {
-  margin-top: var(--space-2);
-  padding: 5px 8px;
-  border: 1px solid var(--c-sidebar-border);
-  border-radius: var(--radius-pill);
-  background: var(--c-surface);
-  color: var(--c-primary);
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.3;
-  text-align: center;
-}
-
-.cce-admin-user-menu {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 4px 0;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-md);
-  background: var(--c-surface);
-  box-shadow: var(--shadow-lg);
-}
-
-/* Sidebar App Titles & Group Headers */
-#nav-sidebar h2,
-#nav-sidebar .group-title,
-#nav-sidebar span[class*="text-xs"][class*="uppercase"],
-aside.sidebar span[class*="text-xs"][class*="uppercase"] {
-  color: var(--c-sidebar-text-muted) !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.8px !important;
-  font-size: 14px !important;
-  padding: 6px 12px !important;
-  text-transform: none !important;
-}
-
-/* Navigation Links inside Unfold Sidebar */
-#nav-sidebar-apps a,
-aside.sidebar #nav-sidebar-apps a {
-  color: var(--c-sidebar-text) !important;
-  border-radius: var(--radius-md) !important;
-  box-sizing: border-box !important;
-  min-height: 38px !important;
-  transition: all 0.16s ease-in-out !important;
-  border: 1px solid transparent !important;
-  font-weight: 500 !important;
-  font-size: 14px !important;
-}
-
-#nav-sidebar-apps a .material-symbols-outlined,
-aside.sidebar #nav-sidebar-apps a .material-symbols-outlined {
-  color: var(--c-sidebar-text-muted) !important;
-  font-size: 18px !important;
-  transition: color 0.16s ease-in-out, font-size 0.16s ease-in-out !important;
-}
-
-/* HOVER STATE: ĐẬM MÀU HƠN RÕ RỆT (TĂNG TƯƠNG PHẢN, DỄ THAO TÁC) */
-#nav-sidebar-apps a:hover,
-aside.sidebar #nav-sidebar-apps a:hover {
-  background-color: var(--c-sidebar-hover) !important;
-  border-color: var(--c-sidebar-hover-border) !important;
-  color: var(--c-sidebar-hover-text) !important;
-  font-size: calc(14px + 1pt) !important;
-  font-weight: 700 !important;
-  transform: none !important;
-  box-shadow: 0 1px 3px rgba(30, 77, 107, 0.08) !important;
-}
-
-#nav-sidebar-apps a:hover .material-symbols-outlined,
-#nav-sidebar-apps a:hover svg,
-aside.sidebar #nav-sidebar-apps a:hover .material-symbols-outlined {
-  color: var(--c-primary) !important;
-  font-size: calc(18px + 1pt) !important;
-  transform: none !important;
-}
-
-/* ACTIVE STATE: MÀU XANH CCE ĐẬM RÕ RÀNG */
-#nav-sidebar-apps a[class*="bg-primary"],
-#nav-sidebar-apps a[class*="active"],
-#nav-sidebar-apps a[aria-current="page"],
-aside.sidebar #nav-sidebar-apps a[aria-current="page"] {
-  background-color: var(--c-sidebar-active) !important;
-  color: var(--c-sidebar-active-text) !important;
-  border-color: var(--c-sidebar-active) !important;
-  font-size: calc(14px + 1pt) !important;
-  font-weight: 700 !important;
-  box-shadow: 0 2px 6px rgba(30, 77, 107, 0.25) !important;
-}
-
-#nav-sidebar-apps a[class*="bg-primary"] .material-symbols-outlined,
-#nav-sidebar-apps a[class*="active"] .material-symbols-outlined,
-#nav-sidebar-apps a[aria-current="page"] .material-symbols-outlined {
-  color: #FFFFFF !important;
-}
-
-#nav-sidebar-apps a[class*="active"]:hover .material-symbols-outlined,
-#nav-sidebar-apps a[aria-current="page"]:hover .material-symbols-outlined {
-  color: #FFFFFF !important;
-}
-
-#nav-sidebar-apps a[class*="bg-primary"] .material-symbols-outlined,
-#nav-sidebar-apps a[class*="active"] .material-symbols-outlined,
-#nav-sidebar-apps a[aria-current="page"] .material-symbols-outlined {
-  font-size: calc(18px + 1pt) !important;
 }
 
 /* HOVER Ở TAGS & BADGES ĐẬM MÀU HƠN */
@@ -450,20 +274,24 @@ aside.sidebar #nav-sidebar-apps a[aria-current="page"] {
 
 /* Action button inside Unfold table cells */
 .cce-table-btn {
-  display: inline-block;
-  padding: 3px 10px;
+  display: inline-flex;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   border-radius: var(--radius-sm);
   background: var(--c-table-action-bg);
-  color: var(--c-accent) !important;
+  color: #0F172A !important;
   border: 1px solid var(--c-accent-border);
   text-decoration: none !important;
   transition: all var(--transition-fast);
 }
 .cce-table-btn:hover {
-  background: var(--c-accent) !important;
-  color: #FFFFFF !important;
+  background: #C8E7DE !important;
+  border-color: #8FCBBB !important;
+  color: #0F172A !important;
 }
 .cce-table-btn-outline {
   background: transparent;
