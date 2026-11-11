@@ -6,34 +6,34 @@
 {% block page_description %}Cấu hình quyền truy cập và hiển thị menu cho từng nhóm vai trò trong hệ thống.{% endblock %}
 
 {% block content %}
-<section class="cce-card">
-  <form method="post">
+<section class="cce-card cce-permissions-panel">
+  <form method="post" class="cce-permissions-form">
     {% csrf_token %}
-    <div class="cce-table-wrap" tabindex="0" role="region" aria-label="Ma trận phân quyền, cuộn ngang để xem thêm">
-      <table class="cce-table" role="table">
+    <div class="cce-table-wrap cce-permissions-table-wrap" tabindex="0" role="region" aria-label="Ma trận phân quyền, cuộn ngang để xem thêm">
+      <table class="cce-table cce-permissions-table" role="table">
         <thead>
           <tr>
-            <th scope="col" style="min-width: 220px;">Chức năng hệ thống</th>
+            <th scope="col" class="cce-permissions-feature-heading">Chức năng hệ thống</th>
             {% for role_name in role_names %}
-              <th scope="col" style="text-align: center; min-width: 140px;">{{ role_name }}</th>
+              <th scope="col" class="cce-permissions-role-heading">{{ role_name }}</th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
           {% for row in matrix_rows %}
             <tr>
-              <th scope="row" style="font-weight: var(--font-weight-semibold); color: var(--c-primary);">
+              <th scope="row" class="cce-permissions-feature">
                 {{ row.feature.label }}
               </th>
               {% for cell in row.roles %}
-                <td style="text-align: center;">
-                  <label style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                <td class="cce-permissions-cell">
+                  <label class="cce-permissions-check-label">
                     <input
                       type="checkbox"
+                      class="cce-permissions-checkbox"
                       name="permissions"
                       value="{{ cell.input_value }}"
                       aria-label="{{ cell.group.name }}: {{ row.feature.label }}"
-                      style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--c-primary);"
                       {% if cell.allowed %}checked{% endif %}
                     >
                   </label>
@@ -45,11 +45,11 @@
       </table>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-5); flex-wrap: wrap; gap: var(--space-3);">
-      <p style="margin: 0; font-size: var(--font-size-xs); color: var(--c-text-muted);">
+    <div class="cce-permissions-footer">
+      <p class="cce-permissions-guidance">
         <strong>Quy tắc bảo mật:</strong> Bỏ chọn ô tương ứng sẽ ẩn menu và từ chối mọi yêu cầu truy cập trực tiếp.
       </p>
-      <button class="cce-btn cce-btn-success" type="submit">Lưu ma trận phân quyền</button>
+      <button class="cce-btn cce-btn-primary cce-permissions-save" type="submit">Lưu ma trận phân quyền</button>
     </div>
   </form>
 </section>

@@ -46,12 +46,12 @@
             datasets: [{
               label: "{{ chart_title|default:'Đăng ký trực tuyến' }}",
               data: {{ chart_values|safe }},
-              borderColor: '#1E4D6B',
-              backgroundColor: 'rgba(30, 77, 107, 0.08)',
+              borderColor: getComputedStyle(document.documentElement).getPropertyValue('--c-primary').trim(),
+              backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--c-primary-soft').trim(),
               borderWidth: 2.5,
               fill: true,
               tension: 0.3,
-              pointBackgroundColor: '#D4612A',
+              pointBackgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--c-accent').trim(),
               pointRadius: 4,
               pointHoverRadius: 6
             }]
@@ -64,7 +64,7 @@
             },
             scales: {
               x: { grid: { display: false } },
-              y: { beginAtZero: true, grid: { color: '#E2E8F0' } }
+              y: { beginAtZero: true, grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--c-border').trim() } }
             }
           }
         });
@@ -72,4 +72,3 @@
     });
   </script>
 {% endif %}
-

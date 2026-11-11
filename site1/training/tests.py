@@ -224,7 +224,7 @@ class PhaseThreeTests(TestCase):
         self.assertContains(response, '<details class="cce-nav-group">')
         self.assertContains(response, "material-symbols-outlined cce-nav-icon")
         self.assertContains(response, "dashboard</span>")
-        self.assertContains(response, "logout-button-shared-20261111")
+        self.assertContains(response, "roles-delete-ui-20261111")
         self.assertContains(response, "Quản lý đào tạo")
         self.assertContains(response, "Hồ sơ & Mật khẩu")
         self.assertContains(response, "cce-logout-button")
@@ -303,7 +303,7 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "Giáo vụ")
         self.assertContains(response, FEATURE_ICONS["courses"])
         self.assertContains(response, "Quản lý khảo thí")
-        self.assertContains(response, "logout-button-shared-20261111")
+        self.assertContains(response, "roles-delete-ui-20261111")
         self.assertContains(response, "Hồ sơ & Mật khẩu")
         self.assertContains(response, 'class="cce-admin-header-logout"')
         self.assertContains(response, 'class="cce-logout-button"')
@@ -604,6 +604,61 @@ class PhaseFiveTests(TestCase):
         self.assertEqual(updated_log.old_values["role"], ["Giáo vụ"])
         self.assertEqual(updated_log.new_values["role"], ["Giáo viên"])
 
+    def test_teacher_and_learner_rows_have_confirmed_delete_actions(self):
+        teacher = Teacher.objects.create(full_name="Giáo viên cần xóa")
+        learner = Learner.objects.create(full_name="Học viên cần xóa")
+        self.client.force_login(self.education_user)
+
+        teacher_list = self.client.get(reverse("admin:training_teacher_changelist"))
+        self.assertContains(teacher_list, f"/admin/training/teacher/{teacher.pk}/delete/")
+        learner_list = self.client.get(reverse("admin:training_learner_changelist"))
+        self.assertContains(learner_list, f"/admin/training/learner/{learner.pk}/delete/")
+
+        for obj, delete_url, changelist_url in (
+            (
+                teacher,
+                reverse("admin:training_teacher_delete", args=(teacher.pk,)),
+                reverse("admin:training_teacher_changelist"),
+            ),
+            (
+                learner,
+                reverse("admin:training_learner_delete", args=(learner.pk,)),
+                reverse("admin:training_learner_changelist"),
+            ),
+        ):
+            with self.subTest(model=obj._meta.verbose_name):
+                confirmation = self.client.get(delete_url)
+                self.assertEqual(confirmation.status_code, 200)
+                self.assertContains(confirmation, "delete-confirmation")
+
+                response = self.client.post(delete_url, {"post": "yes"})
+                self.assertRedirects(response, changelist_url)
+                self.assertFalse(type(obj).objects.filter(pk=obj.pk).exists())
+                self.assertTrue(
+                    AuditLog.objects.filter(
+                        action=AuditLog.Action.DELETE,
+                        object_type=obj._meta.label,
+                        object_id=str(obj.pk),
+                        old_values__full_name=obj.full_name,
+                    ).exists()
+                )
+
+    def test_delete_actions_require_the_matching_feature_permission(self):
+        learner = Learner.objects.create(full_name="Học viên bị hạn chế quyền")
+        RoleFeaturePermission.objects.update_or_create(
+            group=self.groups["Giáo vụ"],
+            feature="learners",
+            defaults={"allowed": False},
+        )
+        self.client.force_login(self.education_user)
+
+        response = self.client.get(
+            reverse("admin:training_learner_delete", args=(learner.pk,))
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Learner.objects.filter(pk=learner.pk).exists())
+
     def test_role_matrix_updates_menu_and_direct_access(self):
         self.groups["Giáo vụ"].permissions.add(
             Permission.objects.get(codename="view_course", content_type__app_label="training")
@@ -612,6 +667,8 @@ class PhaseFiveTests(TestCase):
         response = self.client.get(reverse("role-permissions"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Phân quyền theo vai trò")
+        self.assertContains(response, "cce-permissions-table")
+        self.assertContains(response, "cce-permissions-checkbox")
 
         selected = [
             f"{self.groups[role_name].pk}:{feature['key']}"

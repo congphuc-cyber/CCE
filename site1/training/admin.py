@@ -67,7 +67,20 @@ class BaseModelAdmin(UnfoldModelAdmin):
         return permission_check()
 
     def has_delete_permission(self, request, obj=None):
-        return self.allow_delete and super().has_delete_permission(request, obj)
+        if not self.allow_delete:
+            return False
+        if not roles_for_user(request.user) or not self.feature_key:
+            return super().has_delete_permission(request, obj)
+        return self.has_role_or_model_permission(
+            request,
+            lambda: super(BaseModelAdmin, self).has_delete_permission(request, obj),
+        )
+
+    def get_list_display(self, request):
+        fields = super().get_list_display(request)
+        if "delete_action" in fields and not self.has_delete_permission(request):
+            return tuple(field for field in fields if field != "delete_action")
+        return fields
 
     def has_module_permission(self, request):
         return self.has_role_or_model_permission(
@@ -116,6 +129,15 @@ class BaseModelAdmin(UnfoldModelAdmin):
                 old_values=obj._audit_old_values,
                 new_values=snapshot_instance(obj),
             )
+
+    def delete_model(self, request, obj):
+        record_audit(
+            request.user,
+            AuditLog.Action.DELETE,
+            obj,
+            old_values=snapshot_instance(obj),
+        )
+        super().delete_model(request, obj)
 
 
 class CourseAdmin(BaseModelAdmin):
@@ -205,10 +227,18 @@ class TrainingClassAdmin(BaseModelAdmin):
 
 class TeacherAdmin(BaseModelAdmin):
     feature_key = "teachers"
+    allow_delete = True
     form = TeacherAdminForm
     change_list_title = "Danh sách giáo viên"
-    list_display = ("full_name", "contact_details", "classes_summary", "edit_action")
+    list_display = (
+        "full_name",
+        "contact_details",
+        "classes_summary",
+        "edit_action",
+        "delete_action",
+    )
     list_display_links = None
+    actions = None
     search_fields = ("full_name", "phone", "email")
     ordering = ("full_name",)
 
@@ -232,12 +262,30 @@ class TeacherAdmin(BaseModelAdmin):
             url = reverse(f"{self.admin_site.name}:home_teacher_change", args=(obj.pk,))
         return format_html('<a class="cce-table-btn" href="{}">Sửa</a>', url)
 
+    @admin.display(description="Xóa")
+    def delete_action(self, obj):
+        url = reverse(f"{self.admin_site.name}:training_teacher_delete", args=(obj.pk,))
+        return format_html(
+            '<a class="cce-table-btn table-action-delete" href="{}">Xóa</a>',
+            url,
+        )
+
 
 class LearnerAdmin(BaseModelAdmin):
     feature_key = "learners"
-    list_display = ("full_name", "phone", "email")
+    allow_delete = True
+    list_display = ("full_name", "phone", "email", "delete_action")
+    actions = None
     search_fields = ("full_name", "phone", "email")
     ordering = ("full_name",)
+
+    @admin.display(description="Hành động")
+    def delete_action(self, obj):
+        url = reverse(f"{self.admin_site.name}:training_learner_delete", args=(obj.pk,))
+        return format_html(
+            '<a class="cce-table-btn table-action-delete" href="{}">Xóa</a>',
+            url,
+        )
 
 
 class CceRoleFilter(SimpleListFilter):

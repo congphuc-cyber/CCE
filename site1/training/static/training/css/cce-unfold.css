@@ -3,7 +3,7 @@
    Trung tâm Kỹ thuật Điện toán — ĐH Bách Khoa TP.HCM
    ========================================================================== */
 
-@import url('tokens.css');
+@import url('tokens.css?v=roles-delete-ui-20261111');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Nunito+Sans:ital,opsz,wght@0,6..12,300..800;1,6..12,300..800&display=swap');
 
 :root {
@@ -13,6 +13,10 @@
 
 body {
   font-family: var(--font-sans) !important;
+}
+
+body.change-list {
+  background-color: var(--c-bg) !important;
 }
 
 #page > .relative.z-60 > .fixed,
@@ -68,6 +72,9 @@ div[id="nav-sidebar"] {
   font-size: 14px !important;
   line-height: 1.2 !important;
   text-transform: none !important;
+  border-radius: var(--radius-sm);
+  background-color: var(--c-primary-soft);
+  color: var(--c-primary) !important;
 }
 
 #nav-sidebar-apps > div:first-child > h2 {
@@ -140,6 +147,9 @@ div[id="nav-sidebar"] {
   display: flex;
   align-items: center;
   min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background-color: var(--c-primary-soft);
 }
 
 .cce-admin-search-actions #changelist-search {
@@ -156,6 +166,26 @@ div[id="nav-sidebar"] {
 .cce-admin-filter-add .addlink {
   flex: 0 0 38px;
   margin: 0 !important;
+  border-color: var(--c-primary) !important;
+  background-color: var(--c-primary) !important;
+}
+
+.cce-admin-filter-add .addlink:hover {
+  border-color: var(--c-primary-hover) !important;
+  background-color: var(--c-primary-hover) !important;
+}
+
+body.change-list #result_list thead th {
+  background-color: var(--c-table-header) !important;
+  color: var(--c-primary) !important;
+}
+
+body.change-list #result_list tbody tr:nth-child(even) td {
+  background-color: var(--c-table-row-alt) !important;
+}
+
+body.change-list #result_list tbody tr:hover td {
+  background-color: var(--c-table-row-hover) !important;
 }
 
 .cce-admin-user-wrap {
@@ -425,14 +455,14 @@ aside.sidebar #nav-sidebar-apps a[aria-current="page"] {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-sm);
-  background: var(--c-primary-soft);
-  color: var(--c-primary) !important;
-  border: 1px solid transparent;
+  background: var(--c-table-action-bg);
+  color: var(--c-accent) !important;
+  border: 1px solid var(--c-accent-border);
   text-decoration: none !important;
   transition: all var(--transition-fast);
 }
 .cce-table-btn:hover {
-  background: var(--c-primary) !important;
+  background: var(--c-accent) !important;
   color: #FFFFFF !important;
 }
 .cce-table-btn-outline {
@@ -445,9 +475,9 @@ aside.sidebar #nav-sidebar-apps a[aria-current="page"] {
   color: var(--c-text) !important;
 }
 .cce-table-btn.table-action-delete {
-  background: var(--c-primary-soft) !important;
-  border-color: transparent !important;
-  color: var(--c-primary) !important;
+  background: var(--c-danger-soft) !important;
+  border-color: var(--c-danger-border) !important;
+  color: var(--c-danger) !important;
 }
 .cce-table-btn.table-action-delete:hover {
   background: var(--c-danger) !important;

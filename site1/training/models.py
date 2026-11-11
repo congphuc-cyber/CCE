@@ -242,6 +242,7 @@ class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = "create", "Tạo"
         EDIT = "edit", "Sửa"
+        DELETE = "delete", "Xóa"
         PUBLISH = "publish", "Công bố"
         ISSUE = "issue", "Cấp"
         REVOKE = "revoke", "Thu hồi"
