@@ -406,6 +406,44 @@ class PhaseFourTests(TestCase):
             )
         self.assertFalse(self.education_user.is_staff)
 
+    def test_training_admin_lists_use_shared_pagination_summary(self):
+        for index in range(10):
+            Course.objects.create(name=f"Khóa phân trang {index:02}", pass_threshold=75)
+            TrainingClass.objects.create(
+                name=f"Lớp phân trang {index:02}",
+                course=self.course,
+                learning_format=TrainingClass.LearningFormat.AT_CENTER,
+                schedule="Thứ Hai, 18:00",
+                max_students=10,
+            )
+            Teacher.objects.create(full_name=f"Giáo viên phân trang {index:02}")
+            Learner.objects.create(full_name=f"Học viên phân trang {index:02}")
+
+        Teacher.objects.create(full_name="Giáo viên phân trang 10")
+        Learner.objects.create(full_name="Học viên phân trang 10")
+
+        self.client.force_login(self.education_user)
+        changelist_routes = (
+            "admin:training_course_changelist",
+            "admin:training_trainingclass_changelist",
+            "admin:training_teacher_changelist",
+            "admin:training_learner_changelist",
+        )
+        for route_name in changelist_routes:
+            with self.subTest(route=route_name):
+                response = self.client.get(reverse(route_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Tổng cộng 11 bản ghi")
+                self.assertContains(response, "Trang")
+                self.assertContains(response, "p=1")
+                self.assertContains(response, 'class="cce-page-link is-active">1</span>')
+                self.assertContains(response, "Sau")
+
+                second_page = self.client.get(reverse(route_name), {"p": 1})
+                self.assertEqual(second_page.status_code, 200)
+                self.assertContains(second_page, 'class="cce-page-link is-active">2</span>')
+                self.assertContains(second_page, "p=0")
+
     def test_education_dashboard_sidebar_shows_only_education_groups(self):
         self.client.force_login(self.education_user)
         response = self.client.get(reverse("dashboard"))

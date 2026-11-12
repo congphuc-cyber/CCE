@@ -3,8 +3,8 @@
   {% with page_param|default:"page" as query_param %}
     <nav class="cce-pagination" aria-label="Phân trang dữ liệu">
       <div>
-        Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-        ({{ page_obj.paginator.count }} {{ count_label|default:"bản ghi" }})
+        Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong>
+        (Tổng cộng {{ page_obj.paginator.count }} {{ count_label|default:"bản ghi" }})
       </div>
       <div class="cce-pagination-links">
         {% if page_obj.has_previous %}

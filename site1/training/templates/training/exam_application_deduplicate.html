@@ -142,7 +142,7 @@
       </section>
     {% endfor %}
   </div>
-  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="nhóm trùng lặp" %}
+  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 
   <div style="display:flex; gap:var(--space-3); margin-top:var(--space-6);">
     <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-list' %}" style="display:inline-flex; align-items:center; gap:var(--space-2);">

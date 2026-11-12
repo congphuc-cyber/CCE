@@ -100,21 +100,6 @@
   </div>
 </section>
 
-{% if page_obj.paginator.num_pages > 1 %}
-  <nav class="cce-pagination" aria-label="Phân trang nhật ký">
-    <div>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} bản ghi)</div>
-    <div class="cce-pagination-links">
-      {% if page_obj.has_previous %}
-        {% page_url request page_obj.previous_page_number as previous_url %}
-        <a class="cce-page-link" href="{{ previous_url }}">&laquo; Trước</a>
-      {% endif %}
-      <span class="cce-page-link is-active">{{ page_obj.number }}</span>
-      {% if page_obj.has_next %}
-        {% page_url request page_obj.next_page_number as next_url %}
-        <a class="cce-page-link" href="{{ next_url }}">Sau &raquo;</a>
-      {% endif %}
-    </div>
-  </nav>
-{% endif %}
+{% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 {% endblock %}
 

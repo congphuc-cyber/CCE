@@ -97,28 +97,7 @@
       </table>
     </div>
 
-    {% if page_obj.paginator.num_pages > 1 %}
-      <nav class="cce-pagination" aria-label="Phân trang lớp học" style="margin-top:var(--space-4); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
-        <div class="cce-pagination-info" style="font-size:var(--font-size-sm); color:var(--c-text-muted);">
-          Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong> (Tổng cộng {{ page_obj.paginator.count }} lớp học)
-        </div>
-        <div class="cce-pagination-links" style="display:flex; gap:var(--space-1);">
-          {% if page_obj.has_previous %}
-            <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}">&laquo; Trước</a>
-          {% endif %}
-          {% for p in page_obj.paginator.page_range %}
-            {% if p == page_obj.number %}
-              <span class="cce-page-link is-active">{{ p }}</span>
-            {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}
-              <a class="cce-page-link" href="?page={{ p }}">{{ p }}</a>
-            {% endif %}
-          {% endfor %}
-          {% if page_obj.has_next %}
-            <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}">Sau &raquo;</a>
-          {% endif %}
-        </div>
-      </nav>
-    {% endif %}
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 
   {% else %}
     <div class="cce-empty-state" style="padding:var(--space-6);">
