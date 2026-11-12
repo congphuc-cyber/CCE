@@ -8,11 +8,66 @@
 {% block content %}
 <div class="cce-dashboard-view">
   <!-- Stats Grid -->
-  <section class="cce-stat-grid" aria-label="Các số liệu tổng quan">
+  <section class="cce-stat-grid stat-theme-dashboard" aria-label="Các số liệu tổng quan">
     {% for stat in stats %}
       {% include "training/partials/stat_card.html" with stat_label=stat.label stat_value=stat.value stat_note=stat.note %}
     {% endfor %}
   </section>
+
+  <!-- Quick Actions Panel -->
+  <div class="cce-card" style="margin-bottom: var(--space-6);">
+    <div class="cce-card-header" style="border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-3);">
+      <h2 class="cce-card-title" style="font-size: var(--font-size-md); display: flex; align-items: center; gap: var(--space-2);">
+        <span class="material-symbols-outlined" style="font-size: 1.25rem; color: var(--c-primary);" aria-hidden="true">bolt</span>
+        Lối tắt thao tác nhanh
+      </h2>
+    </div>
+    <div class="cce-quick-actions-grid">
+      <a class="cce-quick-action-tile" href="{% url 'exam-period-list' %}">
+        <div class="cce-quick-action-icon" style="background-color: #E0F2FE; color: #0284C7;">
+          <span class="material-symbols-outlined" aria-hidden="true">event_note</span>
+        </div>
+        <div class="cce-quick-action-text">
+          <div class="cce-quick-action-title">Quản lý đợt thi</div>
+          <div class="cce-quick-action-desc">Kế hoạch & lịch tổ chức</div>
+        </div>
+        <span class="material-symbols-outlined cce-quick-action-arrow" aria-hidden="true">arrow_forward</span>
+      </a>
+
+      <a class="cce-quick-action-tile" href="{% url 'exam-application-list' %}">
+        <div class="cce-quick-action-icon" style="background-color: #ECFDF5; color: #059669;">
+          <span class="material-symbols-outlined" aria-hidden="true">assignment_ind</span>
+        </div>
+        <div class="cce-quick-action-text">
+          <div class="cce-quick-action-title">Hồ sơ đăng ký</div>
+          <div class="cce-quick-action-desc">Tiếp nhận & xét duyệt</div>
+        </div>
+        <span class="material-symbols-outlined cce-quick-action-arrow" aria-hidden="true">arrow_forward</span>
+      </a>
+
+      <a class="cce-quick-action-tile" href="{% url 'exam-score-list' %}">
+        <div class="cce-quick-action-icon" style="background-color: #FFFBEB; color: #D97706;">
+          <span class="material-symbols-outlined" aria-hidden="true">grade</span>
+        </div>
+        <div class="cce-quick-action-text">
+          <div class="cce-quick-action-title">Quản lý điểm thi</div>
+          <div class="cce-quick-action-desc">Bảng điểm & kết quả</div>
+        </div>
+        <span class="material-symbols-outlined cce-quick-action-arrow" aria-hidden="true">arrow_forward</span>
+      </a>
+
+      <a class="cce-quick-action-tile" href="{% url 'mybk-export' %}">
+        <div class="cce-quick-action-icon" style="background-color: #F5F3FF; color: #7C3AED;">
+          <span class="material-symbols-outlined" aria-hidden="true">cloud_sync</span>
+        </div>
+        <div class="cce-quick-action-text">
+          <div class="cce-quick-action-title">Xuất dữ liệu MyBK</div>
+          <div class="cce-quick-action-desc">Đồng bộ cổng sinh viên</div>
+        </div>
+        <span class="material-symbols-outlined cce-quick-action-arrow" aria-hidden="true">arrow_forward</span>
+      </a>
+    </div>
+  </div>
 
   <!-- Daily Registration Chart -->
   {% include "training/partials/daily_chart.html" with chart_id=chart_id chart_title=chart_title chart_labels=chart_labels chart_values=chart_values date_form=date_form %}

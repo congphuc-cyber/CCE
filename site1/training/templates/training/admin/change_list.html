@@ -1,7 +1,23 @@
 {% extends "admin/change_list.html" %}
-{% load admin_list %}
+{% load admin_list ui_components %}
 
 {% block nav-global-side %}{% endblock %}
+
+{% block date_hierarchy %}
+    {{ block.super }}
+    {% get_admin_stats opts.model_name as admin_stats %}
+    {% if admin_stats and not is_popup %}
+        <div class="cce-stat-grid {{ admin_stats.theme }}" style="margin-bottom:var(--space-6); width:100%;">
+            {% for card in admin_stats.cards %}
+                <div class="cce-stat-card">
+                    <div class="cce-stat-label">{{ card.label }}</div>
+                    <div class="cce-stat-value">{{ card.value }}</div>
+                    <div class="cce-stat-note">{{ card.note }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}
 
 {% block search %}
     <div class="cce-admin-search-actions">
@@ -16,6 +32,11 @@
             <a class="cce-clear-filters" href="{{ cl.clear_all_filters_qs }}" aria-label="Xóa tất cả bộ lọc">
                 <span class="material-symbols-outlined" aria-hidden="true">filter_alt_off</span>
                 <span>Xóa bộ lọc</span>
+            </a>
+        {% else %}
+            <a class="cce-btn cce-btn-reset" href="?" aria-label="Đặt lại bộ lọc" style="height:38px; padding:0 14px; text-decoration:none;">
+                <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
+                <span>Đặt lại</span>
             </a>
         {% endif %}
         {% include "admin/change_list_object_tools.html" %}

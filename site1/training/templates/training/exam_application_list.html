@@ -1,0 +1,225 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Hồ sơ đăng ký dự thi{% endblock %}
+{% block breadcrumb_title %}Hồ sơ đăng ký{% endblock %}
+{% block page_title %}Hồ sơ đăng ký dự thi{% endblock %}
+{% block page_description %}{{ page_description|default:"Quản lý danh sách hồ sơ thí sinh đăng ký, sàng lọc hồ sơ hợp lệ và xử lý trùng lặp." }}{% endblock %}
+
+{% block page_actions %}
+  <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-import' %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
+      <span>Nhập từ Google Form</span>
+    </a>
+    <a class="cce-btn {% if duplicate_count > 0 %}cce-btn-danger{% else %}cce-btn-secondary{% endif %}"
+       href="{% url 'exam-application-deduplicate' %}"
+       style="display:inline-flex; align-items:center; gap:var(--space-1);">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">content_copy</span>
+      <span>Xử lý trùng</span>
+      {% if duplicate_count > 0 %}
+        <span class="cce-badge" style="background:rgba(255,255,255,0.3); color:inherit; border:none; margin-left:4px; font-weight:var(--font-weight-bold);">{{ duplicate_count }}</span>
+      {% endif %}
+    </a>
+  </div>
+{% endblock %}
+
+{% block content %}
+{# ── Alert cảnh báo hồ sơ trùng ──────────────────────────────────── #}
+{% if duplicate_count > 0 %}
+  <div class="cce-alert cce-alert-danger" role="alert" style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-6); border-radius:var(--radius-md); box-shadow:var(--shadow-sm); padding:var(--space-4) var(--space-5);">
+    <span class="material-symbols-outlined" style="font-size:1.75rem; color:var(--c-danger); flex-shrink:0;" aria-hidden="true">warning</span>
+    <div>
+      <strong style="font-size:var(--font-size-base); color:var(--c-danger);">Phát hiện {{ duplicate_count }} hồ sơ trùng lặp cần xử lý</strong>
+      <p style="margin:2px 0 0 0; font-size:var(--font-size-sm); color:var(--c-text-muted);">
+        Các hồ sơ trùng họ tên, số CCCD/CMND trong cùng đợt thi cần được xử lý: duyệt giữ lại 1 hồ sơ và xóa các bản ghi trùng lặp còn lại.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{# ── Thống kê tổng quan nhanh (KPI Cards) ────────────────────────── #}
+<div class="cce-stat-grid stat-theme-app" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng hồ sơ tiếp nhận</div>
+    <div class="cce-stat-value">{{ total_applications|default:0 }}</div>
+    <div class="cce-stat-note">Ghi nhận từ mọi nguồn đăng ký</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Hồ sơ hợp lệ</div>
+    <div class="cce-stat-value">{{ valid_count|default:0 }}</div>
+    <div class="cce-stat-note">Đã sẵn sàng để phân phòng thi</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Hồ sơ trùng lặp</div>
+    <div class="cce-stat-value">{{ duplicate_count|default:0 }}</div>
+    <div class="cce-stat-note">
+      {% if duplicate_count > 0 %}
+        Cần rà soát & hợp nhất hồ sơ
+      {% else %}
+        Dữ liệu hồ sơ sạch sẽ
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đợt thi đang mở ĐK</div>
+    <div class="cce-stat-value">{{ open_periods_count|default:0 }}</div>
+    <div class="cce-stat-note">Đang tiếp nhận thí sinh mới</div>
+  </div>
+</div>
+
+{# ── Bảng danh sách hồ sơ ────────────────────────────────────────── #}
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách thí sinh đăng ký dự thi</h2>
+  </div>
+
+  <div class="cce-filter-bar">
+    <form method="get" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:flex-end; width:100%;">
+      <div class="cce-filter-item">
+        <label for="id_q" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Tìm kiếm thí sinh</label>
+        {{ filter_form.q }}
+      </div>
+      <div class="cce-filter-item">
+        <label for="id_exam_period" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Lọc theo đợt thi</label>
+        {{ filter_form.exam_period }}
+      </div>
+      <div class="cce-filter-item">
+        <label for="id_source" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Kênh đăng ký</label>
+        {{ filter_form.source }}
+      </div>
+      <div class="cce-filter-item">
+        <label for="id_status" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Trạng thái hồ sơ</label>
+        {{ filter_form.status }}
+      </div>
+      <div class="cce-filter-actions">
+        <button class="cce-btn cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">filter_alt</span>
+          <span>Áp dụng lọc</span>
+        </button>
+        <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?" style="display:inline-flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
+          <span>Đặt lại</span>
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {% if page_obj.object_list %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col" style="min-width:220px;">Thí sinh & Liên hệ</th>
+            <th scope="col" style="min-width:160px;">Số CCCD / CMND</th>
+            <th scope="col" style="min-width:240px;">Đợt thi đăng ký</th>
+            <th scope="col" style="min-width:150px;">Kênh đăng ký</th>
+            <th scope="col" style="min-width:140px;">Thời điểm ĐK</th>
+            <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in page_obj %}
+            <tr {% if app.status == 'duplicate' %}style="background:var(--c-danger-soft);"{% endif %}>
+              <td>
+                <div style="display:flex; align-items:center; gap:var(--space-2);">
+                  <div style="width:36px; height:36px; border-radius:var(--radius-pill); background:var(--c-primary-soft); color:var(--c-primary); display:flex; align-items:center; justify-content:center; font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); flex-shrink:0;">
+                    {{ app.full_name|slice:":1"|upper }}
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:2px;">
+                    <strong style="font-size:var(--font-size-base); color:var(--c-text);">{{ app.full_name }}</strong>
+                    <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                      <span class="material-symbols-outlined" style="font-size:0.9rem;" aria-hidden="true">call</span>
+                      <span>{{ app.phone|default:"Chưa có SĐT" }}</span>
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); letter-spacing:0.5px; color:var(--c-text);">
+                  {{ app.id_number }}
+                </span>
+              </td>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">{{ app.exam_period.name }}</span>
+                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                    Ngày thi: {{ app.exam_period.exam_date|date:"d/m/Y" }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs);">
+                  {% if app.source == 'google_form' %}
+                    <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-accent);" aria-hidden="true">description</span>
+                    <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Google Form</span>
+                  {% elif app.source == 'direct' %}
+                    <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-primary-light);" aria-hidden="true">storefront</span>
+                    <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Tại cơ sở</span>
+                  {% elif app.source == 'partner' %}
+                    <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-violet);" aria-hidden="true">handshake</span>
+                    <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Đối tác</span>
+                  {% else %}
+                    <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-highlight);" aria-hidden="true">language</span>
+                    <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Trực tuyến</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                  <span class="material-symbols-outlined" style="font-size:0.95rem;" aria-hidden="true">schedule</span>
+                  <span>{{ app.registered_at|date:"d/m/Y H:i" }}</span>
+                </div>
+              </td>
+              <td style="text-align:center;">
+                {% if app.status == 'new' %}
+                  <span class="cce-badge cce-badge-new">Mới nhận</span>
+                {% elif app.status == 'valid' %}
+                  <span class="cce-badge cce-badge-valid">Hợp lệ</span>
+                {% elif app.status == 'duplicate' %}
+                  <span class="cce-badge cce-badge-duplicate" title="Hồ sơ bị trùng CCCD, vui lòng xử lý">Trùng lặp</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# ── Phân trang ────────────────────────────────────────────────── #}
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="cce-pagination" aria-label="Phân trang" style="margin-top:var(--space-4);">
+        <div style="font-size:var(--font-size-sm); color:var(--c-text-muted);">
+          Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong> (Tổng cộng {{ page_obj.paginator.count }} hồ sơ)
+        </div>
+        <div class="cce-pagination-links">
+          {% if page_obj.has_previous %}
+            {% page_url request page_obj.previous_page_number as previous_url %}
+            <a class="cce-page-link" href="{{ previous_url }}">&laquo; Trang trước</a>
+          {% endif %}
+          <span class="cce-page-link is-active">{{ page_obj.number }}</span>
+          {% if page_obj.has_next %}
+            {% page_url request page_obj.next_page_number as next_url %}
+            <a class="cce-page-link" href="{{ next_url }}">Trang sau &raquo;</a>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
+      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">person_search</span>
+      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Không tìm thấy hồ sơ nào</p>
+      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
+        Không có hồ sơ thí sinh nào khớp với tiêu chí tìm kiếm hoặc bộ lọc hiện tại.
+      </p>
+      <a class="cce-btn cce-btn-accent" href="{% url 'exam-application-import' %}">
+        + Nhập hồ sơ từ Google Form / File
+      </a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

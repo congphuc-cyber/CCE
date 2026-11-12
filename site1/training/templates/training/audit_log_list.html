@@ -1,4 +1,5 @@
 {% extends "training/base_internal.html" %}
+{% load ui_components %}
 
 {% block title %}Nhật ký thao tác{% endblock %}
 {% block breadcrumb_title %}Nhật ký thao tác{% endblock %}
@@ -6,6 +7,33 @@
 {% block page_description %}Theo dõi lịch sử và chi tiết các thay đổi dữ liệu nhạy cảm trong hệ thống.{% endblock %}
 
 {% block content %}
+{# 4 Thẻ chỉ số tổng quan nhật ký hệ thống #}
+<div class="cce-stat-grid stat-theme-audit" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng bản ghi nhật ký</div>
+    <div class="cce-stat-value">{{ total_logs_count|default:0 }}</div>
+    <div class="cce-stat-note">Lịch sử thao tác toàn hệ thống</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Thao tác tạo mới</div>
+    <div class="cce-stat-value">{{ create_actions_count|default:0 }}</div>
+    <div class="cce-stat-note">Khóa học, lớp, tài khoản được thêm</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Thao tác cập nhật</div>
+    <div class="cce-stat-value">{{ edit_actions_count|default:0 }}</div>
+    <div class="cce-stat-note">Chỉnh sửa thông tin, phân quyền</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Thao tác xóa dữ liệu</div>
+    <div class="cce-stat-value">{{ delete_actions_count|default:0 }}</div>
+    <div class="cce-stat-note">Hồ sơ đã được xóa lưu vết</div>
+  </div>
+</div>
+
 <!-- Filter Form -->
 <section class="cce-filter-bar" aria-label="Bộ lọc nhật ký">
   <form method="get" style="display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; width: 100%;">
@@ -20,8 +48,14 @@
     {% endfor %}
 
     <div class="cce-filter-actions">
-      <button class="cce-btn cce-btn-primary" type="submit">Lọc</button>
-      <a class="cce-btn cce-btn-secondary" href="{% url 'audit-log-list' %}">Xóa bộ lọc</a>
+      <button class="cce-btn cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">filter_alt</span>
+        <span>Áp dụng lọc</span>
+      </button>
+      <a class="cce-btn cce-btn-secondary cce-btn-reset" href="{% url 'audit-log-list' %}" style="display:inline-flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
+        <span>Đặt lại</span>
+      </a>
     </div>
   </form>
 </section>
@@ -71,11 +105,13 @@
     <div>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} bản ghi)</div>
     <div class="cce-pagination-links">
       {% if page_obj.has_previous %}
-        <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}">&laquo; Trước</a>
+        {% page_url request page_obj.previous_page_number as previous_url %}
+        <a class="cce-page-link" href="{{ previous_url }}">&laquo; Trước</a>
       {% endif %}
       <span class="cce-page-link is-active">{{ page_obj.number }}</span>
       {% if page_obj.has_next %}
-        <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}">Sau &raquo;</a>
+        {% page_url request page_obj.next_page_number as next_url %}
+        <a class="cce-page-link" href="{{ next_url }}">Sau &raquo;</a>
       {% endif %}
     </div>
   </nav>

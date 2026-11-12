@@ -26,6 +26,7 @@ from training.forms import (
 )
 from training.models import AuditLog, ClassAssignment, Enrollment, Learner, RoleFeaturePermission, Teacher, TrainingClass
 from training.navigation import ROLE_MENUS, group_menu_items, roles_for_user
+from training.pagination import PAGE_SIZE
 
 
 class DemoForm(forms.Form):
@@ -88,7 +89,13 @@ AUDIT_OBJECT_TYPE_LABELS = {
     "home.Enrollment": "Ghi danh học viên",
     "home.Learner": "Học viên",
     "home.Teacher": "Giáo viên",
-    "home.TrainingClass": "Lớp học",
+    "home.TrainingClass": "LỜp học",
+    "training.ExamPeriod": "Đợt thi",
+    "training.ExamApplication": "Hồ sơ đăng ký dự thi",
+    "training.ExamRoom": "Phòng thi",
+    "training.ExamRoomAssignment": "Xếp phòng thi",
+    "training.ExamScore": "Điểm thi",
+    "training.MyBKExportLog": "Nhật ký xuất MyBK",
 }
 
 
@@ -242,7 +249,12 @@ def my_class_list(request):
             .distinct()
         )
 
-    page_obj = Paginator(classes, 25).get_page(request.GET.get("page"))
+    page_obj = Paginator(classes, PAGE_SIZE).get_page(request.GET.get("page"))
+    total_assigned_count = classes.count()
+    open_assigned_count = classes.filter(status=TrainingClass.Status.OPEN).count()
+    total_students_count = Enrollment.objects.filter(training_class__in=classes).count()
+    closed_assigned_count = classes.filter(status=TrainingClass.Status.CLOSED).count()
+
     rows = [
         {
             "id": item.pk,
@@ -263,6 +275,11 @@ def my_class_list(request):
             "breadcrumbs": [{"label": "Lớp của tôi"}],
             "rows": rows,
             "page_obj": page_obj,
+            "teacher": teacher,
+            "total_assigned_count": total_assigned_count,
+            "open_assigned_count": open_assigned_count,
+            "total_students_count": total_students_count,
+            "closed_assigned_count": closed_assigned_count,
             "columns": [
                 {"key": "name", "label": "Tên lớp"},
                 {"key": "course", "label": "Khóa học"},
@@ -300,7 +317,7 @@ def class_detail(request, class_id):
 
     can_manage = _can_manage_classes(request.user)
     enrollments = training_class.enrollments.select_related("learner").order_by("learner__full_name")
-    page_obj = Paginator(enrollments, 25).get_page(request.GET.get("page"))
+    page_obj = Paginator(enrollments, PAGE_SIZE).get_page(request.GET.get("page"))
     learners = [
         {
             "id": enrollment.learner_id,
@@ -310,9 +327,10 @@ def class_detail(request, class_id):
         }
         for enrollment in page_obj
     ]
-    assignments = list(
-        training_class.teacher_assignments.filter(is_active=True).select_related("teacher")
-    )
+    assignments = Paginator(
+        training_class.teacher_assignments.filter(is_active=True).select_related("teacher"),
+        PAGE_SIZE,
+    ).get_page(request.GET.get("teachers_page"))
     for assignment in assignments:
         assignment.modal_id = f"remove-assignment-{assignment.pk}"
         assignment.remove_url = reverse(
@@ -336,6 +354,7 @@ def class_detail(request, class_id):
             ],
             "training_class": training_class,
             "assignments": assignments,
+            "teachers_page_obj": assignments,
             "learners": learners,
             "page_obj": page_obj,
             "columns": [
@@ -449,9 +468,10 @@ def class_assignments(request, class_id):
         messages.success(request, "Đã phân công giáo viên cho lớp.")
         return redirect("class-assignments", class_id=class_id)
 
-    assignments = list(
-        training_class.teacher_assignments.filter(is_active=True).select_related("teacher")
-    )
+    assignments = Paginator(
+        training_class.teacher_assignments.filter(is_active=True).select_related("teacher"),
+        PAGE_SIZE,
+    ).get_page(request.GET.get("page"))
     for assignment in assignments:
         assignment.modal_id = f"remove-assignment-{assignment.pk}"
         assignment.remove_url = reverse(
@@ -472,6 +492,7 @@ def class_assignments(request, class_id):
             "training_class": training_class,
             "form": form,
             "assignments": assignments,
+            "page_obj": assignments,
         },
     )
 
@@ -553,13 +574,26 @@ def role_permissions(request):
             administrator_group = next(
                 group for group in groups if group.name == "Quản trị viên"
             )
+            changed_roles = [
+                group.name for group in groups
+                if states.get(group.name) != new_states.get(group.name)
+            ]
+            if changed_roles:
+                audit_old = {r: states[r] for r in changed_roles}
+                audit_new = {r: new_states[r] for r in changed_roles}
+                label = f"Phân quyền vai trò: {', '.join(changed_roles)}" if len(changed_roles) <= 2 else "Ma trận phân quyền theo vai trò"
+            else:
+                audit_old = states
+                audit_new = new_states
+                label = "Ma trận phân quyền theo vai trò"
+
             record_audit(
                 request.user,
                 AuditLog.Action.EDIT,
                 administrator_group,
-                old_values=states,
-                new_values=new_states,
-                object_label="Ma trận phân quyền theo vai trò",
+                old_values=audit_old,
+                new_values=audit_new,
+                object_label=label,
             )
         messages.success(request, "Ma trận phân quyền đã được lưu.")
         states = new_states
@@ -578,6 +612,14 @@ def role_permissions(request):
             for feature in features
         ]
 
+    total_roles_count = len(groups)
+    total_features_count = len(features)
+    active_permissions_count = sum(
+        1 for r in matrix_rows for cell in r["roles"] if cell["allowed"]
+    )
+    total_slots = total_roles_count * total_features_count
+    coverage_rate = f"{round((active_permissions_count / total_slots * 100), 1)}%" if total_slots > 0 else "100%"
+
     return render(
         request,
         "training/role_permissions.html",
@@ -588,6 +630,10 @@ def role_permissions(request):
             "breadcrumbs": [{"label": "Phân quyền theo vai trò"}],
             "role_names": [group.name for group in groups],
             "matrix_rows": matrix_rows,
+            "total_roles_count": total_roles_count,
+            "total_features_count": total_features_count,
+            "active_permissions_count": active_permissions_count,
+            "coverage_rate": coverage_rate,
         },
     )
 
@@ -616,7 +662,12 @@ def audit_log_list(request):
         if to_date:
             logs = logs.filter(created_at__date__lte=to_date)
 
-    page_obj = Paginator(logs, 25).get_page(request.GET.get("page"))
+    page_obj = Paginator(logs, PAGE_SIZE).get_page(request.GET.get("page"))
+    total_logs_count = AuditLog.objects.count()
+    create_actions_count = AuditLog.objects.filter(action=AuditLog.Action.CREATE).count()
+    edit_actions_count = AuditLog.objects.filter(action=AuditLog.Action.EDIT).count()
+    delete_actions_count = AuditLog.objects.filter(action=AuditLog.Action.DELETE).count()
+
     return render(
         request,
         "training/audit_log_list.html",
@@ -627,6 +678,10 @@ def audit_log_list(request):
             "breadcrumbs": [{"label": "Nhật ký thao tác"}],
             "filter_form": form,
             "page_obj": page_obj,
+            "total_logs_count": total_logs_count,
+            "create_actions_count": create_actions_count,
+            "edit_actions_count": edit_actions_count,
+            "delete_actions_count": delete_actions_count,
         },
     )
 
@@ -636,6 +691,66 @@ def audit_log_detail(request, log_id):
     if not user_has_feature(request.user, "audit-log"):
         raise PermissionDenied
     log_entry = get_object_or_404(AuditLog.objects.select_related("actor"), pk=log_id)
+
+    old_vals = log_entry.old_values if isinstance(log_entry.old_values, dict) else {}
+    new_vals = log_entry.new_values if isinstance(log_entry.new_values, dict) else {}
+
+    # Check if this is a role permissions matrix
+    role_names = [r for r in ROLE_MENUS if r in old_vals or r in new_vals]
+    is_permission_matrix = bool(role_names)
+
+    target_role = None
+    changed_roles = []
+    changed_features = set()
+
+    if is_permission_matrix:
+        changed_roles = [
+            r for r in role_names
+            if old_vals.get(r) != new_vals.get(r)
+        ]
+        requested_role = request.GET.get("role")
+        if requested_role in role_names:
+            target_role = requested_role
+        elif changed_roles:
+            target_role = changed_roles[0]
+        elif role_names:
+            target_role = role_names[0]
+
+        if target_role:
+            old_role_dict = old_vals.get(target_role, {}) if isinstance(old_vals.get(target_role), dict) else {}
+            new_role_dict = new_vals.get(target_role, {}) if isinstance(new_vals.get(target_role), dict) else {}
+            changed_features = {
+                k for k in set(old_role_dict.keys()) | set(new_role_dict.keys())
+                if old_role_dict.get(k) != new_role_dict.get(k)
+            }
+
+    show_all = request.GET.get("show_all") == "1"
+    only_changed = not show_all
+
+    changed_entry_keys = set()
+    if not is_permission_matrix and log_entry.action == AuditLog.Action.EDIT:
+        changed_entry_keys = {
+            k for k in set(old_vals.keys()) | set(new_vals.keys())
+            if old_vals.get(k) != new_vals.get(k)
+        }
+
+    old_display = audit_values_for_display(
+        log_entry.old_values,
+        log_entry.object_type,
+        target_role=target_role,
+        changed_features=changed_features,
+        only_changed=only_changed,
+        changed_entry_keys=changed_entry_keys,
+    )
+    new_display = audit_values_for_display(
+        log_entry.new_values,
+        log_entry.object_type,
+        target_role=target_role,
+        changed_features=changed_features,
+        only_changed=only_changed,
+        changed_entry_keys=changed_entry_keys,
+    )
+
     return render(
         request,
         "training/audit_log_detail.html",
@@ -651,14 +766,15 @@ def audit_log_detail(request, log_id):
                 log_entry.object_type,
                 log_entry.object_type,
             ),
-            "old_values_display": audit_values_for_display(
-                log_entry.old_values,
-                log_entry.object_type,
-            ),
-            "new_values_display": audit_values_for_display(
-                log_entry.new_values,
-                log_entry.object_type,
-            ),
+            "is_permission_matrix": is_permission_matrix,
+            "available_roles": role_names,
+            "changed_roles": changed_roles,
+            "active_role": target_role,
+            "changed_features": changed_features,
+            "changed_entry_keys": changed_entry_keys,
+            "show_all": show_all,
+            "old_values_display": old_display,
+            "new_values_display": new_display,
         },
     )
 
@@ -761,5 +877,130 @@ def ui_demo(request):
                 '07/11/2026',
             ],
             'chart_values': [12, 19, 14, 23, 18, 21, 16],
+        },
+    )
+
+# Exam views (Pha 1) — imported from exam_views.py
+from training.exam_views import (
+    exam_period_list,
+    exam_period_add,
+    exam_period_edit,
+    exam_period_toggle,
+    exam_application_list,
+    exam_application_import,
+    exam_application_deduplicate,
+)
+
+# Exam stubs (Pha 2-4) — imported from exam_stubs.py
+from training.exam_stubs import (
+    exam_room_list,
+    exam_room_assign,
+    exam_score_list,
+    exam_score_entry,
+    exam_score_upload,
+    exam_score_publish,
+    mybk_export,
+    exam_statistics,
+    report_list,
+    report_export_excel,
+    certificate_list,
+    exam_certificate_list,
+)
+
+
+def ui_demo(request):
+    if not settings.DEBUG:
+        return HttpResponseNotFound()
+
+    requested_role = request.GET.get("role", "Giáo vụ")
+    role_name = requested_role if requested_role in ROLE_MENUS else "Giáo vụ"
+    invalid_form = DemoForm(data={"full_name": "", "email": "khong-phai-email"})
+    invalid_form.is_valid()
+    filters = [
+        {
+            "name": "keyword",
+            "label": "Từ khóa",
+            "placeholder": "Nhập tên hoặc mã",
+            "value": request.GET.get("keyword", ""),
+        },
+        {
+            "name": "status",
+            "label": "Trạng thái",
+            "placeholder": "Tất cả trạng thái",
+            "value": request.GET.get("status", ""),
+            "options": [
+                {"value": "open", "label": "Đang mở"},
+                {"value": "closed", "label": "Đã đóng"},
+            ],
+        },
+        {
+            "name": "from_date",
+            "label": "Từ ngày",
+            "type": "date",
+            "value": request.GET.get("from_date", ""),
+        },
+    ]
+    from django.core.paginator import Paginator as _Paginator
+    demo_page_obj = _Paginator(
+        [
+            {
+                "id": 1,
+                "code": "CCE-2026-014",
+                "name": "Nguyễn Minh Anh",
+                "status": "Hợp lệ",
+                "view_url": "#",
+                "edit_url": "#",
+                "delete_url": "#demo-delete",
+            },
+            {
+                "id": 2,
+                "code": "CCE-2026-015",
+                "name": "Trần Gia Bảo",
+                "status": "Mới",
+                "view_url": "#",
+                "edit_url": "#",
+                "delete_url": "#demo-delete",
+            },
+            {
+                "id": 3,
+                "code": "CCE-2026-016",
+                "name": "Lê Hoàng Phúc",
+                "status": "Đã công bố",
+                "view_url": "#",
+                "edit_url": "#",
+                "delete_url": "#demo-delete",
+            },
+        ],
+        2,
+    ).get_page(1)
+    return render(
+        request,
+        "training/ui_demo.html",
+        {
+            "demo_role_label": role_name,
+            "demo_sidebar_items": ROLE_MENUS[role_name]["items"],
+            "demo_sidebar_groups": group_menu_items(ROLE_MENUS[role_name]["items"]),
+            "active_menu": ROLE_MENUS[role_name]["items"][0]["key"],
+            "filter_fields": filters,
+            "from_date": request.GET.get("from_date", ""),
+            "to_date": request.GET.get("to_date", ""),
+            "demo_columns": [
+                {"key": "code", "label": "Mã hồ sơ"},
+                {"key": "name", "label": "Họ và tên"},
+                {"key": "status", "label": "Trạng thái"},
+            ],
+            "demo_rows": demo_page_obj,
+            "empty_rows": [],
+            "demo_page_obj": demo_page_obj,
+            "demo_allow_delete": True,
+            "normal_form": DemoForm(),
+            "invalid_form": invalid_form,
+            "chart_id": "demo-daily-chart",
+            "chart_title": "Số hồ sơ theo ngày",
+            "chart_labels": [
+                "01/11/2026", "02/11/2026", "03/11/2026", "04/11/2026",
+                "05/11/2026", "06/11/2026", "07/11/2026",
+            ],
+            "chart_values": [12, 19, 14, 23, 18, 21, 16],
         },
     )

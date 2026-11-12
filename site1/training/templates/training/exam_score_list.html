@@ -1,0 +1,382 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Danh sách điểm thi{% endblock %}
+{% block breadcrumb_title %}Điểm thi{% endblock %}
+{% block page_title %}Danh sách điểm thi{% endblock %}
+{% block page_description %}{{ page_description|default:"Xem, nhập và quản lý điểm thi theo từng phòng và đợt thi." }}{% endblock %}
+
+{% block page_actions %}
+  <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+    {% if selected_room %}
+      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}?period={{ selected_room.exam_period.pk }}&room={{ selected_room.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
+        <span>Nhập từ file</span>
+      </a>
+      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-publish' %}?period={{ selected_room.exam_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">campaign</span>
+        <span>Công bố điểm</span>
+      </a>
+    {% elif selected_period %}
+      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}?period={{ selected_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
+        <span>Nhập điểm từ file</span>
+      </a>
+      <a class="cce-btn cce-btn-accent" href="{% url 'exam-score-publish' %}?period={{ selected_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">campaign</span>
+        <span>Công bố điểm đợt này</span>
+      </a>
+    {% else %}
+      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
+        <span>Nhập điểm từ file</span>
+      </a>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block content %}
+{# ── Thống kê tổng quan nhanh (KPI Cards) ────────────────────────── #}
+<div class="cce-stat-grid stat-theme-score" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng thí sinh</div>
+    <div class="cce-stat-value">{{ total|default:0 }}</div>
+    <div class="cce-stat-note">
+      {% if selected_room %}Phòng {{ selected_room.name }}{% elif selected_period %}Đợt đang chọn{% else %}Toàn bộ đợt thi{% endif %}
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đã có điểm</div>
+    <div class="cce-stat-value">{{ has_score_count|default:0 }}</div>
+    <div class="cce-stat-note">
+      Tiến độ nhập: <strong>{{ score_progress_pct|default:0 }}%</strong>
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đạt yêu cầu</div>
+    <div class="cce-stat-value">{{ passed_count|default:0 }}</div>
+    <div class="cce-stat-note">
+      Tỉ lệ đạt: <strong>{{ pass_rate|default:0 }}%</strong>
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Không đạt (Hỏng)</div>
+    <div class="cce-stat-value">{{ failed_count|default:0 }}</div>
+    <div class="cce-stat-note">Vắng thi: <strong>{{ absent_count|default:0 }}</strong> · Đã công bố: <strong>{{ published_count|default:0 }}</strong></div>
+  </div>
+</div>
+
+{# ── Bảng danh sách điểm thi ────────────────────────────────────── #}
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Bảng theo dõi điểm thi & kết quả</h2>
+  </div>
+
+  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+
+  {# Thanh tiến độ nhập điểm trực quan #}
+  {% if total > 0 %}
+    <div style="padding:var(--space-3) var(--space-4); background:var(--c-surface-subtle); border-radius:var(--radius-md); margin:0 var(--space-4) var(--space-4); display:flex; align-items:center; gap:var(--space-3); border:1px solid var(--c-border-subtle);">
+      <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); color:var(--c-text); white-space:nowrap;">
+        Tiến độ chấm điểm:
+      </span>
+      <div style="flex:1; background:var(--c-border); border-radius:var(--radius-pill); height:8px; overflow:hidden;">
+        <div style="height:100%; background:var(--c-primary); width:{{ score_progress_pct }}%; border-radius:var(--radius-pill); transition:width var(--transition-normal);"></div>
+      </div>
+      <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); color:var(--c-primary);">
+        {{ has_score_count }}/{{ total }} thí sinh ({{ score_progress_pct }}%)
+      </span>
+    </div>
+  {% endif %}
+
+  {% if page_obj.object_list %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col" style="min-width:200px;">Thí sinh & CCCD</th>
+            <th scope="col" style="min-width:140px;">Phòng & Ca thi</th>
+            <th scope="col" style="min-width:100px; text-align:center;">Điểm số</th>
+            <th scope="col" style="min-width:120px; text-align:center;">Đánh giá</th>
+            <th scope="col" style="min-width:120px; text-align:center;">Công bố</th>
+            <th scope="col" style="min-width:110px; text-align:right;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in page_obj %}
+            <tr>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <strong style="font-size:var(--font-size-base); color:var(--c-text);">{{ item.assignment.application.full_name }}</strong>
+                  <span style="font-family:var(--font-family-mono); font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                    CCCD: {{ item.assignment.application.id_number }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-weight:var(--font-weight-semibold); color:var(--c-text);">
+                    <span class="material-symbols-outlined" style="font-size:1rem; color:var(--c-primary-mid);" aria-hidden="true">meeting_room</span>
+                    <span>Phòng {{ item.assignment.exam_room.name }}</span>
+                  </div>
+                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">{{ item.assignment.exam_room.session }}</span>
+                </div>
+              </td>
+              <td style="text-align:center;">
+                {% if item.score_obj %}
+                  {% if item.score_obj.is_absent %}
+                    <span style="color:var(--c-danger); font-size:var(--font-size-sm); font-weight:var(--font-weight-bold);">Vắng</span>
+                  {% elif item.score_obj.score is not None %}
+                    <span style="font-family:var(--font-family-mono); font-size:var(--font-size-md); font-weight:var(--font-weight-extrabold); color:{% if item.passed %}var(--c-success){% else %}var(--c-danger){% endif %};">
+                      {{ item.score_obj.score }}
+                    </span>
+                  {% else %}
+                    <span style="color:var(--c-text-muted);">—</span>
+                  {% endif %}
+                {% else %}
+                  <span style="color:var(--c-text-muted);">—</span>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
+                {% if item.score_obj and item.score_obj.is_absent %}
+                  <span class="cce-badge cce-badge-duplicate">Vắng thi</span>
+                {% elif item.passed is not None %}
+                  {% if item.passed %}
+                    <span class="cce-badge cce-badge-valid">Đạt</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-duplicate">Không đạt</span>
+                  {% endif %}
+                {% else %}
+                  <span class="cce-badge cce-badge-new">Chưa nhập</span>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
+                {% if item.score_obj and item.score_obj.is_published %}
+                  <span class="cce-badge cce-badge-published">Đã công bố</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-draft">Chưa</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" class="cce-table-btn cce-table-btn-outline"
+                        onclick="openScoreModal({
+                          assignmentId: '{{ item.assignment.pk }}',
+                          fullName: '{{ item.assignment.application.full_name|escapejs }}',
+                          idNumber: '{{ item.assignment.application.id_number|escapejs }}',
+                          roomName: '{{ item.assignment.exam_room.name|escapejs }}',
+                          periodName: '{{ item.assignment.exam_room.exam_period.name|escapejs }}',
+                          scoreScale: '{{ item.assignment.exam_room.exam_period.score_scale }}',
+                          currentScore: '{% if item.score_obj and item.score_obj.score is not None %}{{ item.score_obj.score }}{% endif %}',
+                          isAbsent: {% if item.score_obj and item.score_obj.is_absent %}true{% else %}false{% endif %},
+                          isLocked: {% if item.score_obj and item.score_obj.is_locked %}true{% else %}false{% endif %},
+                          isPublished: {% if item.score_obj and item.score_obj.is_published %}true{% else %}false{% endif %}
+                        })"
+                        title="Nhập điểm cho thí sinh {{ item.assignment.application.full_name }}">
+                  <span class="material-symbols-outlined" style="font-size:0.95rem; vertical-align:middle;" aria-hidden="true">edit</span>
+                  <span>Nhập điểm</span>
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# ── Phân trang ────────────────────────────────────────────────── #}
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="cce-pagination" aria-label="Phân trang" style="margin-top:var(--space-4);">
+        <div style="font-size:var(--font-size-sm); color:var(--c-text-muted);">
+          Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong> (Tổng cộng {{ page_obj.paginator.count }} thí sinh)
+        </div>
+        <div class="cce-pagination-links">
+          {% if page_obj.has_previous %}
+            <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.period %}&period={{ request.GET.period }}{% endif %}{% if request.GET.room %}&room={{ request.GET.room }}{% endif %}">&laquo; Trang trước</a>
+          {% endif %}
+          <span class="cce-page-link is-active">{{ page_obj.number }}</span>
+          {% if page_obj.has_next %}
+            <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.period %}&period={{ request.GET.period }}{% endif %}{% if request.GET.room %}&room={{ request.GET.room }}{% endif %}">Trang sau &raquo;</a>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
+      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">grading</span>
+      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có dữ liệu điểm thi</p>
+      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
+        Chưa có thí sinh nào được xếp phòng trong tiêu chí lọc này, hoặc thí sinh chưa được nhập điểm.
+      </p>
+      <a class="cce-btn cce-btn-accent" href="{% url 'exam-room-list' %}">
+        → Đến danh sách phòng thi để xếp phòng
+      </a>
+    </div>
+  {% endif %}
+</section>
+
+{# ── Modal nhập điểm thủ công cho thí sinh đã chọn ── #}
+<div class="cce-modal-backdrop" id="cceSingleScoreModal" role="dialog" aria-modal="true" aria-labelledby="cceScoreModalTitle" style="display:none;">
+  <div class="cce-modal-dialog" style="max-width:500px;">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceScoreModalTitle" style="display:flex; align-items:center; gap:var(--space-2);">
+        <span class="material-symbols-outlined" style="color:var(--c-primary);" aria-hidden="true">edit_square</span>
+        <span>Nhập điểm thí sinh</span>
+      </h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" onclick="closeScoreModal()" aria-label="Đóng">&times;</button>
+    </div>
+    <form method="post" id="cceSingleScoreForm">
+      {% csrf_token %}
+      <input type="hidden" name="save_single_score" value="1">
+      <input type="hidden" name="assignment_id" id="modalAssignmentId" value="">
+      <input type="hidden" name="redirect_url" value="{{ request.get_full_path }}">
+
+      <div class="cce-modal-body" style="display:flex; flex-direction:column; gap:var(--space-4);">
+        {# Thẻ thông tin thí sinh đã chọn #}
+        <div style="padding:var(--space-3) var(--space-4); background:var(--c-surface-subtle); border-radius:var(--radius-md); border:1px solid var(--c-border-subtle); display:flex; flex-direction:column; gap:var(--space-1);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:var(--font-size-base); color:var(--c-text);" id="modalCandidateName">—</strong>
+            <span class="cce-badge cce-badge-neutral" id="modalScoreScaleBadge">Thang điểm: 100</span>
+          </div>
+          <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); display:flex; gap:var(--space-3); flex-wrap:wrap;">
+            <span>CCCD: <code id="modalCandidateIdNumber">—</code></span>
+            <span>Phòng: <strong id="modalCandidateRoom">—</strong></span>
+          </div>
+          <div style="font-size:var(--font-size-xs); color:var(--c-text-muted);" id="modalCandidatePeriod">—</div>
+        </div>
+
+        {# Cảnh báo nếu điểm đã chốt #}
+        <div id="modalLockedAlert" class="cce-alert cce-alert-warning" style="display:none; font-size:var(--font-size-xs);">
+          <span class="material-symbols-outlined" style="font-size:16px;">lock</span>
+          <span>Điểm của thí sinh này đã được chốt. Yêu cầu nhập lý do điều chỉnh bắt buộc bên dưới.</span>
+        </div>
+
+        {# Cảnh báo nếu điểm đã công bố #}
+        <div id="modalPublishedAlert" class="cce-alert cce-alert-info" style="display:none; font-size:var(--font-size-xs);">
+          <span class="material-symbols-outlined" style="font-size:16px;">campaign</span>
+          <span>Điểm đã công bố đến thí sinh. Mọi chỉnh sửa sẽ cập nhật trực tiếp kết quả hiển thị.</span>
+        </div>
+
+        {# Checkbox Vắng thi #}
+        <div style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) 0;">
+          <input type="checkbox" name="is_absent" id="modalIsAbsent" value="1" style="width:18px; height:18px; cursor:pointer;" onchange="handleAbsentChange(this.checked)">
+          <label for="modalIsAbsent" style="font-weight:var(--font-weight-medium); cursor:pointer; font-size:var(--font-size-sm); color:var(--c-danger);">
+            Đánh dấu thí sinh Vắng thi (bỏ thi)
+          </label>
+        </div>
+
+        {# Ô nhập điểm số #}
+        <div class="cce-form-group" id="modalScoreGroup">
+          <label class="cce-label" for="modalScoreInput">
+            Điểm số <span class="cce-required" aria-hidden="true">*</span>
+            <span style="font-weight:normal; color:var(--c-text-muted); font-size:var(--font-size-xs);" id="modalScoreHint">(0 đến 100)</span>
+          </label>
+          <input type="number" step="0.1" min="0" name="score" id="modalScoreInput" class="cce-input" placeholder="Ví dụ: 8.5" style="font-size:var(--font-size-lg); font-weight:var(--font-weight-bold); font-family:var(--font-family-mono);">
+        </div>
+
+        {# Ô lý do khi đã chốt #}
+        <div class="cce-form-group" id="modalReasonGroup" style="display:none;">
+          <label class="cce-label" for="modalReasonInput">
+            Lý do điều chỉnh điểm <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          <textarea name="reason" id="modalReasonInput" class="cce-input" rows="2" placeholder="Nhập lý do điều chỉnh điểm sau khi đã chốt..."></textarea>
+        </div>
+      </div>
+
+      <div class="cce-modal-footer" style="display:flex; justify-content:flex-end; gap:var(--space-2); padding:var(--space-3) var(--space-4); border-top:1px solid var(--c-border-subtle);">
+        <button type="button" class="cce-btn cce-btn-secondary" onclick="closeScoreModal()">Hủy</button>
+        <button type="submit" class="cce-btn cce-btn-primary" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+          <span class="material-symbols-outlined" style="font-size:16px;">save</span>
+          <span>Lưu điểm</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openScoreModal(data) {
+    document.getElementById('modalAssignmentId').value = data.assignmentId;
+    document.getElementById('modalCandidateName').textContent = data.fullName;
+    document.getElementById('modalCandidateIdNumber').textContent = data.idNumber;
+    document.getElementById('modalCandidateRoom').textContent = data.roomName;
+    document.getElementById('modalCandidatePeriod').textContent = data.periodName;
+    document.getElementById('modalScoreScaleBadge').textContent = 'Thang điểm: ' + data.scoreScale;
+    document.getElementById('modalScoreHint').textContent = '(0 đến ' + data.scoreScale + ')';
+
+    const scoreInput = document.getElementById('modalScoreInput');
+    scoreInput.max = data.scoreScale;
+    scoreInput.value = data.currentScore || '';
+
+    const absentCheck = document.getElementById('modalIsAbsent');
+    absentCheck.checked = !!data.isAbsent;
+    handleAbsentChange(absentCheck.checked);
+
+    const lockedAlert = document.getElementById('modalLockedAlert');
+    const reasonGroup = document.getElementById('modalReasonGroup');
+    const reasonInput = document.getElementById('modalReasonInput');
+    if (data.isLocked) {
+      lockedAlert.style.display = 'flex';
+      reasonGroup.style.display = 'block';
+      reasonInput.required = true;
+    } else {
+      lockedAlert.style.display = 'none';
+      reasonGroup.style.display = 'none';
+      reasonInput.required = false;
+      reasonInput.value = '';
+    }
+
+    const publishedAlert = document.getElementById('modalPublishedAlert');
+    publishedAlert.style.display = data.isPublished ? 'flex' : 'none';
+
+    const modal = document.getElementById('cceSingleScoreModal');
+    modal.style.display = 'flex';
+    modal.classList.add('is-open');
+
+    setTimeout(() => {
+      if (!absentCheck.checked) {
+        scoreInput.focus();
+        scoreInput.select();
+      }
+    }, 50);
+  }
+
+  function closeScoreModal() {
+    const modal = document.getElementById('cceSingleScoreModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('is-open');
+    }
+  }
+
+  function handleAbsentChange(isAbsent) {
+    const scoreGroup = document.getElementById('modalScoreGroup');
+    const scoreInput = document.getElementById('modalScoreInput');
+    if (isAbsent) {
+      scoreInput.disabled = true;
+      scoreInput.value = '';
+      scoreInput.required = false;
+      scoreGroup.style.opacity = '0.4';
+    } else {
+      scoreInput.disabled = false;
+      scoreInput.required = true;
+      scoreGroup.style.opacity = '1';
+    }
+  }
+
+  // Đóng modal khi bấm phím Escape hoặc click nền ngoài
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeScoreModal();
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    const modal = document.getElementById('cceSingleScoreModal');
+    if (modal && e.target === modal) {
+      closeScoreModal();
+    }
+  });
+</script>
+{% endblock %}

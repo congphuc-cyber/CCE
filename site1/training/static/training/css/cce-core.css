@@ -963,66 +963,75 @@ code, pre {
 }
 
 .cce-sidebar-user {
-  margin: var(--space-3) 12px;
-  padding: 8px 10px 10px;
-  background: var(--c-sidebar-user-bg);
-  border: 1px solid var(--c-sidebar-border);
+  margin: 8px 12px 14px;
+  padding: 8px 10px;
+  background: #FFFFFF;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .cce-sidebar-user-identity {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
   min-width: 0;
 }
 .cce-user-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  border: 1px solid rgba(178, 108, 255, 0.22);
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   border-radius: 50%;
-  background: #B26CFF;
+  background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
   color: #FFFFFF;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  font-size: 0.95rem;
+  font-weight: 700;
   text-transform: uppercase;
+  box-shadow: 0 2px 5px rgba(2, 132, 199, 0.25);
 }
 .cce-user-details {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: var(--space-1);
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
 .cce-user-name {
   width: 100%;
   min-width: 0;
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-sm);
-  color: var(--c-sidebar-text-dark);
-  text-align: center;
-  overflow-wrap: anywhere;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: #172B3A;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
 }
 .cce-user-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .cce-user-role {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 18px;
   max-width: 100%;
-  padding: 3px 10px;
-  border: 1px solid #B9E4E8;
-  border-radius: var(--radius-pill);
-  background: #B9E4E8;
-  color: #0F172A;
+  padding: 1px 6px;
+  border: 1px solid #BAE6FD;
+  border-radius: 4px;
+  background: #F0F9FF;
+  color: #0284C7;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+}
   font-size: var(--font-size-sm);
   font-weight: 800;
   line-height: 1.2;
@@ -1265,52 +1274,177 @@ code, pre {
 }
 
 .cce-stat-card {
-  --stat-tint: #9FA0FF;
+  --stat-tint: #C7D2FE;
   background-color: var(--stat-tint);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: var(--radius-md);
   padding: var(--space-5);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 .cce-stat-card:nth-child(2) {
-  --stat-tint: #D5E8E6;
+  --stat-tint: #CCFBF1;
 }
 .cce-stat-card:nth-child(3) {
-  --stat-tint: #FFF3E3;
+  --stat-tint: #FEF3C7;
 }
 .cce-stat-card:nth-child(4) {
-  --stat-tint: #FBA17E;
+  --stat-tint: #FED7AA;
 }
 .cce-stat-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
 }
 
+/* Thống nhất tuyệt đối kiểu chữ, kiểu màu chữ và số cho tất cả các trang */
 .cce-stat-label {
-  font-size: calc(var(--font-size-xs) + 2pt);
-  font-weight: var(--font-weight-bold);
-  color: var(--c-text);
+  font-family: var(--font-family-sans);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #172B3A !important;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: var(--space-2);
 }
 
 .cce-stat-value {
-  font-size: calc(var(--font-size-3xl) + 2pt);
-  font-weight: var(--font-weight-extrabold);
-  color: var(--c-text);
+  font-family: var(--font-family-sans);
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #172B3A !important;
   line-height: 1.1;
   margin-bottom: var(--space-2);
 }
 
+.cce-stat-value, .cce-stat-value * {
+  color: #172B3A !important;
+}
+
 .cce-stat-note {
-  font-size: calc(var(--font-size-xs) + 2pt);
-  font-weight: var(--font-weight-bold);
-  color: var(--c-text);
+  font-family: var(--font-family-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #34495D !important;
   line-height: var(--line-height-normal);
   margin: 0;
 }
+
+.cce-stat-note, .cce-stat-note * {
+  color: #34495D !important;
+}
+
+/* --- Theme màu nền riêng biệt cho 4 thẻ của từng trang --- */
+/* 1. Trang Đợt thi (/exam/periods/) */
+.stat-theme-period .cce-stat-card:nth-child(1) { background-color: #C7D2FE; } /* Indigo light */
+.stat-theme-period .cce-stat-card:nth-child(2) { background-color: #CCFBF1; } /* Teal mint */
+.stat-theme-period .cce-stat-card:nth-child(3) { background-color: #FEF3C7; } /* Warm amber */
+.stat-theme-period .cce-stat-card:nth-child(4) { background-color: #FED7AA; } /* Soft orange */
+
+/* 2. Trang Hồ sơ đăng ký (/exam/applications/) */
+.stat-theme-app .cce-stat-card:nth-child(1) { background-color: #BAE6FD; } /* Sky blue */
+.stat-theme-app .cce-stat-card:nth-child(2) { background-color: #D1FAE5; } /* Emerald light */
+.stat-theme-app .cce-stat-card:nth-child(3) { background-color: #FEE2E2; } /* Rose blush */
+.stat-theme-app .cce-stat-card:nth-child(4) { background-color: #E9D5FF; } /* Purple mist */
+
+/* 3. Trang Phòng thi (/exam/rooms/) */
+.stat-theme-room .cce-stat-card:nth-child(1) { background-color: #A7F3D0; } /* Mint green */
+.stat-theme-room .cce-stat-card:nth-child(2) { background-color: #E0E7FF; } /* Periwinkle */
+.stat-theme-room .cce-stat-card:nth-child(3) { background-color: #FDE68A; } /* Sunshine gold */
+.stat-theme-room .cce-stat-card:nth-child(4) { background-color: #E2E8F0; } /* Slate soft */
+
+/* 4. Trang Điểm thi (/exam/scores/) */
+.stat-theme-score .cce-stat-card:nth-child(1) { background-color: #DDD6FE; } /* Lavender */
+.stat-theme-score .cce-stat-card:nth-child(2) { background-color: #BBF7D0; } /* Bright mint */
+.stat-theme-score .cce-stat-card:nth-child(3) { background-color: #BFDBFE; } /* Ice blue */
+.stat-theme-score .cce-stat-card:nth-child(4) { background-color: #FBCFE8; } /* Pink sherbet */
+
+/* 5. Trang Xuất MyBK (/exam/mybk-export/) */
+.stat-theme-mybk .cce-stat-card:nth-child(1) { background-color: #C4B5FD; } /* Violet Bách Khoa */
+.stat-theme-mybk .cce-stat-card:nth-child(2) { background-color: #99F6E4; } /* Teal bright */
+.stat-theme-mybk .cce-stat-card:nth-child(3) { background-color: #FDE047; } /* Gold sand */
+.stat-theme-mybk .cce-stat-card:nth-child(4) { background-color: #FECDD3; } /* Coral soft */
+
+/* 6. Trang Thống kê (/exam/statistics/) */
+.stat-theme-stat-org .cce-stat-card:nth-child(1) { background-color: #CFFAFE; }
+.stat-theme-stat-org .cce-stat-card:nth-child(2) { background-color: #D1FAE5; }
+.stat-theme-stat-org .cce-stat-card:nth-child(3) { background-color: #FFE4E6; }
+.stat-theme-stat-org .cce-stat-card:nth-child(4) { background-color: #E0E7FF; }
+
+.stat-theme-stat-score .cce-stat-card:nth-child(1) { background-color: #E0F2FE; }
+.stat-theme-stat-score .cce-stat-card:nth-child(2) { background-color: #DCFCE7; }
+.stat-theme-stat-score .cce-stat-card:nth-child(3) { background-color: #FEF08A; }
+.stat-theme-stat-score .cce-stat-card:nth-child(4) { background-color: #FCE7F3; }
+
+.stat-theme-stat-global .cce-stat-card:nth-child(1) { background-color: #CBD5E1; }
+.stat-theme-stat-global .cce-stat-card:nth-child(2) { background-color: #BAE6FD; }
+.stat-theme-stat-global .cce-stat-card:nth-child(3) { background-color: #BBF7D0; }
+.stat-theme-stat-global .cce-stat-card:nth-child(4) { background-color: #FEF08A; }
+
+/* 7. Trang Bảng điều khiển (/dashboard/) */
+.stat-theme-dashboard .cce-stat-card:nth-child(1) { background-color: #BAE6FD; } /* Sky Blue */
+.stat-theme-dashboard .cce-stat-card:nth-child(2) { background-color: #BBF7D0; } /* Mint Green */
+.stat-theme-dashboard .cce-stat-card:nth-child(3) { background-color: #FEF3C7; } /* Warm Amber */
+.stat-theme-dashboard .cce-stat-card:nth-child(4) { background-color: #FED7AA; } /* Soft Orange */
+
+/* 8. Trang Báo cáo giáo vụ (/reports/) */
+.stat-theme-reports .cce-stat-card:nth-child(1) { background-color: #DDD6FE; } /* Soft Violet */
+.stat-theme-reports .cce-stat-card:nth-child(2) { background-color: #CCFBF1; } /* Teal Mist */
+.stat-theme-reports .cce-stat-card:nth-child(3) { background-color: #FDE68A; } /* Golden Sand */
+.stat-theme-reports .cce-stat-card:nth-child(4) { background-color: #FECDD3; } /* Rose Soft */
+
+/* 9. Trang Lớp của tôi (/my-classes/) */
+.stat-theme-myclasses .cce-stat-card:nth-child(1) { background-color: #A7F3D0; } /* Emerald Light */
+.stat-theme-myclasses .cce-stat-card:nth-child(2) { background-color: #BFDBFE; } /* Soft Blue */
+.stat-theme-myclasses .cce-stat-card:nth-child(3) { background-color: #FDE047; } /* Warm Yellow */
+.stat-theme-myclasses .cce-stat-card:nth-child(4) { background-color: #E9D5FF; } /* Lavender */
+
+/* 10. Trang Chứng nhận / Chứng chỉ (/certificates/) */
+.stat-theme-certificates .cce-stat-card:nth-child(1) { background-color: #C7D2FE; } /* Indigo Light */
+.stat-theme-certificates .cce-stat-card:nth-child(2) { background-color: #BBF7D0; } /* Spring Green */
+.stat-theme-certificates .cce-stat-card:nth-child(3) { background-color: #FEF08A; } /* Gold */
+.stat-theme-certificates .cce-stat-card:nth-child(4) { background-color: #FBCFE8; } /* Pink Blossom */
+
+/* 11. Trang Phân quyền (/admin/role-permissions/) */
+.stat-theme-permissions .cce-stat-card:nth-child(1) { background-color: #BFDBFE; } /* Corporate Blue */
+.stat-theme-permissions .cce-stat-card:nth-child(2) { background-color: #D1FAE5; } /* Safe Mint */
+.stat-theme-permissions .cce-stat-card:nth-child(3) { background-color: #FEF3C7; } /* Warning Amber */
+.stat-theme-permissions .cce-stat-card:nth-child(4) { background-color: #E0E7FF; } /* Periwinkle */
+
+/* 12. Trang Nhật ký thao tác (/admin/audit-log/) */
+.stat-theme-audit .cce-stat-card:nth-child(1) { background-color: #E2E8F0; } /* Slate Clean */
+.stat-theme-audit .cce-stat-card:nth-child(2) { background-color: #CFFAFE; } /* Cyan Breeze */
+.stat-theme-audit .cce-stat-card:nth-child(3) { background-color: #FED7AA; } /* Peach Amber */
+.stat-theme-audit .cce-stat-card:nth-child(4) { background-color: #DDD6FE; } /* Lilac */
+
+/* 13. Admin Khóa học (/admin/training/course/) */
+.stat-theme-admin-course .cce-stat-card:nth-child(1) { background-color: #C7D2FE; }
+.stat-theme-admin-course .cce-stat-card:nth-child(2) { background-color: #BBF7D0; }
+.stat-theme-admin-course .cce-stat-card:nth-child(3) { background-color: #FDE68A; }
+.stat-theme-admin-course .cce-stat-card:nth-child(4) { background-color: #FECDD3; }
+
+/* 14. Admin Lớp học (/admin/training/trainingclass/) */
+.stat-theme-admin-class .cce-stat-card:nth-child(1) { background-color: #BAE6FD; }
+.stat-theme-admin-class .cce-stat-card:nth-child(2) { background-color: #D1FAE5; }
+.stat-theme-admin-class .cce-stat-card:nth-child(3) { background-color: #FEF3C7; }
+.stat-theme-admin-class .cce-stat-card:nth-child(4) { background-color: #FED7AA; }
+
+/* 15. Admin Giáo viên (/admin/training/teacher/) */
+.stat-theme-admin-teacher .cce-stat-card:nth-child(1) { background-color: #E0E7FF; }
+.stat-theme-admin-teacher .cce-stat-card:nth-child(2) { background-color: #CCFBF1; }
+.stat-theme-admin-teacher .cce-stat-card:nth-child(3) { background-color: #FDE047; }
+.stat-theme-admin-teacher .cce-stat-card:nth-child(4) { background-color: #FBCFE8; }
+
+/* 16. Admin Học viên (/admin/training/learner/) */
+.stat-theme-admin-learner .cce-stat-card:nth-child(1) { background-color: #DDD6FE; }
+.stat-theme-admin-learner .cce-stat-card:nth-child(2) { background-color: #A7F3D0; }
+.stat-theme-admin-learner .cce-stat-card:nth-child(3) { background-color: #FEF08A; }
+.stat-theme-admin-learner .cce-stat-card:nth-child(4) { background-color: #FECDD3; }
+
+/* 17. Admin Tài khoản (/admin/auth/user/) */
+.stat-theme-admin-user .cce-stat-card:nth-child(1) { background-color: #C4B5FD; }
+.stat-theme-admin-user .cce-stat-card:nth-child(2) { background-color: #99F6E4; }
+.stat-theme-admin-user .cce-stat-card:nth-child(3) { background-color: #FEF3C7; }
+.stat-theme-admin-user .cce-stat-card:nth-child(4) { background-color: #FED7AA; }
 
 /* --- Buttons --- */
 .cce-btn {
@@ -1401,6 +1535,157 @@ code, pre {
   background: var(--c-danger);
   border-color: var(--c-danger);
   color: #FFFFFF;
+}
+
+.cce-filter-actions .cce-btn-primary {
+  background-color: #0284C7 !important;
+  border-color: #0284C7 !important;
+  color: #FFFFFF !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+  transition: all var(--transition-fast);
+}
+
+.cce-filter-actions .cce-btn-primary:hover {
+  background-color: #0369A1 !important;
+  border-color: #0369A1 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  text-decoration: none;
+}
+
+.cce-btn-reset {
+  background-color: #D97706 !important;
+  color: #FFFFFF !important;
+  border: 1px solid #B45309 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+  transition: all var(--transition-fast);
+}
+
+.cce-btn-reset:hover {
+  background-color: #B45309 !important;
+  color: #FFFFFF !important;
+  border-color: #92400E !important;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+  text-decoration: none;
+}
+
+.cce-filter-actions .cce-btn-accent,
+.cce-btn-add {
+  background-color: #0D6E6E !important;
+  border-color: #0D6E6E !important;
+  color: #FFFFFF !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  height: 38px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+  transition: all var(--transition-fast);
+}
+
+.cce-filter-actions .cce-btn-accent:hover,
+.cce-btn-add:hover {
+  background-color: #084D4D !important;
+  border-color: #084D4D !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(13, 110, 110, 0.25);
+  text-decoration: none;
+}
+
+.cce-class-action-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 16px !important;
+  box-sizing: border-box !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: all var(--transition-fast) !important;
+  line-height: normal !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+}
+
+.cce-class-action-btn .material-symbols-outlined {
+  font-size: 18px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.cce-btn-edit-action {
+  background-color: #0284C7 !important;
+  border: 1px solid #0284C7 !important;
+  color: #FFFFFF !important;
+}
+
+.cce-btn-edit-action:hover {
+  background-color: #0369A1 !important;
+  border-color: #0369A1 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25) !important;
+  text-decoration: none !important;
+}
+
+.cce-btn-assign-action {
+  background-color: #4F46E5 !important;
+  border: 1px solid #4F46E5 !important;
+  color: #FFFFFF !important;
+}
+
+.cce-btn-assign-action:hover {
+  background-color: #4338CA !important;
+  border-color: #4338CA !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25) !important;
+  text-decoration: none !important;
+}
+
+.cce-btn-enroll-action {
+  background-color: #0D6E6E !important;
+  border: 1px solid #0D6E6E !important;
+  color: #FFFFFF !important;
+}
+
+.cce-btn-enroll-action:hover {
+  background-color: #084D4D !important;
+  border-color: #084D4D !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(13, 110, 110, 0.25) !important;
+  text-decoration: none !important;
+}
+
+.cce-btn-close-action {
+  background-color: #DC2626 !important;
+  border: 1px solid #DC2626 !important;
+  color: #FFFFFF !important;
+}
+
+.cce-btn-close-action:hover {
+  background-color: #B91C1C !important;
+  border-color: #B91C1C !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25) !important;
+  text-decoration: none !important;
 }
 
 .cce-topbar-logout .cce-logout-button {
@@ -1988,6 +2273,426 @@ select.form-control:focus, textarea.form-control:focus {
 }
 @keyframes cce-spin {
   to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Modern Quick Actions Grid (Dashboard)
+   ========================================================================== */
+.cce-quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--space-3);
+}
+
+.cce-quick-action-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--c-text);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: all var(--transition-fast);
+}
+
+.cce-quick-action-tile:hover {
+  text-decoration: none;
+  color: var(--c-text);
+  border-color: #CBD5E1;
+  background-color: #FAFCFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.cce-quick-action-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.cce-quick-action-tile:hover .cce-quick-action-icon {
+  transform: scale(1.08);
+}
+
+.cce-quick-action-icon .material-symbols-outlined {
+  font-size: 1.35rem;
+}
+
+.cce-quick-action-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.cce-quick-action-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--c-text);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cce-quick-action-desc {
+  font-size: 0.75rem;
+  color: var(--c-text-muted);
+  line-height: 1.3;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cce-quick-action-arrow {
+  font-size: 1.1rem;
+  color: #94A3B8;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.cce-quick-action-tile:hover .cce-quick-action-arrow {
+  color: var(--c-primary);
+  transform: translateX(3px);
+}
+
+/* ==========================================================================
+   Universal Modern Date Picker UI & Custom Bách Khoa Popover
+   ========================================================================== */
+input[type="date"],
+input[type="date"].cce-input,
+input[type="date"].form-control {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--c-text);
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  padding: 6px 34px 6px 12px;
+  height: 38px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+  cursor: pointer;
+  box-sizing: border-box;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='18' viewBox='0 -960 960 960' width='18' fill='%230066CC'%3E%3Cpath d='M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px 16px;
+}
+
+input[type="date"]:hover,
+input[type="date"].cce-input:hover,
+input[type="date"].form-control:hover {
+  border-color: #94A3B8;
+  background-color: #F8FAFC;
+}
+
+input[type="date"]:focus,
+input[type="date"].cce-input:focus,
+input[type="date"].form-control:focus {
+  outline: none;
+  border-color: var(--c-focus-border);
+  background-color: var(--c-surface);
+  box-shadow: 0 0 0 3px var(--c-focus-ring);
+}
+
+/* Hide native browser WebKit calendar indicator completely to eliminate raw OS popup */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Scoped Date Range Filter Toolbar (e.g., Chart Header) */
+.cce-date-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #F8FAFC;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  padding: 4px 6px;
+}
+
+.cce-date-field-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  padding: 0 4px 0 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.cce-date-field-wrap:focus-within {
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 2px var(--c-primary-soft);
+}
+
+.cce-date-field-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  user-select: none;
+  margin: 0;
+}
+
+.cce-date-field-wrap input[type="date"],
+.cce-date-field-wrap input[type="date"].form-control {
+  width: 142px !important;
+  height: 30px !important;
+  padding: 2px 26px 2px 4px !important;
+  border: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: var(--c-text) !important;
+  background-position: right 4px center !important;
+  background-size: 15px 15px !important;
+}
+
+.cce-date-field-wrap input[type="date"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.cce-date-separator {
+  color: #94A3B8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.cce-date-filter-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   CCE Bách Khoa Datepicker Popover
+   ========================================================================== */
+.cce-datepicker-popover {
+  position: absolute;
+  z-index: 99999;
+  display: none;
+  width: 292px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 16px;
+  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 6px 12px -2px rgba(15, 23, 42, 0.08);
+  font-family: var(--font-family-sans);
+  user-select: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.cce-datepicker-popover.is-visible {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cce-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.cce-cal-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--c-text, #1E293B);
+}
+
+.cce-cal-month {
+  color: var(--c-primary, #0066CC);
+}
+
+.cce-cal-year {
+  color: var(--c-text-muted, #64748B);
+  font-weight: 600;
+}
+
+.cce-cal-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border, #E2E8F0);
+  background-color: #FFFFFF;
+  color: #64748B;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.cce-cal-nav-btn:hover {
+  background-color: #F1F5F9;
+  border-color: #CBD5E1;
+  color: var(--c-primary, #0066CC);
+}
+
+.cce-cal-nav-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.cce-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.cce-cal-weekday {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748B;
+  padding: 4px 0;
+}
+
+.cce-cal-weekday.is-sunday {
+  color: #EF4444;
+}
+
+.cce-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.cce-cal-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1E293B;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.cce-cal-day:hover {
+  background-color: #F1F5F9;
+  color: var(--c-primary, #0066CC);
+  font-weight: 600;
+}
+
+.cce-cal-day.is-today {
+  border: 1.5px solid var(--c-primary, #0066CC);
+  color: var(--c-primary, #0066CC);
+  font-weight: 700;
+}
+
+.cce-cal-day.is-selected {
+  background: var(--c-primary, #0066CC) !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.4);
+}
+
+.cce-cal-day.is-other-month {
+  color: #CBD5E1;
+  cursor: default;
+  pointer-events: none;
+}
+
+.cce-cal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #F1F5F9;
+}
+
+.cce-cal-btn-today {
+  border: none;
+  background: transparent;
+  color: var(--c-primary, #0066CC);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cce-cal-btn-today:hover {
+  background-color: #E0F2FE;
+}
+
+.cce-cal-btn-clear {
+  border: none;
+  background: transparent;
+  color: #64748B;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cce-cal-btn-clear:hover {
+  color: #EF4444;
+  background-color: #FEE2E2;
+}
+
+.cce-cal-btn-close {
+  border: 1px solid var(--c-border, #E2E8F0);
+  background-color: #F8FAFC;
+  color: #334155;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cce-cal-btn-close:hover {
+  background-color: #E2E8F0;
 }
 
 /* --- Responsive Layout for Mobile --- */

@@ -1,0 +1,130 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Báo cáo giáo vụ{% endblock %}
+{% block breadcrumb_title %}Báo cáo giáo vụ{% endblock %}
+{% block page_title %}Báo cáo giáo vụ{% endblock %}
+{% block page_description %}Tổng hợp số liệu lớp học và chương trình đào tạo để báo cáo giáo vụ.{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-accent" href="{% url 'report-export-excel' %}">
+    <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
+    <span>Xuất Báo cáo file Excel</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{# 4 Thẻ chỉ số tổng quan báo cáo giáo vụ #}
+<div class="cce-stat-grid stat-theme-reports" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng lớp đào tạo</div>
+    <div class="cce-stat-value">{{ total_classes_count|default:0 }}</div>
+    <div class="cce-stat-note">Quy mô các lớp trong học kỳ</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Học viên ghi danh</div>
+    <div class="cce-stat-value">{{ total_enrolled_learners|default:0 }}</div>
+    <div class="cce-stat-note">Lượt học viên phân lớp thực tế</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Lớp đang mở</div>
+    <div class="cce-stat-value">{{ open_classes_count|default:0 }}</div>
+    <div class="cce-stat-note">Lớp sẵn sàng tiếp nhận học viên</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Chương trình đào tạo</div>
+    <div class="cce-stat-value">{{ total_courses_count|default:0 }}</div>
+    <div class="cce-stat-note">Các khóa học đang vận hành</div>
+  </div>
+</div>
+
+{# Thống kê lớp học gần đây (10 bản ghi/trang) #}
+<section class="cce-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Lớp học gần đây</h2>
+    <div class="cce-card-actions" style="display:flex; gap:var(--space-2); align-items:center;">
+      <a class="cce-btn cce-btn-secondary cce-btn-sm"
+         href="{% url 'report-export-excel' %}">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">download</span>
+        <span>Xuất Excel</span>
+      </a>
+      <a class="cce-btn cce-btn-secondary cce-btn-sm"
+         href="/admin/training/trainingclass/">Xem tất cả</a>
+    </div>
+  </div>
+  {% if class_stats %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th>Lớp học</th>
+            <th>Chương trình</th>
+            <th>Ngày khai giảng</th>
+            <th>Trạng thái</th>
+            <th>Học viên</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cls in class_stats %}
+            <tr>
+              <td>
+                <a href="/classes/{{ cls.pk }}/" style="color:var(--c-primary); font-weight:var(--font-weight-semibold);">
+                  {{ cls.name }}
+                </a>
+              </td>
+              <td>{{ cls.course.name }}</td>
+              <td>
+                {% if cls.start_date %}
+                  <span style="font-weight:var(--font-weight-medium);">{{ cls.start_date|date:"d/m/Y" }}</span>
+                {% else %}
+                  <span style="color:var(--c-text-muted);">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if cls.status == "closed" %}
+                  <span class="cce-badge cce-badge-closed">Đã đóng</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-published">Đang mở</span>
+                {% endif %}
+              </td>
+              <td>{{ cls.enrollment_count }}/{{ cls.max_students }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="cce-pagination" aria-label="Phân trang lớp học" style="margin-top:var(--space-4); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
+        <div class="cce-pagination-info" style="font-size:var(--font-size-sm); color:var(--c-text-muted);">
+          Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong> (Tổng cộng {{ page_obj.paginator.count }} lớp học)
+        </div>
+        <div class="cce-pagination-links" style="display:flex; gap:var(--space-1);">
+          {% if page_obj.has_previous %}
+            <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}">&laquo; Trước</a>
+          {% endif %}
+          {% for p in page_obj.paginator.page_range %}
+            {% if p == page_obj.number %}
+              <span class="cce-page-link is-active">{{ p }}</span>
+            {% elif p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}
+              <a class="cce-page-link" href="?page={{ p }}">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+          {% if page_obj.has_next %}
+            <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}">Sau &raquo;</a>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-6);">
+      <p class="cce-empty-desc">Chưa có dữ liệu lớp học.</p>
+    </div>
+  {% endif %}
+</section>
+
+{% endblock %}

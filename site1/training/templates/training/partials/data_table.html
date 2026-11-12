@@ -7,7 +7,9 @@
         {% for col in columns %}
           <th scope="col">{{ col.label }}</th>
         {% endfor %}
-        <th scope="col" style="text-align: right;">Hành động</th>
+        {% if not hide_actions %}
+          <th scope="col" style="text-align: right;">Hành động</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
@@ -22,21 +24,23 @@
               {% endif %}
             </td>
           {% endfor %}
-          <td style="text-align: right; white-space: nowrap;">
-            {% if row.view_url %}
-              <a class="cce-table-btn" href="{{ row.view_url }}">Xem</a>
-            {% endif %}
-            {% if row.edit_url %}
-              <a class="cce-table-btn cce-table-btn-outline" href="{{ row.edit_url }}">Sửa</a>
-            {% endif %}
-            {% if allow_delete and row.delete_url %}
-              <a class="cce-table-btn table-action-delete" href="{{ row.delete_url }}">Xóa</a>
-            {% endif %}
-          </td>
+          {% if not hide_actions %}
+            <td style="text-align: right; white-space: nowrap;">
+              {% if row.view_url %}
+                <a class="cce-table-btn" href="{{ row.view_url }}">Xem</a>
+              {% endif %}
+              {% if row.edit_url %}
+                <a class="cce-table-btn cce-table-btn-outline" href="{{ row.edit_url }}">Sửa</a>
+              {% endif %}
+              {% if allow_delete and row.delete_url %}
+                <a class="cce-table-btn table-action-delete" href="{{ row.delete_url }}">Xóa</a>
+              {% endif %}
+            </td>
+          {% endif %}
         </tr>
       {% empty %}
         <tr>
-          <td colspan="{{ columns|length|add:1 }}" class="cce-empty-state">
+          <td colspan="{% if hide_actions %}{{ columns|length }}{% else %}{{ columns|length|add:1 }}{% endif %}" class="cce-empty-state">
             Không có dữ liệu
           </td>
         </tr>

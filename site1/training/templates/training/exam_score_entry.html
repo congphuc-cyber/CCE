@@ -1,0 +1,162 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Nhập điểm — {{ room.name }}{% endblock %}
+{% block breadcrumb_title %}{{ room.name }}{% endblock %}
+{% block page_title %}Nhập điểm — {{ room.name }}{% endblock %}
+{% block page_description %}{{ room.exam_period.name }} · Thang điểm: {{ score_scale }}{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-secondary"
+     href="{% url 'exam-score-upload' %}?period={{ room.exam_period.pk }}&room={{ room.pk }}">
+    Nhập từ file
+  </a>
+  <a class="cce-btn cce-btn-secondary"
+     href="{% url 'exam-score-list' %}?period={{ room.exam_period.pk }}&room={{ room.pk }}">
+    Danh sách điểm
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{# Banner tiến độ #}
+<div class="cce-card" style="margin-bottom:var(--space-4); padding:var(--space-4);">
+  <div style="display:flex; align-items:center; gap:var(--space-4); flex-wrap:wrap;">
+    <div>
+      <span style="font-size:var(--font-size-sm); color:var(--c-text-muted);">Tiến độ</span><br>
+      <span style="font-size:var(--font-size-xl); font-weight:var(--font-weight-bold);">
+        {{ has_score_count }}/{{ total }}
+      </span>
+      <span style="font-size:var(--font-size-sm); color:var(--c-text-muted);">đã có điểm</span>
+    </div>
+    <div style="flex:1; min-width:120px;">
+      <div style="background:var(--c-border); border-radius:var(--radius-full); height:10px; overflow:hidden;">
+        {% if total > 0 %}
+          <div style="height:100%; background:var(--c-primary);
+                      width:{% widthratio has_score_count total 100 %}%;
+                      border-radius:var(--radius-full);"></div>
+        {% endif %}
+      </div>
+    </div>
+    {% if is_locked %}
+      <span class="cce-badge cce-badge-closed">Đã chốt điểm</span>
+    {% endif %}
+  </div>
+</div>
+
+{# Cảnh báo chốt điểm đã xong #}
+{% if is_locked %}
+  <div class="cce-alert cce-alert-warning" style="margin-bottom:var(--space-4);">
+    <span class="material-symbols-outlined">lock</span>
+    Điểm phòng này đã được chốt. Mọi chỉnh sửa yêu cầu nhập lý do bắt buộc.
+  </div>
+{% endif %}
+
+<section class="cce-card">
+  <form method="post" id="score-form">
+    {% csrf_token %}
+
+    {% if is_locked %}
+      {# Ô lý do bắt buộc khi chỉnh sửa sau chốt #}
+      <div class="cce-form-group" style="padding:var(--space-4); border-bottom:1px solid var(--c-border);">
+        <label class="cce-label" for="id_reason">
+          Lý do chỉnh sửa <span class="cce-required" aria-hidden="true">*</span>
+        </label>
+        <input type="text" name="reason" id="id_reason" class="cce-input"
+               placeholder="Nhập lý do chỉnh sửa điểm đã chốt..."
+               style="max-width:480px;">
+        {% if reason_error %}
+          <p class="cce-form-error">{{ reason_error }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col">Họ và tên</th>
+            <th scope="col">Số CCCD</th>
+            <th scope="col" style="width:120px;">Điểm (0–{{ score_scale }})</th>
+            <th scope="col" style="width:100px; text-align:center;">Vắng thi</th>
+            {% if errors %}
+              <th scope="col">Lỗi</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for asgn in assignments %}
+            {% with sc=asgn.score %}
+            <tr {% if errors and asgn.pk in errors %}style="background:var(--c-danger-soft);"{% endif %}>
+              <td><strong>{{ asgn.application.full_name }}</strong></td>
+              <td><code>{{ asgn.application.id_number }}</code></td>
+              <td>
+                <input
+                  type="number"
+                  name="score_{{ asgn.pk }}"
+                  id="score_{{ asgn.pk }}"
+                  class="cce-input"
+                  step="0.01" min="0" max="{{ score_scale }}"
+                  value="{% if sc.score is not None %}{{ sc.score }}{% endif %}"
+                  {% if sc.is_absent %}disabled{% endif %}
+                  style="width:100px;"
+                  oninput="if(this.value) document.getElementById('absent_{{ asgn.pk }}').checked=false;"
+                >
+              </td>
+              <td style="text-align:center;">
+                <input
+                  type="checkbox"
+                  name="absent_{{ asgn.pk }}"
+                  id="absent_{{ asgn.pk }}"
+                  value="1"
+                  {% if sc.is_absent %}checked{% endif %}
+                  onchange="if(this.checked){ document.getElementById('score_{{ asgn.pk }}').value=''; document.getElementById('score_{{ asgn.pk }}').disabled=true; } else { document.getElementById('score_{{ asgn.pk }}').disabled=false; }"
+                  style="width:18px; height:18px; cursor:pointer;"
+                >
+              </td>
+              {% if errors %}
+                <td>
+                  {% if asgn.pk in errors %}
+                    <span style="color:var(--c-danger); font-size:var(--font-size-sm);">{{ errors|get_item:asgn.pk }}</span>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+            {% endwith %}
+          {% empty %}
+            <tr>
+              <td colspan="4" class="cce-empty-state" style="padding:var(--space-8);">
+                Chưa có thí sinh trong phòng này. Vui lòng xếp thí sinh trước.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="thí sinh" %}
+
+    {% if assignments %}
+      <div class="cce-form-actions" style="padding:var(--space-4); display:flex; gap:var(--space-3);">
+        <button class="cce-btn cce-btn-primary" type="submit" name="action" value="save">
+          Lưu điểm
+        </button>
+        {% if not is_locked %}
+          <button class="cce-btn cce-btn-accent" type="submit" name="action" value="lock"
+                  onclick="return confirm('Chốt điểm phòng {{ room.name }}? Thao tác này sẽ khoá bảng điểm và yêu cầu lý do khi chỉnh sửa.');">
+            Chốt điểm
+          </button>
+        {% endif %}
+        <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-list' %}?period={{ room.exam_period.pk }}&room={{ room.pk }}">
+          Hủy
+        </a>
+      </div>
+    {% endif %}
+  </form>
+</section>
+
+<script>
+// Template filter fallback for dict access in template
+// errors dict is handled via Python template tag; JS is not needed here.
+</script>
+{% endblock %}

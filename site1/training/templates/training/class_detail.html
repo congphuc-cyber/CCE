@@ -1,4 +1,5 @@
 {% extends "training/base_internal.html" %}
+{% load ui_components %}
 
 {% block title %}{{ training_class.name }}{% endblock %}
 {% block breadcrumb_title %}{{ training_class.name }}{% endblock %}
@@ -7,17 +8,34 @@
 
 {% block page_actions %}
   {% if can_manage %}
-    <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{{ class_change_url }}">Sửa thông tin</a>
-    <a class="cce-btn cce-btn-outline cce-btn-sm" href="{{ assignment_url }}">Phân công giáo viên</a>
+    <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+      <a class="cce-class-action-btn cce-btn-edit-action" href="{{ class_change_url }}">
+        <span class="material-symbols-outlined">edit</span>
+        <span>Sửa thông tin</span>
+      </a>
+      <a class="cce-class-action-btn cce-btn-assign-action" href="{{ assignment_url }}">
+        <span class="material-symbols-outlined">badge</span>
+        <span>Phân công giáo viên</span>
+      </a>
 
-    {% if training_class.status == "open" %}
-      {% if can_enroll %}
-        <a class="cce-btn cce-btn-primary cce-btn-sm" href="{{ enrollment_url }}">Ghi danh học viên</a>
-      {% else %}
-        <button class="cce-btn cce-btn-secondary cce-btn-sm" type="button" disabled>Đã đủ sĩ số</button>
+      {% if training_class.status == "open" %}
+        {% if can_enroll %}
+          <a class="cce-class-action-btn cce-btn-enroll-action" href="{{ enrollment_url }}">
+            <span class="material-symbols-outlined">how_to_reg</span>
+            <span>Ghi danh học viên</span>
+          </a>
+        {% else %}
+          <button class="cce-class-action-btn cce-btn-secondary" type="button" disabled style="opacity:0.6; cursor:not-allowed;">
+            <span class="material-symbols-outlined">group_off</span>
+            <span>Đã đủ sĩ số</span>
+          </button>
+        {% endif %}
+        <button class="cce-class-action-btn cce-btn-close-action" type="button" data-bs-target="#close-class-modal">
+          <span class="material-symbols-outlined">lock</span>
+          <span>Đóng lớp</span>
+        </button>
       {% endif %}
-      <button class="cce-btn cce-btn-danger cce-btn-sm" type="button" data-bs-target="#close-class-modal">Đóng lớp</button>
-    {% endif %}
+    </div>
   {% endif %}
 {% endblock %}
 
@@ -76,6 +94,7 @@
       <li class="cce-empty-state" style="padding: var(--space-4);">Chưa có giáo viên được phân công.</li>
     {% endfor %}
   </ul>
+  {% include "training/partials/pagination.html" with page_obj=teachers_page_obj page_param="teachers_page" count_label="giáo viên" %}
 </section>
 
 <!-- Enrolled Learners Card -->
@@ -84,7 +103,7 @@
     <h2 class="cce-card-title" id="class-learners-title">Học viên đã ghi danh ({{ training_class.enrolled_count }} / {{ training_class.max_students }})</h2>
   </div>
 
-  {% include "training/partials/data_table.html" with columns=columns rows=learners page_obj=page_obj %}
+  {% include "training/partials/data_table.html" with columns=columns rows=learners page_obj=page_obj hide_actions=True %}
 </section>
 
 <!-- Modal for Closing Class with Mandatory Reason -->

@@ -100,51 +100,126 @@ div[id="nav-sidebar"] {
 }
 
 .cce-admin-filter-add .addlink {
-  flex: 0 0 38px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  height: 38px !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
   margin: 0 !important;
-  border-color: var(--c-primary) !important;
-  background-color: var(--c-primary) !important;
+  padding: 0 14px !important;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid #0D6E6E !important;
+  background-color: #0D6E6E !important;
+  color: #FFFFFF !important;
+  font-size: var(--font-size-sm) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.cce-admin-filter-add .addlink::after {
+  content: "Thêm mới";
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #FFFFFF;
 }
 
 .cce-admin-filter-add .addlink:hover {
-  border-color: var(--c-primary-hover) !important;
-  background-color: var(--c-primary-hover) !important;
+  border-color: #084D4D !important;
+  background-color: #084D4D !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(13, 110, 110, 0.25) !important;
 }
 
-body.change-list .filter-open-button.bg-primary-600 {
-  border-color: #B9E4E8 !important;
-  background-color: #B9E4E8 !important;
-  color: #0F172A !important;
-  font-weight: var(--font-weight-bold);
+body.change-list .filter-open-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid #0284C7 !important;
+  background-color: #0284C7 !important;
+  color: #FFFFFF !important;
+  font-size: 0 !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: all var(--transition-fast) !important;
+  cursor: pointer;
 }
 
-body.change-list .filter-open-button.bg-primary-600:hover {
-  border-color: #A9D9DE !important;
-  background-color: #A9D9DE !important;
-  color: #0F172A !important;
+body.change-list .filter-open-button::before {
+  content: "filter_alt";
+  font-family: 'Material Symbols Outlined';
+  font-size: 16px;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+body.change-list .filter-open-button::after {
+  content: "Áp dụng lọc";
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+body.change-list .filter-open-button span.material-symbols-outlined {
+  display: none !important;
+}
+
+body.change-list .filter-open-button:hover {
+  border-color: #0369A1 !important;
+  background-color: #0369A1 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25) !important;
 }
 
 .cce-clear-filters {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid #A3D5DA;
-  border-radius: var(--radius-md);
-  background-color: #B9E4E8;
-  color: #0F172A !important;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  padding: 0 14px !important;
+  border: 1px solid #B45309 !important;
+  border-radius: var(--radius-md) !important;
+  background-color: #D97706 !important;
+  color: #FFFFFF !important;
+  font-size: 0 !important;
+  font-weight: 500 !important;
   text-decoration: none !important;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  box-shadow: var(--shadow-xs) !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.cce-clear-filters::before {
+  content: "restart_alt";
+  font-family: 'Material Symbols Outlined';
+  font-size: 16px;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+.cce-clear-filters::after {
+  content: "Đặt lại";
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.cce-clear-filters span {
+  display: none !important;
 }
 
 .cce-clear-filters:hover {
-  border-color: #A9D9DE;
-  background-color: #A9D9DE;
-  color: #0F172A !important;
+  border-color: #92400E !important;
+  background-color: #B45309 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25) !important;
 }
 
 .cce-clear-filters:focus-visible {
@@ -342,4 +417,36 @@ a.deletelink:hover,
   background: var(--c-danger) !important;
   border-color: var(--c-danger) !important;
   color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   Modern Admin Filter Drawer (Quản lý đào tạo & Hệ thống)
+   ========================================================================== */
+.cce-filter-item-link:hover {
+  background-color: #F1F5F9 !important;
+  color: #0284C7 !important;
+  padding-left: 14px !important;
+}
+
+.cce-filter-item-link.is-selected {
+  background-color: #E0F2FE !important;
+  color: #0284C7 !important;
+  font-weight: 600 !important;
+}
+
+.cce-filter-options-card::-webkit-scrollbar {
+  width: 5px;
+}
+
+.cce-filter-options-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cce-filter-options-card::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+.cce-filter-options-card::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }

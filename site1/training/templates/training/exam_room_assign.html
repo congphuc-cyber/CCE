@@ -1,0 +1,346 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Phòng thi — {{ exam_period.name }}{% endblock %}
+{% block breadcrumb_title %}{{ exam_period.name }}{% endblock %}
+{% block page_title %}Phòng thi — {{ exam_period.name }}{% endblock %}
+{% block page_description %}Tạo phòng thi và xếp thí sinh hợp lệ vào từng phòng.{% endblock %}
+
+{% block content %}
+
+{# ── Danh sách phòng trong đợt ──────────────────────────────────────────── #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Các phòng thi trong đợt này</h2>
+    <div class="cce-card-actions">
+      <a href="{% url 'exam-room-list' %}?period={{ exam_period.pk }}"
+         class="cce-btn cce-btn-secondary cce-btn-sm">Xem tất cả phòng</a>
+    </div>
+  </div>
+
+  {% if rooms_in_period %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th>Tên phòng</th>
+            <th>Ca thi</th>
+            <th>Sức chứa</th>
+            <th>Đã xếp</th>
+            <th style="text-align:right;">Chọn</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rooms_in_period %}
+            <tr {% if room and r.pk == room.pk %}style="background:var(--c-surface-raised);"{% endif %}>
+              <td><strong>{{ r.name }}</strong></td>
+              <td>{{ r.session }}</td>
+              <td>{{ r.capacity }}</td>
+              <td>{{ r.assigned_count }}</td>
+              <td style="text-align:right;">
+                <a class="cce-table-btn {% if room and r.pk == room.pk %}cce-table-btn-active{% else %}cce-table-btn-outline{% endif %}"
+                   href="{% url 'exam-room-assign' exam_period.pk %}?room_id={{ r.pk }}">
+                  {% if room and r.pk == room.pk %}Đang xem{% else %}Chọn{% endif %}
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "training/partials/pagination.html" with page_obj=rooms_page_obj page_param="rooms_page" count_label="phòng thi" %}
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-4);">
+      <p class="cce-empty-desc">Chưa có phòng thi nào trong đợt này.</p>
+    </div>
+  {% endif %}
+</section>
+
+{# ── Form tạo phòng mới ─────────────────────────────────────────────────── #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title" style="display:flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="font-size:1.25rem; color:var(--c-primary);" aria-hidden="true">add_box</span>
+      <span>Tạo phòng thi mới cho đợt thi: {{ exam_period.name }}</span>
+    </h2>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="create_room" value="1">
+    {{ form.exam_period }}
+    <div class="cce-form-body" style="padding:var(--space-4);">
+      {% if form.non_field_errors %}
+        <div class="cce-alert cce-alert-danger" style="margin-bottom:var(--space-4);">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+      <div class="cce-form-row">
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_name">Tên phòng thi <span class="cce-required" aria-hidden="true">*</span></label>
+          {{ form.name }}
+          {% if form.name.errors %}
+            <p class="cce-form-error">{{ form.name.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_session">Ca thi (Chọn khung giờ) <span class="cce-required" aria-hidden="true">*</span></label>
+          {{ form.session }}
+          {% if form.session.errors %}
+            <p class="cce-form-error">{{ form.session.errors.0 }}</p>
+          {% endif %}
+        </div>
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_capacity">Sức chứa (Số thí sinh) <span class="cce-required" aria-hidden="true">*</span></label>
+          {{ form.capacity }}
+          {% if form.capacity.errors %}
+            <p class="cce-form-error">{{ form.capacity.errors.0 }}</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="cce-form-actions" style="margin-top:var(--space-3); display:flex; gap:var(--space-2);">
+        <button class="cce-btn cce-btn-accent" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">check</span>
+          <span>Tạo phòng thi</span>
+        </button>
+        <a class="cce-btn cce-btn-secondary" href="{% url 'exam-room-list' %}?period={{ exam_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-2);">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">arrow_back</span>
+          <span>Quay lại danh sách phòng</span>
+        </a>
+      </div>
+    </div>
+  </form>
+</section>
+
+{# ── Xếp thí sinh vào phòng đã chọn ────────────────────────────────────── #}
+{% if room %}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">
+      Thí sinh trong phòng "{{ room.name }}"
+      <span class="cce-badge {% if room.assigned_count >= room.capacity %}cce-badge-closed{% else %}cce-badge-draft{% endif %}"
+            style="margin-left:var(--space-2);">
+        {{ room.assigned_count }}/{{ room.capacity }}
+      </span>
+    </h2>
+  </div>
+
+  {% if assignments_in_room %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th>Họ và tên</th>
+            <th>Số CCCD</th>
+            <th>Điện thoại</th>
+            <th style="text-align:right;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asgn in assignments_in_room %}
+            <tr>
+              <td>{{ asgn.application.full_name }}</td>
+              <td><code>{{ asgn.application.id_number }}</code></td>
+              <td>{{ asgn.application.phone|default:"—" }}</td>
+              <td style="text-align:right;">
+                <form method="post" style="display:inline;"
+                      onsubmit="return confirm('Bỏ {{ asgn.application.full_name }} khỏi phòng?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="remove_candidate" value="1">
+                  <input type="hidden" name="room_id" value="{{ room.pk }}">
+                  <input type="hidden" name="assignment_id" value="{{ asgn.pk }}">
+                  <button type="submit" class="cce-table-btn table-action-delete">Bỏ</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "training/partials/pagination.html" with page_obj=assigned_page_obj page_param="assigned_page" count_label="thí sinh" %}
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-4);">
+      <p class="cce-empty-desc">Chưa có thí sinh trong phòng này. Xếp thí sinh từ danh sách bên dưới.</p>
+    </div>
+  {% endif %}
+</section>
+
+{# ── Danh sách thí sinh chưa xếp ─────────────────────────────────────── #}
+{% if room.assigned_count < room.capacity %}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
+    <div>
+      <h2 class="cce-card-title" style="display:flex; align-items:center; gap:var(--space-2);">
+        <span class="material-symbols-outlined" style="color:var(--c-primary);" aria-hidden="true">how_to_reg</span>
+        <span>Xếp thí sinh hợp lệ vào phòng "{{ room.name }}"</span>
+      </h2>
+      <p style="font-size:var(--font-size-xs); color:var(--c-text-muted); margin:4px 0 0 0;">
+        Phòng còn trống <strong style="color:var(--c-primary); font-size:var(--font-size-sm);">{{ room.remaining_capacity }}</strong> / {{ room.capacity }} chỗ thi.
+      </p>
+    </div>
+    <div class="cce-card-actions" style="display:flex; align-items:center; gap:var(--space-2);">
+      <span class="cce-badge cce-badge-draft">{{ unassigned_candidates.count }} thí sinh chờ xếp</span>
+      {% if unassigned_candidates %}
+        <form method="post" style="display:inline; margin:0;">
+          {% csrf_token %}
+          <input type="hidden" name="auto_fill" value="1">
+          <input type="hidden" name="room_id" value="{{ room.pk }}">
+          <button class="cce-btn cce-btn-sm cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:4px; font-weight:var(--font-weight-medium);" title="Tự động lấy thí sinh từ danh sách để lấp đầy số chỗ còn trống">
+            <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
+            <span>Tự động xếp lấp đầy phòng</span>
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if unassigned_candidates %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="assign_candidates" value="1">
+      <input type="hidden" name="room_id" value="{{ room.pk }}">
+      <div class="cce-table-wrap">
+        <table class="cce-table" role="table">
+          <thead>
+            <tr>
+              <th style="width:36px; text-align:center;">
+                <input type="checkbox" id="check-all" style="width:16px; height:16px; cursor:pointer;"
+                       onchange="document.querySelectorAll('.app-check').forEach(c=>c.checked=this.checked)">
+              </th>
+              <th>Họ và tên</th>
+              <th>Số CCCD/CMND</th>
+              <th>Điện thoại</th>
+              <th>Kênh đăng ký</th>
+              <th>Thời gian ĐK</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for app in unassigned_page_obj %}
+              <tr>
+                <td style="text-align:center;">
+                  <input class="app-check" type="checkbox" name="app_ids" value="{{ app.pk }}" style="width:16px; height:16px; cursor:pointer;">
+                </td>
+                <td><strong style="color:var(--c-text);">{{ app.full_name }}</strong></td>
+                <td><code>{{ app.id_number }}</code></td>
+                <td>{{ app.phone|default:"—" }}</td>
+                <td>
+                  <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs);">
+                    {% if app.source == 'google_form' %}
+                      <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-accent);" aria-hidden="true">description</span>
+                      <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Google Form</span>
+                    {% elif app.source == 'direct' %}
+                      <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-primary-light);" aria-hidden="true">storefront</span>
+                      <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Tại cơ sở</span>
+                    {% elif app.source == 'partner' %}
+                      <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-violet);" aria-hidden="true">handshake</span>
+                      <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Đối tác</span>
+                    {% else %}
+                      <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-highlight);" aria-hidden="true">language</span>
+                      <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Trực tuyến</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                  {{ app.registered_at|date:"d/m/Y H:i" }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if unassigned_page_obj.paginator.num_pages > 1 %}
+        <nav class="cce-pagination" aria-label="Phân trang thí sinh" style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-3) var(--space-4); border-top:1px solid var(--c-border-subtle); background:var(--c-surface-soft);">
+          <div style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+            Trang <strong>{{ unassigned_page_obj.number }}</strong> / <strong>{{ unassigned_page_obj.paginator.num_pages }}</strong> (Hiển thị {{ page_size }} / {{ unassigned_candidates.count }} thí sinh chờ xếp)
+          </div>
+          <div class="cce-pagination-links">
+            {% if unassigned_page_obj.has_previous %}
+              <a class="cce-page-link" href="?room_id={{ room.pk }}&page={{ unassigned_page_obj.previous_page_number }}">&laquo; Trước</a>
+            {% endif %}
+            {% for p in unassigned_page_obj.paginator.page_range %}
+              {% if p == unassigned_page_obj.number %}
+                <span class="cce-page-link is-active">{{ p }}</span>
+              {% elif p >= unassigned_page_obj.number|add:"-2" and p <= unassigned_page_obj.number|add:"2" %}
+                <a class="cce-page-link" href="?room_id={{ room.pk }}&page={{ p }}">{{ p }}</a>
+              {% endif %}
+            {% endfor %}
+            {% if unassigned_page_obj.has_next %}
+              <a class="cce-page-link" href="?room_id={{ room.pk }}&page={{ unassigned_page_obj.next_page_number }}">Sau &raquo;</a>
+            {% endif %}
+          </div>
+        </nav>
+      {% endif %}
+      <div class="cce-form-actions" style="padding:var(--space-4); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2); border-top:1px solid var(--c-border-subtle);">
+        <button class="cce-btn cce-btn-accent" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:18px;">group_add</span>
+          <span>Xếp các thí sinh đã chọn vào phòng "{{ room.name }}"</span>
+        </button>
+        <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+          Đã tích chọn xếp phòng theo danh sách trên
+        </span>
+      </div>
+    </form>
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-6); text-align:center;">
+      <span class="material-symbols-outlined cce-empty-icon" style="font-size:2.5rem; color:var(--c-success);">check_circle</span>
+      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold);">Tất cả thí sinh hợp lệ đã được xếp phòng</p>
+      <p class="cce-empty-desc" style="color:var(--c-text-muted); font-size:var(--font-size-sm);">Không còn thí sinh hợp lệ nào đang chờ xếp phòng trong đợt thi này.</p>
+    </div>
+  {% endif %}
+</section>
+{% else %}
+  <div class="cce-alert cce-alert-warning" style="margin-bottom:var(--space-6); display:flex; align-items:center; gap:var(--space-3);">
+    <span class="material-symbols-outlined" style="font-size:1.5rem;">warning</span>
+    <div>
+      <strong>Phòng "{{ room.name }}" đã đủ sức chứa ({{ room.capacity }} thí sinh).</strong>
+      <div style="font-size:var(--font-size-xs); margin-top:2px;">Vui lòng chọn phòng thi khác ở bảng trên hoặc tạo thêm phòng thi mới để xếp các thí sinh còn lại.</div>
+    </div>
+  </div>
+{% endif %}
+
+{# ── Thí sinh không đủ điều kiện ─────────────────────────────────────── #}
+{% if ineligible_candidates %}
+<section class="cce-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Thí sinh không đủ điều kiện xếp phòng</h2>
+  </div>
+  <div class="cce-table-wrap">
+    <table class="cce-table" role="table">
+      <thead>
+        <tr>
+          <th>Họ và tên</th>
+          <th>Số CCCD</th>
+          <th>Trạng thái</th>
+          <th>Lý do</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for app in ineligible_candidates %}
+          <tr>
+            <td>{{ app.full_name }}</td>
+            <td><code>{{ app.id_number }}</code></td>
+            <td>
+              {% if app.status == 'duplicate' %}
+                <span class="cce-badge cce-badge-duplicate">Trùng</span>
+              {% elif app.status == 'new' %}
+                <span class="cce-badge cce-badge-new">Mới</span>
+              {% else %}
+                <span class="cce-badge cce-badge-draft">{{ app.status }}</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--c-text-muted); font-size:var(--font-size-sm);">
+              {% if app.status == 'duplicate' %}Hồ sơ bị trùng CCCD trong đợt thi, cần xử lý trước.
+              {% elif app.status == 'new' %}Hồ sơ chưa được duyệt hợp lệ.
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=ineligible_page_obj page_param="ineligible_page" count_label="thí sinh" %}
+</section>
+{% endif %}
+
+{% endif %}{# end if room #}
+
+{% endblock %}

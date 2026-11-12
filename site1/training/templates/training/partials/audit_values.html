@@ -1,50 +1,62 @@
 {% if values.is_matrix %}
-  <div class="cce-table-wrap" role="region" aria-label="Ma trận quyền chỉ đọc">
-    <table class="cce-table cce-permissions-table">
+  <div class="cce-table-wrap" role="region" aria-label="Ma trận quyền chỉ đọc" style="overflow-x: hidden; width: 100%;">
+    <table class="cce-table cce-permissions-table" style="min-width: 100%; width: 100%; table-layout: fixed;">
       <thead>
         <tr>
-          <th scope="col" class="cce-permissions-feature-heading">Chức năng hệ thống</th>
+          <th scope="col" class="cce-permissions-feature-heading" style="min-width: 0; width: 50%; text-align: center;">Chức năng hệ thống</th>
           {% for role in values.roles %}
-            <th scope="col" class="cce-permissions-role-heading">{{ role }}</th>
+            <th scope="col" class="cce-permissions-role-heading" style="min-width: 0; width: 50%; text-align: center;">
+              {% if values.roles|length == 1 %}
+                Quyền truy cập ({{ role }})
+              {% else %}
+                {{ role }}
+              {% endif %}
+            </th>
           {% endfor %}
         </tr>
       </thead>
       <tbody>
         {% for row in values.rows %}
           <tr>
-            <th scope="row" class="cce-permissions-feature">{{ row.label }}</th>
+            <th scope="row" class="cce-permissions-feature" style="width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;">
+              {{ row.label }}
+            </th>
             {% for value in row.values %}
-              <td class="cce-permissions-cell">
+              <td class="cce-permissions-cell" style="width: 50%; text-align: center;">
                 <span class="cce-audit-permission {{ value.css_class }}">{{ value.label }}</span>
               </td>
             {% endfor %}
           </tr>
         {% empty %}
           <tr>
-            <td colspan="100">Không có dữ liệu ghi nhận.</td>
+            <td colspan="100" style="text-align: center; color: var(--c-text-muted); padding: var(--space-4);">
+              Không có quyền nào thay đổi.
+            </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 {% else %}
-  <div class="cce-table-wrap" role="region" aria-label="Các giá trị chỉ đọc">
-    <table class="cce-table">
+  <div class="cce-table-wrap" role="region" aria-label="Các giá trị chỉ đọc" style="overflow-x: hidden; width: 100%;">
+    <table class="cce-table" style="min-width: 100%; width: 100%; table-layout: fixed;">
       <thead>
         <tr>
-          <th scope="col">Thông tin</th>
-          <th scope="col">Giá trị</th>
+          <th scope="col" style="width: 50%;">Thông tin</th>
+          <th scope="col" style="width: 50%;">Giá trị</th>
         </tr>
       </thead>
       <tbody>
         {% for entry in values.entries %}
           <tr>
-            <th scope="row">{{ entry.label }}</th>
-            <td>{{ entry.value }}</td>
+            <th scope="row" style="width: 50%; overflow: hidden; text-overflow: ellipsis;">{{ entry.label }}</th>
+            <td style="width: 50%;">{{ entry.value }}</td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="2">Không có dữ liệu ghi nhận.</td>
+            <td colspan="2" style="text-align: center; color: var(--c-text-muted); padding: var(--space-4);">
+              Không có thông tin nào thay đổi.
+            </td>
           </tr>
         {% endfor %}
       </tbody>

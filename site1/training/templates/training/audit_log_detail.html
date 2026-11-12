@@ -6,7 +6,10 @@
 {% block page_description %}Đối chiếu giá trị cũ và mới của dữ liệu được thay đổi.{% endblock %}
 
 {% block page_actions %}
-  <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{% url 'audit-log-list' %}">Quay lại danh sách</a>
+  <a class="cce-btn cce-btn-secondary" href="{% url 'audit-log-list' %}" style="display:inline-flex; align-items:center; gap:var(--space-2);">
+    <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">arrow_back</span>
+    <span>Quay lại danh sách</span>
+  </a>
 {% endblock %}
 
 {% block content %}
@@ -42,8 +45,77 @@
   {% endif %}
 </section>
 
+{% if is_permission_matrix and active_role %}
+  <div class="cce-card" style="margin-top: var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3);">
+      <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+        <span class="material-symbols-outlined" style="color: var(--c-primary); font-size: 20px;" aria-hidden="true">badge</span>
+        <span style="font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--c-text-strong);">
+          Vai trò / Cán bộ đối chiếu:
+        </span>
+        <span class="cce-badge cce-badge-published" style="font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);">
+          {{ active_role }}
+        </span>
+        {% if changed_features %}
+          <span class="cce-badge cce-badge-accent" style="font-size: var(--font-size-xs);">
+            {{ changed_features|length }} quyền thay đổi
+          </span>
+        {% else %}
+          <span class="cce-badge cce-badge-closed" style="font-size: var(--font-size-xs);">
+            Không có thay đổi
+          </span>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+        {% if changed_features %}
+          {% if show_all %}
+            <a href="?role={{ active_role }}&show_all=0" class="cce-btn cce-btn-secondary cce-btn-sm" style="font-size: var(--font-size-xs); display: inline-flex; align-items: center; gap: 4px;">
+              <span class="material-symbols-outlined" style="font-size: 16px;">filter_alt</span>
+              <span>Chỉ hiện quyền thay đổi</span>
+            </a>
+          {% else %}
+            <a href="?role={{ active_role }}&show_all=1" class="cce-btn cce-btn-secondary cce-btn-sm" style="font-size: var(--font-size-xs); display: inline-flex; align-items: center; gap: 4px;">
+              <span class="material-symbols-outlined" style="font-size: 16px;">visibility</span>
+              <span>Xem tất cả quyền</span>
+            </a>
+          {% endif %}
+        {% endif %}
+
+        {% if available_roles|length > 1 %}
+          <div style="display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap;">
+            <span style="font-size: var(--font-size-xs); color: var(--c-text-muted); margin-right: 4px;">Cán bộ / vai trò khác:</span>
+            {% for r in available_roles %}
+              <a href="?role={{ r }}{% if show_all %}&show_all=1{% endif %}"
+                 class="cce-btn cce-btn-sm {% if r == active_role %}cce-btn-primary{% else %}cce-btn-secondary{% endif %}"
+                 style="font-size: var(--font-size-xs); padding: 3px 8px;">
+                {{ r }}
+                {% if r in changed_roles %}
+                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #EF4444; margin-left: 2px;" title="Có thay đổi"></span>
+                {% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endif %}
+
 <!-- Values Diff Grid -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-6);">
+<style>
+  .cce-audit-diff-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6);
+  }
+  @media (max-width: 768px) {
+    .cce-audit-diff-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<div class="cce-audit-diff-grid">
   <section class="cce-card" aria-labelledby="old-val-title">
     <div class="cce-card-header">
       <h2 class="cce-card-title" id="old-val-title" style="color: var(--c-danger);">Giá trị cũ (Trước thay đổi)</h2>

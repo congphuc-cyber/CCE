@@ -6,6 +6,33 @@
 {% block page_description %}Cấu hình quyền truy cập và hiển thị menu cho từng nhóm vai trò trong hệ thống.{% endblock %}
 
 {% block content %}
+{# 4 Thẻ chỉ số tổng quan phân quyền #}
+<div class="cce-stat-grid stat-theme-permissions" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Nhóm vai trò CCE</div>
+    <div class="cce-stat-value">{{ total_roles_count|default:4 }}</div>
+    <div class="cce-stat-note">Admin, Giáo vụ, Giáo viên, Cán bộ thi</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Chức năng quản trị</div>
+    <div class="cce-stat-value">{{ total_features_count|default:12 }}</div>
+    <div class="cce-stat-note">Các module phân hệ phân quyền RBAC</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Quyền đang kích hoạt</div>
+    <div class="cce-stat-value">{{ active_permissions_count|default:0 }}</div>
+    <div class="cce-stat-note">Số điểm phân quyền được cho phép</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Độ bao phủ quyền</div>
+    <div class="cce-stat-value">{{ coverage_rate|default:"0%" }}</div>
+    <div class="cce-stat-note">Tỉ lệ kích hoạt trong toàn ma trận</div>
+  </div>
+</div>
+
 <section class="cce-card cce-permissions-panel">
   <form method="post" class="cce-permissions-form">
     {% csrf_token %}

@@ -7,7 +7,7 @@
   <title>{% block title %}{{ page_title|default:"Quản lý đào tạo và thi" }}{% endblock %} | CCE</title>
   <link rel="stylesheet" href="{% static 'unfold/fonts/material-symbols/styles.css' %}">
   <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}?v=edtech-rich-surfaces-20261111">
-  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=audit-permission-status-20261111">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=avatar-profile-gap-20261111">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -75,6 +75,7 @@
     </div>
   </div>
 
+  <script src="{% static 'training/js/cce-datepicker.js' %}?v=cce-cal-20261112"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

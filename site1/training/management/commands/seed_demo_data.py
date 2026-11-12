@@ -207,6 +207,7 @@ class Command(BaseCommand):
                         f"Thứ {index % 6 + 2}, "
                         f"{8 + index % 9:02d}:00-{10 + index % 9:02d}:00"
                     ),
+                    "start_date": timezone.now().date() - timedelta(days=(index * 3) % 45),
                     "max_students": 20,
                     "status": status,
                     "close_reason": SAMPLE_REASON if status == TrainingClass.Status.CLOSED else "",

@@ -89,7 +89,10 @@ class CourseAdminForm(forms.ModelForm):
 class TrainingClassAdminForm(forms.ModelForm):
     class Meta:
         model = TrainingClass
-        fields = ("name", "course", "learning_format", "schedule", "max_students")
+        fields = ("name", "course", "learning_format", "schedule", "start_date", "max_students")
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date", "class": "cce-input"}),
+        }
 
     def clean(self):
         cleaned_data = super().clean()

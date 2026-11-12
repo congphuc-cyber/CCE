@@ -89,7 +89,14 @@ def _permission_state_display(value):
     return {"label": "—", "css_class": "is-unknown"}
 
 
-def audit_values_for_display(values, object_type):
+def audit_values_for_display(
+    values,
+    object_type,
+    target_role=None,
+    changed_features=None,
+    only_changed=False,
+    changed_entry_keys=None,
+):
     values = values if isinstance(values, dict) else {}
     model = _audit_model(object_type)
     role_names = [role for role in ROLE_MENUS if role in values]
@@ -98,23 +105,46 @@ def audit_values_for_display(values, object_type):
     ) and len(role_names) == len(values)
 
     if is_permission_matrix:
+        # If target_role is specified, filter to only that role
+        if target_role and target_role in role_names:
+            display_roles = [target_role]
+        else:
+            display_roles = role_names
+
+        changed_features = changed_features or set()
         rows = []
         for feature_key, label in AUDIT_FEATURE_LABELS.items():
-            if not any(feature_key in values[role] for role in role_names):
+            if not any(feature_key in values[role] for role in display_roles):
+                continue
+            is_changed = feature_key in changed_features
+            if only_changed and changed_features and not is_changed:
                 continue
             rows.append(
                 {
+                    "key": feature_key,
                     "label": label,
+                    "is_changed": is_changed,
                     "values": [
                         _permission_state_display(values[role].get(feature_key))
-                        for role in role_names
+                        for role in display_roles
                     ],
                 }
             )
-        return {"is_matrix": True, "roles": role_names, "rows": rows}
+        return {
+            "is_matrix": True,
+            "roles": display_roles,
+            "all_roles": role_names,
+            "active_role": display_roles[0] if len(display_roles) == 1 else None,
+            "rows": rows,
+            "total_count": len(AUDIT_FEATURE_LABELS),
+            "changed_count": len(changed_features),
+            "only_changed": only_changed,
+        }
 
     entries = []
     for key, value in values.items():
+        if only_changed and changed_entry_keys and key not in changed_entry_keys:
+            continue
         try:
             field = model._meta.get_field(key) if model else None
         except FieldDoesNotExist:

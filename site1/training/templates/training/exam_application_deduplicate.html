@@ -1,0 +1,312 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Xử lý hồ sơ trùng{% endblock %}
+{% block breadcrumb_title %}Xử lý trùng{% endblock %}
+{% block page_title %}Xử lý hồ sơ trùng{% endblock %}
+{% block page_description %}Phát hiện và xử lý từng hồ sơ trùng lặp (trùng họ tên, CCCD/CMND và số điện thoại trong cùng một đợt thi).{% endblock %}
+
+{% block content %}
+
+{% if not has_duplicates %}
+  <div class="cce-card" style="padding:var(--space-8); text-align:center;">
+    <div style="font-size:3rem; margin-bottom:var(--space-4);">✅</div>
+    <h3 style="color:var(--c-success); margin-bottom:var(--space-3);">Không phát hiện hồ sơ trùng</h3>
+    <p style="color:var(--c-text-muted); margin-bottom:var(--space-5);">
+      Tất cả hồ sơ hiện tại đều hợp lệ — không có hồ sơ nào trùng lặp thông tin trong cùng một đợt thi.
+    </p>
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-list' %}" style="display:inline-flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">arrow_back</span>
+      <span>Quay lại danh sách</span>
+    </a>
+  </div>
+
+{% else %}
+  <div class="cce-alert cce-alert-info" role="alert" style="margin-bottom:var(--space-5); display:flex; align-items:center; gap:var(--space-3);">
+    <span class="material-symbols-outlined" style="font-size:1.5rem; color:var(--c-primary); flex-shrink:0;">info</span>
+    <div>
+      Phát hiện <strong>{{ page_obj.paginator.count }} nhóm trùng lặp</strong>. Với từng thí sinh, bạn có thể <strong>xóa trực tiếp từng bản ghi trùng</strong> hoặc chọn 1 hồ sơ cần giữ lại để hệ thống xử lý riêng cho nhóm đó.
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:var(--space-5);">
+    {% for group in groups %}
+      <section class="cce-card" style="padding:var(--space-5);">
+        <form method="post">
+          {% csrf_token %}
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-4); flex-wrap:wrap; gap:var(--space-2);">
+            <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
+              <span class="cce-badge cce-badge-duplicate">Trùng</span>
+              <span style="font-weight:var(--font-weight-semibold); color:var(--c-text);">
+                Thí sinh: <strong style="color:var(--c-primary-dark);">{{ group.full_name }}</strong>
+                — CCCD: <code style="background:var(--c-surface-subtle); padding:2px 6px; border-radius:4px;">{{ group.id_number }}</code>
+                — SĐT: <code style="background:var(--c-surface-subtle); padding:2px 6px; border-radius:4px;">{{ group.phone|default:"—" }}</code>
+              </span>
+              <span style="color:var(--c-text-muted); font-size:var(--font-size-sm);">— Đợt thi: {{ group.exam_period.name }}</span>
+            </div>
+            <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); font-weight:var(--font-weight-medium);">
+              {{ group.members|length }} bản ghi đăng ký
+            </div>
+          </div>
+
+          <div class="cce-table-wrap">
+            <table class="cce-table">
+              <thead>
+                <tr>
+                  <th style="width:50px; text-align:center;">Giữ</th>
+                  <th>Họ và tên</th>
+                  <th>Số CCCD/CMND</th>
+                  <th>Điện thoại</th>
+                  <th>Nguồn đăng ký</th>
+                  <th>Thời gian đăng ký</th>
+                  <th>Trạng thái</th>
+                  <th style="width:90px; text-align:center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in group.members %}
+                  <tr>
+                    <td style="text-align:center;">
+                      <input type="radio"
+                             name="keep_id"
+                             value="{{ member.pk }}"
+                             id="keep-{{ member.pk }}"
+                             data-source="{{ member.get_source_display }}"
+                             data-reg-time="{{ member.registered_at|date:'d/m/Y H:i:s' }}"
+                             {% if forloop.first %}checked{% endif %}
+                             style="accent-color:var(--c-primary); width:18px; height:18px; cursor:pointer;">
+                    </td>
+                    <td>
+                      <label for="keep-{{ member.pk }}" style="cursor:pointer; font-weight:var(--font-weight-medium);">
+                        {{ member.full_name }}
+                      </label>
+                    </td>
+                    <td><code>{{ member.id_number }}</code></td>
+                    <td>{{ member.phone|default:"—" }}</td>
+                    <td>
+                      <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs);">
+                        {% if member.source == 'google_form' %}
+                          <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-accent);" aria-hidden="true">description</span>
+                          <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Google Form</span>
+                        {% elif member.source == 'direct' %}
+                          <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-primary-light);" aria-hidden="true">storefront</span>
+                          <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Tại cơ sở</span>
+                        {% elif member.source == 'partner' %}
+                          <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-violet);" aria-hidden="true">handshake</span>
+                          <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Đối tác</span>
+                        {% else %}
+                          <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-highlight);" aria-hidden="true">language</span>
+                          <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">Trực tuyến</span>
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                      <div style="font-weight:var(--font-weight-medium); color:var(--c-text);">{{ member.registered_at|date:"d/m/Y H:i:s" }}</div>
+                    </td>
+                    <td>
+                      {% if member.status == 'new' %}<span class="cce-badge cce-badge-new">Mới</span>
+                      {% elif member.status == 'valid' %}<span class="cce-badge cce-badge-valid">Hợp lệ</span>
+                      {% elif member.status == 'duplicate' %}<span class="cce-badge cce-badge-duplicate">Trùng</span>
+                      {% endif %}
+                      {% for asg in member.room_assignments.all %}
+                        <span class="cce-badge" style="background:var(--c-primary-soft); color:var(--c-primary); margin-left:4px;" title="Đã xếp phòng thi">Phòng {{ asg.exam_room.name }}</span>
+                      {% endfor %}
+                    </td>
+                    <td style="text-align:center;">
+                      <button type="button"
+                              class="cce-btn cce-btn-sm"
+                              style="background:#FEE2E2; color:#B91C1C; border:1px solid #FCA5A5; padding:4px 10px; border-radius:var(--radius-sm); font-size:var(--font-size-xs); cursor:pointer; display:inline-flex; align-items:center; gap:2px;"
+                              onclick="openDeleteModal('{{ member.pk }}', '{{ member.full_name|escapejs }}', '{{ member.id_number|escapejs }}', '{{ member.get_source_display|escapejs }}', '{{ member.registered_at|date:'d/m/Y H:i:s'|escapejs }}')"
+                              title="Xóa riêng bản ghi này">
+                        <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+                        <span>Xóa</span>
+                      </button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:var(--space-3); gap:var(--space-3); padding-top:var(--space-2); border-top:1px dashed var(--c-border);">
+            <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">Hoặc chọn 1 hồ sơ ở trên để giữ lại:</span>
+            <button class="cce-btn cce-btn-primary cce-btn-sm"
+                    type="button"
+                    onclick="confirmKeepGroup(this.form, '{{ group.full_name|escapejs }}', '{{ group.id_number|escapejs }}')"
+                    style="display:inline-flex; align-items:center; gap:var(--space-1); padding:6px 14px; font-weight:var(--font-weight-medium);">
+              <span class="material-symbols-outlined" style="font-size:1rem;">check_circle</span>
+              <span>Giữ hồ sơ được chọn & Xóa các bản ghi trùng của thí sinh này</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    {% endfor %}
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="nhóm trùng lặp" %}
+
+  <div style="display:flex; gap:var(--space-3); margin-top:var(--space-6);">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-list' %}" style="display:inline-flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="font-size:1.1rem;">arrow_back</span>
+      <span>Quay lại danh sách hồ sơ</span>
+    </a>
+  </div>
+{% endif %}
+
+{# ── Modal Xác nhận Xóa 1 bản ghi trùng ── #}
+<div class="cce-modal-backdrop" id="cceDeleteRecordModal" role="dialog" aria-modal="true" aria-labelledby="cceDeleteModalTitle" style="display:none;">
+  <div class="cce-modal-dialog" style="max-width:490px;">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceDeleteModalTitle" style="display:flex; align-items:center; gap:var(--space-2); color:var(--c-danger);">
+        <span class="material-symbols-outlined" style="font-size:1.35rem;" aria-hidden="true">delete_forever</span>
+        <span>Xác nhận xóa bản ghi trùng</span>
+      </h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" onclick="closeDeleteModal()" aria-label="Đóng">&times;</button>
+    </div>
+    <form method="post" id="cceDeleteModalForm">
+      {% csrf_token %}
+      <input type="hidden" name="delete_id" id="cceDeleteModalInput" value="">
+      <div class="cce-modal-body">
+        <p style="font-size:var(--font-size-base); color:var(--c-text); margin:0 0 var(--space-3) 0;">
+          Bạn có chắc chắn muốn xóa bản ghi hồ sơ dự thi này?
+        </p>
+        <div style="background:var(--c-surface-subtle); border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-4); font-size:var(--font-size-sm); display:flex; flex-direction:column; gap:6px;">
+          <div><strong>Thí sinh:</strong> <span id="deleteModalCandidateName" style="color:var(--c-primary-dark); font-weight:var(--font-weight-bold);"></span></div>
+          <div><strong>Mã hồ sơ:</strong> <span id="deleteModalAppId" style="font-weight:600;"></span> — <strong>CCCD:</strong> <code id="deleteModalIdNumber"></code></div>
+          <div><strong>Kênh đăng ký:</strong> <span id="deleteModalSource"></span></div>
+          <div><strong>Thời gian đăng ký:</strong> <span id="deleteModalRegTime"></span></div>
+        </div>
+        <div class="cce-alert cce-alert-warning" style="font-size:var(--font-size-xs); margin:0;">
+          Bản ghi này sẽ bị xóa khỏi đợt thi. Dữ liệu phòng thi hoặc điểm thi (nếu có) sẽ được hệ thống bảo toàn sang hồ sơ hợp lệ còn lại của thí sinh.
+        </div>
+      </div>
+      <div class="cce-modal-footer" style="padding:var(--space-4) var(--space-6); border-top:1px solid var(--c-border); display:flex; justify-content:flex-end; gap:var(--space-2);">
+        <button type="button" class="cce-btn cce-btn-secondary" onclick="closeDeleteModal()">Hủy bỏ</button>
+        <button type="submit" class="cce-btn cce-btn-danger" style="display:inline-flex; align-items:center; gap:4px;">
+          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">delete</span>
+          <span>Xác nhận xóa bản ghi</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Modal Xác nhận Giữ 1 hồ sơ & Xóa các bản ghi trùng của nhóm ── #}
+<div class="cce-modal-backdrop" id="cceKeepRecordModal" role="dialog" aria-modal="true" aria-labelledby="cceKeepModalTitle" style="display:none;">
+  <div class="cce-modal-dialog" style="max-width:510px;">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceKeepModalTitle" style="display:flex; align-items:center; gap:var(--space-2); color:var(--c-primary);">
+        <span class="material-symbols-outlined" style="font-size:1.35rem;" aria-hidden="true">verified</span>
+        <span>Xác nhận giữ hồ sơ & xóa bản ghi trùng</span>
+      </h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" onclick="closeKeepModal()" aria-label="Đóng">&times;</button>
+    </div>
+    <div class="cce-modal-body">
+      <p style="font-size:var(--font-size-base); color:var(--c-text); margin:0 0 var(--space-3) 0;">
+        Bạn đang chọn giữ lại 1 hồ sơ và xóa tất cả các bản ghi trùng còn lại của thí sinh:
+      </p>
+      <div style="background:var(--c-surface-subtle); border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-4); font-size:var(--font-size-sm); display:flex; flex-direction:column; gap:6px;">
+        <div><strong>Thí sinh:</strong> <span id="keepModalCandidateName" style="color:var(--c-primary-dark); font-weight:var(--font-weight-bold);"></span></div>
+        <div><strong>Bản ghi giữ lại:</strong> <span id="keepModalAppId" style="font-weight:600; color:var(--c-primary);"></span> — <strong>CCCD:</strong> <code id="keepModalIdNumber"></code></div>
+        <div><strong>Kênh đăng ký giữ:</strong> <span id="keepModalSource"></span></div>
+        <div><strong>Thời gian đăng ký:</strong> <span id="keepModalRegTime"></span></div>
+      </div>
+      <div class="cce-alert cce-alert-info" style="font-size:var(--font-size-xs); margin:0;">
+        Hồ sơ được giữ lại sẽ tự động chuyển sang trạng thái <strong>Hợp lệ</strong>. Tất cả các bản ghi trùng khác của thí sinh này trong đợt thi sẽ bị <strong>xóa bỏ hoàn toàn</strong>.
+      </div>
+    </div>
+    <div class="cce-modal-footer" style="padding:var(--space-4) var(--space-6); border-top:1px solid var(--c-border); display:flex; justify-content:flex-end; gap:var(--space-2);">
+      <button type="button" class="cce-btn cce-btn-secondary" onclick="closeKeepModal()">Hủy bỏ</button>
+      <button type="button" class="cce-btn cce-btn-primary" id="cceKeepConfirmBtn" onclick="submitKeepForm()" style="display:inline-flex; align-items:center; gap:4px;">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">check_circle</span>
+        <span>Xác nhận xử lý</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let currentKeepForm = null;
+
+  function openDeleteModal(appId, candidateName, idNumber, source, regTime) {
+    const modal = document.getElementById('cceDeleteRecordModal');
+    const input = document.getElementById('cceDeleteModalInput');
+    if (!modal || !input) return;
+
+    input.value = appId;
+    document.getElementById('deleteModalAppId').textContent = '#' + appId;
+    document.getElementById('deleteModalCandidateName').textContent = candidateName;
+    document.getElementById('deleteModalIdNumber').textContent = idNumber;
+    document.getElementById('deleteModalSource').textContent = source;
+    document.getElementById('deleteModalRegTime').textContent = regTime;
+
+    modal.style.display = 'flex';
+    modal.classList.add('is-open');
+  }
+
+  function closeDeleteModal() {
+    const modal = document.getElementById('cceDeleteRecordModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('is-open');
+    }
+  }
+
+  function confirmKeepGroup(form, groupName, idNumber) {
+    const modal = document.getElementById('cceKeepRecordModal');
+    if (!modal || !form) return;
+
+    const checkedRadio = form.querySelector('input[name="keep_id"]:checked');
+    if (!checkedRadio) {
+      alert('Vui lòng chọn 1 hồ sơ cần giữ lại.');
+      return;
+    }
+
+    currentKeepForm = form;
+    const appId = checkedRadio.value;
+    const source = checkedRadio.getAttribute('data-source') || '';
+    const regTime = checkedRadio.getAttribute('data-reg-time') || '';
+
+    document.getElementById('keepModalCandidateName').textContent = groupName;
+    document.getElementById('keepModalIdNumber').textContent = idNumber;
+    document.getElementById('keepModalAppId').textContent = '#' + appId;
+    document.getElementById('keepModalSource').textContent = source;
+    document.getElementById('keepModalRegTime').textContent = regTime;
+
+    modal.style.display = 'flex';
+    modal.classList.add('is-open');
+  }
+
+  function closeKeepModal() {
+    const modal = document.getElementById('cceKeepRecordModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('is-open');
+    }
+    currentKeepForm = null;
+  }
+
+  function submitKeepForm() {
+    if (currentKeepForm) {
+      currentKeepForm.submit();
+    }
+  }
+
+  // Đóng modal khi bấm phím Escape hoặc click nền ngoài
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeDeleteModal();
+      closeKeepModal();
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('cce-modal-backdrop')) {
+      closeDeleteModal();
+      closeKeepModal();
+    }
+  });
+</script>
+{% endblock %}

@@ -19,10 +19,19 @@
     {% endfor %}
 
     <div class="cce-filter-actions">
-      <button class="cce-btn cce-btn-primary" type="submit">Áp dụng lọc</button>
-      <a class="cce-btn cce-btn-secondary" href="?">Đặt lại</a>
+      <button class="cce-btn cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">filter_alt</span>
+        <span>Áp dụng lọc</span>
+      </button>
+      <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?" style="display:inline-flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
+        <span>Đặt lại</span>
+      </a>
       {% if add_url %}
-        <a class="cce-btn cce-btn-accent" href="{{ add_url }}" style="margin-left: auto;">+ Thêm mới</a>
+        <a class="cce-btn cce-btn-accent" href="{{ add_url }}" style="margin-left: auto; display:inline-flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">add</span>
+          <span>Thêm mới</span>
+        </a>
       {% endif %}
     </div>
   </form>

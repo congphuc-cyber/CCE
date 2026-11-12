@@ -1,0 +1,221 @@
+<div class="cce-upload-wizard" id="{{ wizard_id }}" data-mode="{{ mode|default:'strict' }}">
+
+  {# Bước 1: Chọn file #}
+  <div class="cce-wizard-step" data-step="1">
+    <div class="cce-dropzone" id="{{ wizard_id }}-dropzone"
+         role="button" tabindex="0" aria-label="Kéo thả file hoặc nhấn để chọn"
+         ondragover="cceWizard.onDragOver(event, '{{ wizard_id }}')"
+         ondragleave="cceWizard.onDragLeave(event, '{{ wizard_id }}')"
+         ondrop="cceWizard.onDrop(event, '{{ wizard_id }}')"
+         onclick="document.getElementById('{{ wizard_id }}-input').click()"
+         onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('{{ wizard_id }}-input').click()">
+      <div class="cce-dropzone-icon" aria-hidden="true">📁</div>
+      <p class="cce-dropzone-label">Kéo thả file vào đây hoặc</p>
+      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm"
+              onclick="event.stopPropagation(); document.getElementById('{{ wizard_id }}-input').click()">
+        Chọn file
+      </button>
+      <p class="cce-dropzone-hint">Hỗ trợ định dạng CSV (UTF-8)</p>
+      <input type="file" id="{{ wizard_id }}-input" accept=".csv,.xlsx"
+             style="display:none;" onchange="cceWizard.onFileSelect(event, '{{ wizard_id }}')">
+    </div>
+    <div class="cce-upload-file-info" id="{{ wizard_id }}-file-info" style="display:none; margin-top:var(--space-3);">
+      <span class="cce-badge cce-badge-new" id="{{ wizard_id }}-filename"></span>
+      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm" style="margin-left:var(--space-2);"
+              onclick="cceWizard.reset('{{ wizard_id }}')">Đổi file</button>
+      <button type="button" class="cce-btn cce-btn-primary cce-btn-sm" style="margin-left:var(--space-2);"
+              onclick="cceWizard.upload('{{ wizard_id }}', '{{ upload_url }}')">↑ Tải lên & Kiểm tra</button>
+    </div>
+  </div>
+
+  {# Bước 2: Xem trước / kết quả kiểm tra #}
+  <div class="cce-wizard-step" data-step="2" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-3);">
+      <span id="{{ wizard_id }}-preview-summary" style="font-weight:var(--font-weight-semibold); color:var(--c-text);"></span>
+      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm"
+              onclick="cceWizard.reset('{{ wizard_id }}')">← Chọn file khác</button>
+    </div>
+    <div class="cce-table-wrap" style="max-height:320px; overflow-y:auto;">
+      <table class="cce-table">
+        <thead><tr><th>#</th><th>Nội dung</th><th>Kết quả</th></tr></thead>
+        <tbody id="{{ wizard_id }}-preview-body"></tbody>
+      </table>
+    </div>
+    <div style="display:flex; gap:var(--space-3); margin-top:var(--space-4);">
+      <button type="button" class="cce-btn cce-btn-success" id="{{ wizard_id }}-confirm-btn"
+              onclick="cceWizard.confirm('{{ wizard_id }}', '{{ upload_url }}')">
+        ✓ Xác nhận nhập
+      </button>
+      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm"
+              onclick="cceWizard.reset('{{ wizard_id }}')">Hủy bỏ</button>
+    </div>
+  </div>
+
+  {# Bước 3: Kết quả #}
+  <div class="cce-wizard-step" data-step="3" style="display:none;">
+    <div id="{{ wizard_id }}-result" style="text-align:center; padding:var(--space-8);"></div>
+    <div style="text-align:center;">
+      <button type="button" class="cce-btn cce-btn-secondary" onclick="cceWizard.reset('{{ wizard_id }}')">
+        ↺ Nhập thêm
+      </button>
+    </div>
+  </div>
+
+  {# Loading #}
+  <div class="cce-upload-loading" id="{{ wizard_id }}-loading" style="display:none;">
+    <div class="cce-upload-spinner" aria-label="Đang xử lý..."></div>
+    <span style="margin-left:var(--space-3); color:var(--c-text-muted);">Đang kiểm tra dữ liệu...</span>
+  </div>
+</div>
+
+<style>
+.cce-dropzone {
+  border: 2px dashed var(--c-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  background: var(--c-surface-subtle);
+}
+.cce-dropzone:hover, .cce-dropzone.is-over {
+  border-color: var(--c-primary);
+  background: color-mix(in srgb, var(--c-primary) 5%, transparent);
+}
+.cce-dropzone-icon { font-size: 2rem; margin-bottom: var(--space-2); }
+.cce-dropzone-label { margin: 0 0 var(--space-3); color: var(--c-text-muted); font-size: var(--font-size-sm); }
+.cce-dropzone-hint { margin: var(--space-3) 0 0; color: var(--c-text-subtle); font-size: var(--font-size-xs); }
+.cce-upload-loading {
+  display: flex; align-items: center; padding: var(--space-4);
+  background: var(--c-surface-subtle); border-radius: var(--radius-md); margin-top: var(--space-3);
+}
+.cce-upload-spinner {
+  width: 20px; height: 20px; border: 2px solid var(--c-border);
+  border-top-color: var(--c-primary); border-radius: 50%;
+  animation: cceSpin 0.7s linear infinite;
+}
+@keyframes cceSpin { to { transform: rotate(360deg); } }
+.cce-row-valid { color: var(--c-success); font-weight: var(--font-weight-semibold); }
+.cce-row-error { color: var(--c-danger); }
+</style>
+
+<script>
+if (typeof cceWizard === 'undefined') {
+var cceWizard = (function() {
+  var _files = {};
+  function showStep(id, n) {
+    document.getElementById(id).querySelectorAll('.cce-wizard-step').forEach(function(s) {
+      s.style.display = s.dataset.step == n ? '' : 'none';
+    });
+  }
+  function setLoading(id, on) {
+    var el = document.getElementById(id + '-loading');
+    if (el) el.style.display = on ? 'flex' : 'none';
+  }
+  function getCsrf() {
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+  return {
+    onDragOver: function(e, id) { e.preventDefault(); document.getElementById(id+'-dropzone').classList.add('is-over'); },
+    onDragLeave: function(e, id) { document.getElementById(id+'-dropzone').classList.remove('is-over'); },
+    onDrop: function(e, id) {
+      e.preventDefault();
+      document.getElementById(id+'-dropzone').classList.remove('is-over');
+      var file = e.dataTransfer.files[0];
+      if (file) this._setFile(id, file);
+    },
+    onFileSelect: function(e, id) { var f = e.target.files[0]; if (f) this._setFile(id, f); },
+    _setFile: function(id, file) {
+      _files[id] = file;
+      document.getElementById(id+'-filename').textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
+      document.getElementById(id+'-file-info').style.display = '';
+    },
+    upload: function(id, url) {
+      var file = _files[id]; if (!file) return;
+      var periodEl = document.getElementById('select-exam-period');
+      var fd = new FormData();
+      fd.append('file', file);
+      fd.append('exam_period', periodEl ? periodEl.value : '');
+      fd.append('csrfmiddlewaretoken', getCsrf());
+      fd.append('preview', '1');
+      setLoading(id, true);
+      fetch(url, {method:'POST', body:fd})
+        .then(function(r){return r.json();})
+        .then(function(data){ setLoading(id, false); cceWizard._showPreview(id, data); })
+        .catch(function(err){ setLoading(id, false); alert('Lỗi: '+err.message); });
+    },
+    _showPreview: function(id, data) {
+      var tbody = document.getElementById(id+'-preview-body');
+      var summary = document.getElementById(id+'-preview-summary');
+      var btn = document.getElementById(id+'-confirm-btn');
+      var mode = document.getElementById(id).dataset.mode;
+      tbody.innerHTML = '';
+      var errorCount = data.errors ? data.errors.length : 0;
+      if (errorCount > 0) {
+        summary.innerHTML = '<span style="color:var(--c-danger);">⚠ Phát hiện '+errorCount+' lỗi</span>';
+        data.errors.forEach(function(e) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td style="color:var(--c-text-muted);">Dòng '+e.row+'</td><td>—</td><td class="cce-row-error">✗ '+e.msg+'</td>';
+          tbody.appendChild(tr);
+        });
+        if (mode === 'strict') {
+          btn.disabled = true; btn.textContent = 'Có lỗi — Kiểm tra lại file';
+          btn.classList.remove('cce-btn-success'); btn.classList.add('cce-btn-secondary');
+        }
+      } else {
+        var validCount = data.valid_count || 0;
+        summary.innerHTML = '<span style="color:var(--c-success);">✓ '+validCount+' dòng hợp lệ</span>';
+        if (data.preview_rows) {
+          data.preview_rows.slice(0,10).forEach(function(row,i) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>'+(i+2)+'</td><td>'+(row.full_name||'')+(row.id_number?' — '+row.id_number:'')+'</td><td class="cce-row-valid">✓ Hợp lệ</td>';
+            tbody.appendChild(tr);
+          });
+          if (data.preview_rows.length > 10) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="3" style="text-align:center;color:var(--c-text-muted);font-style:italic;">... và '+(data.preview_rows.length-10)+' dòng khác</td>';
+            tbody.appendChild(tr);
+          }
+        }
+        btn.disabled = false; btn.textContent = '✓ Xác nhận nhập '+validCount+' hồ sơ';
+        btn.classList.add('cce-btn-success'); btn.classList.remove('cce-btn-secondary');
+      }
+      showStep(id, 2);
+    },
+    confirm: function(id, url) {
+      var file = _files[id]; if (!file) return;
+      var periodEl = document.getElementById('select-exam-period');
+      var fd = new FormData();
+      fd.append('file', file);
+      fd.append('exam_period', periodEl ? periodEl.value : '');
+      fd.append('csrfmiddlewaretoken', getCsrf());
+      setLoading(id, true);
+      fetch(url, {method:'POST', body:fd})
+        .then(function(r){return r.json();})
+        .then(function(data){ setLoading(id, false); cceWizard._showResult(id, data); })
+        .catch(function(err){ setLoading(id, false); alert('Lỗi khi lưu: '+err.message); });
+    },
+    _showResult: function(id, data) {
+      var el = document.getElementById(id+'-result');
+      if (data.ok) {
+        el.innerHTML = '<div style="font-size:2.5rem;margin-bottom:var(--space-3);">✅</div><h3 style="color:var(--c-success);margin-bottom:var(--space-2);">Nhập thành công!</h3><p style="color:var(--c-text-muted);">Đã nhập <strong>'+data.saved+'</strong> hồ sơ vào hệ thống.</p>';
+      } else {
+        var errList = (data.errors||[]).map(function(e){return '<li>Dòng '+e.row+': '+e.msg+'</li>';}).join('');
+        el.innerHTML = '<div style="font-size:2.5rem;margin-bottom:var(--space-3);">❌</div><h3 style="color:var(--c-danger);margin-bottom:var(--space-2);">Nhập thất bại</h3><p style="color:var(--c-text-muted);margin-bottom:var(--space-3);">'+data.errors.length+' lỗi. Không có dòng nào được lưu.</p><ul style="text-align:left;color:var(--c-danger);font-size:var(--font-size-sm);">'+errList+'</ul>';
+      }
+      showStep(id, 3);
+    },
+    reset: function(id) {
+      _files[id] = null;
+      var input = document.getElementById(id+'-input'); if (input) input.value = '';
+      document.getElementById(id+'-file-info').style.display = 'none';
+      document.getElementById(id+'-filename').textContent = '';
+      var btn = document.getElementById(id+'-confirm-btn');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Xác nhận nhập'; btn.classList.add('cce-btn-success'); btn.classList.remove('cce-btn-secondary'); }
+      showStep(id, 1);
+    }
+  };
+})();
+}
+</script>

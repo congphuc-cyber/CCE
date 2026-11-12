@@ -1,0 +1,17 @@
+﻿c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe : Creating test database for alias 'default'...
+At line:1 char:208
++ ... } catch {}; c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...as 'default'...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+.....................................................
+----------------------------------------------------------------------
+Ran 53 tests in 39.728s
+
+OK
+Destroying test database for alias 'default'...
+
+Found 53 test(s).
+System check identified no issues (0 silenced).

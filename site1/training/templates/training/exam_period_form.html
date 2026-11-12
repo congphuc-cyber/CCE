@@ -1,0 +1,55 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb_title %}{{ page_title }}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 640px;">
+  <section class="cce-card" style="padding: var(--space-6);">
+    {% load ui_components %}
+
+    {% if form.non_field_errors %}
+      <div class="cce-alert cce-alert-danger" role="alert" style="margin-bottom: var(--space-4);">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% for field in form %}
+        <div class="cce-form-group {% if field.errors %}has-error{% endif %}" style="margin-bottom: var(--space-4);">
+          <label class="cce-label" for="{{ field.id_for_label }}">
+            {{ field.label }}
+            {% if field.field.required %}<span class="cce-required" aria-hidden="true">*</span>{% endif %}
+          </label>
+
+          {{ field|accessible_field }}
+
+          {% if field.help_text %}
+            <div class="cce-form-help">{{ field.help_text }}</div>
+          {% endif %}
+
+          {% for error in field.errors %}
+            <div class="cce-form-error" role="alert">{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+
+      {% if not is_add %}
+        <div class="cce-alert" style="background:var(--c-surface-subtle); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); margin-bottom:var(--space-4); font-size:var(--font-size-sm); color:var(--c-text-muted);">
+          <strong>Lưu ý:</strong> Thang điểm mặc định 100. Hạn đăng ký phải trước ngày thi.
+        </div>
+      {% endif %}
+
+      <div class="cce-form-actions" style="display:flex; gap:var(--space-3); margin-top:var(--space-6);">
+        <button class="cce-btn cce-btn-success" type="submit">{{ submit_label }}</button>
+        <a class="cce-btn cce-btn-secondary" href="{{ cancel_url }}">Hủy bỏ</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,289 @@
+﻿c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe : Creating test database for alias 'default' 
+('file:memorydb_default?mode=memory&cache=shared')...
+At line:1 char:208
++ ... } catch {}; c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...che=shared')...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Found 37 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles, unfold, unfold_filters, unfold_forms
+  Apply all migrations: admin, auth, contenttypes, sessions, training
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying sessions.0001_initial... OK
+  Applying training.0001_initial... OK
+  Applying training.0002_alter_trainingclass_learning_format_and_more... OK
+  Applying training.0003_auditlog_rolefeaturepermission... OK
+  Applying training.0004_alter_auditlog_action... OK
+test_exam_period_list_forbidden (training.tests.ExamPermissionTests.test_exam_period_list_forbidden) ... ok
+test_exam_room_list_forbidden (training.tests.ExamPermissionTests.test_exam_room_list_forbidden) ... ok
+test_exam_score_list_forbidden (training.tests.ExamPermissionTests.test_exam_score_list_forbidden) ... ok
+test_mybk_export_forbidden (training.tests.ExamPermissionTests.test_mybk_export_forbidden) ... ok
+test_unauthenticated_redirected_to_login (training.tests.ExamPermissionTests.test_unauthenticated_redirected_to_login) 
+... ok
+test_create_exam_period_valid_post_redirects 
+(training.tests.ExamPeriodCRUDTests.test_create_exam_period_valid_post_redirects) ... ok
+test_edit_exam_period_shows_current_data (training.tests.ExamPeriodCRUDTests.test_edit_exam_period_shows_current_data) 
+... ok
+test_period_list_shows_created_period (training.tests.ExamPeriodCRUDTests.test_period_list_shows_created_period) ... ok
+test_toggle_exam_period_draft_to_published 
+(training.tests.ExamPeriodCRUDTests.test_toggle_exam_period_draft_to_published) ... FAIL
+test_application_list_shows_app_data (training.tests.ExamApplicationTests.test_application_list_shows_app_data) ... ok
+test_application_list_shows_period_filter 
+(training.tests.ExamApplicationTests.test_application_list_shows_period_filter) ... ok
+test_application_list_with_period_filter 
+(training.tests.ExamApplicationTests.test_application_list_with_period_filter) ... ok
+test_deduplicate_marks_later_entries_as_duplicate 
+(training.tests.ExamApplicationTests.test_deduplicate_marks_later_entries_as_duplicate)
+2 hồ sơ cùng CCCD → bản sau bị mark DUPLICATE. ... FAIL
+test_deduplicate_no_duplicates_message (training.tests.ExamApplicationTests.test_deduplicate_no_duplicates_message)
+Không có trùng → không có record nào bị mark DUPLICATE. ... ok
+test_deduplicate_view_get_200 (training.tests.ExamApplicationTests.test_deduplicate_view_get_200) ... ok
+test_assign_candidate_to_room (training.tests.ExamRoomTests.test_assign_candidate_to_room) ... ERROR
+test_assigned_count_property (training.tests.ExamRoomTests.test_assigned_count_property) ... ok
+test_create_room_via_post (training.tests.ExamRoomTests.test_create_room_via_post) ... FAIL
+test_room_assign_page_shows_period_name (training.tests.ExamRoomTests.test_room_assign_page_shows_period_name) ... ok
+test_room_list_200 (training.tests.ExamRoomTests.test_room_list_200) ... ok
+test_room_list_shows_room_name (training.tests.ExamRoomTests.test_room_list_shows_room_name) ... ok
+test_score_entry_absent_clears_score (training.tests.ExamScoreTests.test_score_entry_absent_clears_score) ... ERROR
+test_score_entry_get_200 (training.tests.ExamScoreTests.test_score_entry_get_200) ... ok
+test_score_entry_post_saves_score (training.tests.ExamScoreTests.test_score_entry_post_saves_score) ... ERROR
+test_score_entry_shows_candidate_name (training.tests.ExamScoreTests.test_score_entry_shows_candidate_name) ... ok
+test_score_publish_view_200 (training.tests.ExamScoreTests.test_score_publish_view_200) ... ok
+test_score_upload_csv_preview_json (training.tests.ExamScoreTests.test_score_upload_csv_preview_json)
+Upload CSV điểm với preview=1 → JSON response. ... ERROR
+test_score_upload_get_200 (training.tests.ExamScoreTests.test_score_upload_get_200) ... ok
+test_mybk_export_csv_response (training.tests.MyBKExportTests.test_mybk_export_csv_response) ... ok
+test_mybk_export_get_200 (training.tests.MyBKExportTests.test_mybk_export_get_200) ... ok
+test_mybk_export_shows_period_list (training.tests.MyBKExportTests.test_mybk_export_shows_period_list) ... ok
+test_statistics_200_empty (training.tests.ExamStatisticsTests.test_statistics_200_empty) ... ok
+test_statistics_shows_period_data (training.tests.ExamStatisticsTests.test_statistics_shows_period_data) ... ok
+test_statistics_with_period_filter (training.tests.ExamStatisticsTests.test_statistics_with_period_filter) ... ok
+test_report_list_200_for_giaoyu (training.tests.ReportListTests.test_report_list_200_for_giaoyu) ... ERROR
+test_report_list_forbidden_for_anonymous (training.tests.ReportListTests.test_report_list_forbidden_for_anonymous) ... 
+ok
+test_report_list_forbidden_for_canbothi (training.tests.ReportListTests.test_report_list_forbidden_for_canbothi)
+Cán bộ thi KHÔNG có quyền xem báo cáo giáo vụ. ... ok
+
+======================================================================
+ERROR: test_assign_candidate_to_room (training.tests.ExamRoomTests.test_assign_candidate_to_room)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1326, in test_assign_candidate_to_room
+    r = self.client.post(
+        ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1156, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 499, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1090, in request
+    self.check_exception(response)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 805, in check_exception
+    raise exc_value
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in 
+_get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in 
+_view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\exam_views.py", line 600, in exam_room_assign
+    record_audit(
+TypeError: record_audit() got an unexpected keyword argument 'label'
+
+======================================================================
+ERROR: test_score_entry_absent_clears_score (training.tests.ExamScoreTests.test_score_entry_absent_clears_score)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1381, in test_score_entry_absent_clears_score
+    r = self.client.post(reverse("exam-score-entry", args=[self.room.pk]), {
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1156, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 499, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1090, in request
+    self.check_exception(response)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 805, in check_exception
+    raise exc_value
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in 
+_get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in 
+_view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\exam_views.py", line 870, in exam_score_entry
+    AuditLog.Action.UPDATE,
+    ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'Action' has no attribute 'UPDATE'
+
+======================================================================
+ERROR: test_score_entry_post_saves_score (training.tests.ExamScoreTests.test_score_entry_post_saves_score)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1370, in test_score_entry_post_saves_score
+    r = self.client.post(reverse("exam-score-entry", args=[self.room.pk]), {
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1156, in post
+    response = super().post(
+               ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 499, in post
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1090, in request
+    self.check_exception(response)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 805, in check_exception
+    raise exc_value
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in 
+_get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in 
+_view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\exam_views.py", line 870, in exam_score_entry
+    AuditLog.Action.UPDATE,
+    ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'Action' has no attribute 'UPDATE'
+
+======================================================================
+ERROR: test_score_upload_csv_preview_json (training.tests.ExamScoreTests.test_score_upload_csv_preview_json)
+Upload CSV điểm với preview=1 → JSON response.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1401, in test_score_upload_csv_preview_json
+    csv_file = io.BytesIO(csv_content.encode("utf-8"))
+               ^^
+NameError: name 'io' is not defined. Did you forget to import 'io'
+
+======================================================================
+ERROR: test_report_list_200_for_giaoyu (training.tests.ReportListTests.test_report_list_200_for_giaoyu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1497, in test_report_list_200_for_giaoyu
+    self.assertEqual(self.client.get(reverse("report-list")).status_code, 200)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1127, in get
+    response = super().get(
+               ^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 475, in get
+    return self.generic(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 1090, in request
+    self.check_exception(response)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\test\client.py", line 805, in check_exception
+    raise exc_value
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\core\handlers\base.py", line 197, in 
+_get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in 
+_view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\exam_views.py", line 1488, in report_list
+    ).order_by("-start_date")[:20]
+      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\db\models\query.py", line 1727, in order_by
+    obj.query.add_ordering(*field_names)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\db\models\sql\query.py", line 2312, in 
+add_ordering
+    self.names_to_path(item.split(LOOKUP_SEP), self.model._meta)
+  File "C:\Users\Admin\Downloads\lmssss\.venv\Lib\site-packages\django\db\models\sql\query.py", line 1813, in 
+names_to_path
+    raise FieldError(
+django.core.exceptions.FieldError: Cannot resolve keyword 'start_date' into field. Choices are: close_reason, course, 
+course_id, enrollment_count, enrollments, id, learners, learning_format, max_students, name, schedule, status, 
+teacher_assignments, teachers
+
+======================================================================
+FAIL: test_toggle_exam_period_draft_to_published 
+(training.tests.ExamPeriodCRUDTests.test_toggle_exam_period_draft_to_published)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1215, in 
+test_toggle_exam_period_draft_to_published
+  Applying training.0005_exam_models... OK
+System check identified no issues (0 silenced).
+    self.assertNotEqual(period.status, ExamPeriod.Status.DRAFT)
+AssertionError: 'draft' == ExamPeriod.Status.DRAFT
+
+======================================================================
+FAIL: test_deduplicate_marks_later_entries_as_duplicate 
+(training.tests.ExamApplicationTests.test_deduplicate_marks_later_entries_as_duplicate)
+2 hồ sơ cùng CCCD → bản sau bị mark DUPLICATE.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1273, in 
+test_deduplicate_marks_later_entries_as_duplicate
+    self.assertEqual(a2.status, ExamApplication.Status.DUPLICATE)
+AssertionError: 'valid' != ExamApplication.Status.DUPLICATE
+
+======================================================================
+FAIL: test_create_room_via_post (training.tests.ExamRoomTests.test_create_room_via_post)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 1322, in test_create_room_via_post
+    self.assertTrue(ExamRoom.objects.filter(name="Phòng Test X99").exists())
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 37 tests in 27.710s
+
+FAILED (failures=3, errors=5)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+

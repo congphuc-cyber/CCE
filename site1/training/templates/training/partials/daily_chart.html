@@ -1,17 +1,30 @@
 <div class="cce-card" style="margin-top: var(--space-6);">
-  <div class="cce-card-header">
-    <h2 class="cce-card-title">{{ chart_title|default:"Đăng ký trực tuyến theo ngày" }}</h2>
+  <div class="cce-card-header" style="flex-wrap: wrap; gap: var(--space-3); align-items: center;">
+    <h2 class="cce-card-title" style="display: flex; align-items: center; gap: var(--space-2);">
+      <span class="material-symbols-outlined" style="font-size: 1.25rem; color: var(--c-primary);" aria-hidden="true">insights</span>
+      {{ chart_title|default:"Đăng ký trực tuyến theo ngày" }}
+    </h2>
     {% if date_form %}
       <form method="get" class="cce-filter-actions" style="margin: 0;">
-        <div style="display: flex; gap: var(--space-2); align-items: center;">
-          <label style="font-size: var(--font-size-xs);" for="{{ date_form.from_date.id_for_label }}">Từ:</label>
-          {{ date_form.from_date }}
-          <label style="font-size: var(--font-size-xs);" for="{{ date_form.to_date.id_for_label }}">Đến:</label>
-          {{ date_form.to_date }}
-          <button class="cce-btn cce-btn-secondary cce-btn-sm" type="submit">Lọc</button>
+        <div class="cce-date-filter-group">
+          <div class="cce-date-field-wrap">
+            <label class="cce-date-field-label" for="{{ date_form.from_date.id_for_label }}">Từ</label>
+            {{ date_form.from_date }}
+          </div>
+          <span class="cce-date-separator" aria-hidden="true">
+            <span class="material-symbols-outlined" style="font-size: 16px;">arrow_forward</span>
+          </span>
+          <div class="cce-date-field-wrap">
+            <label class="cce-date-field-label" for="{{ date_form.to_date.id_for_label }}">Đến</label>
+            {{ date_form.to_date }}
+          </div>
+          <button class="cce-btn cce-btn-primary cce-btn-sm cce-date-filter-btn" type="submit">
+            <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">filter_alt</span>
+            <span>Lọc</span>
+          </button>
         </div>
         {% if date_form.errors %}
-          <div class="cce-form-error" role="alert" style="margin-top: 4px;">
+          <div class="cce-form-error" role="alert" style="margin-top: 6px; text-align: right;">
             {% for field in date_form %}{% for err in field.errors %}<div>{{ err }}</div>{% endfor %}{% endfor %}
             {% for err in date_form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
           </div>

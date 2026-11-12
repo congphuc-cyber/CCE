@@ -3,37 +3,65 @@
 {% block title %}Hồ sơ cá nhân{% endblock %}
 {% block breadcrumb_title %}Hồ sơ cá nhân{% endblock %}
 {% block page_title %}Hồ sơ tài khoản & Bảo mật{% endblock %}
-{% block page_description %}Xem thông tin định danh và cập nhật mật khẩu đăng nhập.{% endblock %}
+{% block page_description %}Xem thông tin định danh và cập nhật mật khẩu đăng nhập hệ thống CCE.{% endblock %}
 
 {% block content %}
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-6);">
-  <!-- Account Info Card -->
-  <section class="cce-card" aria-labelledby="acc-info-title">
-    <div class="cce-card-header">
-      <h2 class="cce-card-title" id="acc-info-title">Thông tin tài khoản</h2>
+<div style="display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: flex-start;">
+  <!-- Card 1: Hồ sơ định danh & Thông tin tài khoản -->
+  <section class="cce-card" aria-labelledby="acc-info-title" style="width: 100%; max-width: 440px; flex: 0 1 440px;">
+    <div style="padding: var(--space-4) var(--space-5) var(--space-2); display: flex; align-items: center; gap: var(--space-3);">
+      <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; font-weight: 700; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25); flex-shrink: 0;">
+        {{ request.user.first_name|first|default:request.user.username|first|upper }}
+      </div>
+      <div style="min-width: 0;">
+        <h2 style="font-size: 1.125rem; font-weight: 700; color: #0F172A; margin: 0; line-height: 1.35;">
+          {{ request.user.get_full_name|default:request.user.username }}
+        </h2>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+          <span style="font-size: 0.72rem; font-weight: 700; color: #0284C7; background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 4px; padding: 2px 7px;">
+            {{ profile_role_label|default:"Người dùng hệ thống" }}
+          </span>
+          <span style="font-size: 0.78rem; color: var(--c-text-muted);">ĐH Bách Khoa TP.HCM</span>
+        </div>
+      </div>
     </div>
 
-    <dl style="display: grid; grid-template-columns: 140px 1fr; gap: var(--space-3) var(--space-4); margin: 0; font-size: var(--font-size-sm);">
-      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Họ và tên:</dt>
-      <dd style="margin: 0; font-weight: var(--font-weight-bold);">{{ request.user.get_full_name|default:"Chưa cập nhật" }}</dd>
+    <div class="cce-card-header" style="border-bottom: none; padding-top: var(--space-2); padding-bottom: var(--space-2);">
+      <h3 class="cce-card-title" id="acc-info-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: var(--space-2);">
+        <span class="material-symbols-outlined" style="font-size: 1.15rem; color: var(--c-primary);" aria-hidden="true">badge</span>
+        Thông tin tài khoản
+      </h3>
+    </div>
 
-      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Tên đăng nhập:</dt>
-      <dd style="margin: 0; font-family: var(--font-family-mono);">{{ request.user.get_username }}</dd>
+    <div style="padding: 0 var(--space-5) var(--space-4);">
+      <dl style="display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-4); margin: 0; font-size: var(--font-size-sm); align-items: center;">
+        <dt style="font-weight: 600; color: var(--c-text-muted); white-space: nowrap;">Tên đăng nhập:</dt>
+        <dd style="margin: 0; font-family: var(--font-family-mono); font-weight: 700; color: #0F172A;">{{ request.user.get_username }}</dd>
 
-      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Địa chỉ email:</dt>
-      <dd style="margin: 0;">{{ request.user.email|default:"Chưa cập nhật" }}</dd>
+        <dt style="font-weight: 600; color: var(--c-text-muted); white-space: nowrap;">Địa chỉ email:</dt>
+        <dd style="margin: 0; color: #0F172A;">{{ request.user.email|default:"Chưa cập nhật" }}</dd>
 
-      <dt style="font-weight: var(--font-weight-semibold); color: var(--c-text-muted);">Vai trò hệ thống:</dt>
-      <dd style="margin: 0;">
-        <span class="cce-badge cce-badge-published">{{ profile_role_label }}</span>
-      </dd>
-    </dl>
+        <dt style="font-weight: 600; color: var(--c-text-muted); white-space: nowrap;">Vai trò hệ thống:</dt>
+        <dd style="margin: 0; font-weight: 600; color: #0284C7;">{{ profile_role_label }}</dd>
+
+        <dt style="font-weight: 600; color: var(--c-text-muted); white-space: nowrap;">Đăng nhập gần nhất:</dt>
+        <dd style="margin: 0; font-size: 0.8rem; color: var(--c-text-muted); white-space: nowrap;">{{ request.user.last_login|date:"d/m/Y H:i"|default:"Phiên hiện tại" }}</dd>
+
+        <dt style="font-weight: 600; color: var(--c-text-muted); white-space: nowrap;">Trạng thái:</dt>
+        <dd style="margin: 0;">
+          <span class="cce-badge cce-badge-valid" style="font-size: 0.72rem; padding: 2px 8px;">Đang hoạt động</span>
+        </dd>
+      </dl>
+    </div>
   </section>
 
-  <!-- Password Change Card -->
-  <section class="cce-card" aria-labelledby="pwd-change-title">
+  <!-- Card 2: Đổi mật khẩu bảo vệ -->
+  <section class="cce-card" aria-labelledby="pwd-change-title" style="width: 100%; max-width: 480px; flex: 1 1 360px;">
     <div class="cce-card-header">
-      <h2 class="cce-card-title" id="pwd-change-title">Đổi mật khẩu</h2>
+      <h2 class="cce-card-title" id="pwd-change-title" style="display:flex; align-items:center; gap:var(--space-2);">
+        <span class="material-symbols-outlined" style="font-size:1.25rem; color:var(--c-primary);" aria-hidden="true">lock_reset</span>
+        Đổi mật khẩu bảo vệ
+      </h2>
     </div>
 
     <p style="font-size: var(--font-size-xs); color: var(--c-text-muted); margin-bottom: var(--space-4);">

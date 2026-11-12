@@ -1,0 +1,243 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Xuất dữ liệu MyBK{% endblock %}
+{% block breadcrumb_title %}Xuất MyBK{% endblock %}
+{% block page_title %}Xuất dữ liệu MyBK{% endblock %}
+{% block page_description %}{{ page_description|default:"Xuất file CSV điểm thi đã công bố để đối chiếu với hệ thống quản lý MyBK ĐH Bách Khoa." }}{% endblock %}
+
+{% block content %}
+{# ── Thống kê tổng quan xuất MyBK (KPI Cards) ────────────────────── #}
+<div class="cce-stat-grid stat-theme-mybk" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Thí sinh trong đợt</div>
+    <div class="cce-stat-value">{{ total_assignments_count|default:0 }}</div>
+    <div class="cce-stat-note">
+      {% if selected_period %}Ngày thi: {{ selected_period.exam_date|date:"d/m/Y" }}{% else %}Vui lòng chọn đợt thi{% endif %}
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Sẵn sàng xuất MyBK</div>
+    <div class="cce-stat-value">{{ ready_records_count|default:0 }}</div>
+    <div class="cce-stat-note">Điểm đã công bố đủ điều kiện</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Lịch sử xuất thành công</div>
+    <div class="cce-stat-value">{{ total_export_logs_count|default:0 }}</div>
+    <div class="cce-stat-note">Lượt xuất dữ liệu đã lưu vết</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng bản ghi đã xuất</div>
+    <div class="cce-stat-value">{{ total_exported_records|default:0 }}</div>
+    <div class="cce-stat-note">Dữ liệu đã chuyển sang MyBK</div>
+  </div>
+</div>
+
+{# ── Bảng điều khiển xuất dữ liệu (Export Console) ────────────────── #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header" style="border-bottom:1px solid var(--c-border-subtle); padding-bottom:var(--space-3);">
+    <div style="display:flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="color:var(--c-primary); font-size:1.35rem;" aria-hidden="true">sync_alt</span>
+      <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Cấu hình xuất dữ liệu MyBK</h2>
+    </div>
+  </div>
+
+  <div style="padding:var(--space-5);">
+    <form method="get" id="periodSelectForm" style="margin-bottom:var(--space-5);">
+      <div style="max-width:560px;">
+        <label class="cce-label" for="id_period" style="font-weight:700; font-size:0.8125rem; color:#172B3A; margin-bottom:var(--space-2); display:flex; align-items:center; gap:var(--space-1);">
+          <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-primary);" aria-hidden="true">filter_list</span>
+          <span>Lựa chọn đợt thi khảo thí:</span>
+        </label>
+        <select name="period" id="id_period" class="cce-select" onchange="this.form.submit()" style="padding:8px 12px; font-size:var(--font-size-sm); border-radius:var(--radius-md); width:100%;">
+          <option value="">— Chọn đợt thi cần xuất dữ liệu —</option>
+          {% for p in periods %}
+            <option value="{{ p.pk }}" {% if selected_period and selected_period.pk == p.pk %}selected{% endif %}>
+              {{ p.name }} (Ngày thi: {{ p.exam_date|date:"d/m/Y" }} — {% if p.status == 'published' %}Đã công bố{% elif p.status == 'closed' %}Đã đóng{% else %}Nháp{% endif %})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+
+    {% if selected_period %}
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:var(--space-4); margin-bottom:var(--space-5);">
+        {# Card 1: Đợt thi #}
+        <div style="background:#FFFFFF; border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:0 1px 3px rgba(15,23,42,0.04);">
+          <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
+            <span class="material-symbols-outlined" style="color:var(--c-primary); font-size:1.2rem;" aria-hidden="true">event</span>
+            <span style="font-size:0.75rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Thông tin đợt thi</span>
+          </div>
+          <div style="font-weight:700; font-size:0.95rem; color:#172B3A; line-height:1.3;">{{ selected_period.name }}</div>
+          <div style="font-size:0.8rem; color:var(--c-text-muted); margin-top:4px;">Loại chứng chỉ: <strong style="color:var(--c-text);">{{ selected_period.cert_type.name }}</strong></div>
+        </div>
+
+        {# Card 2: Quy chuẩn #}
+        <div style="background:#FFFFFF; border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:0 1px 3px rgba(15,23,42,0.04);">
+          <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
+            <span class="material-symbols-outlined" style="color:var(--c-primary); font-size:1.2rem;" aria-hidden="true">description</span>
+            <span style="font-size:0.75rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Quy chuẩn dữ liệu MyBK</span>
+          </div>
+          <div style="font-weight:700; font-size:0.95rem; color:#172B3A; line-height:1.3;">CSV UTF-8 (có BOM)</div>
+          <div style="font-size:0.8rem; color:var(--c-text-muted); margin-top:4px;">Gồm 8 cột chuẩn quản lý sinh viên Bách Khoa</div>
+        </div>
+
+        {# Card 3: Trạng thái #}
+        <div style="background:#FFFFFF; border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-4); box-shadow:0 1px 3px rgba(15,23,42,0.04);">
+          <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
+            <span class="material-symbols-outlined" style="color:{% if ready_records_count > 0 %}var(--c-success){% else %}var(--c-warning){% endif %}; font-size:1.2rem;" aria-hidden="true">{% if ready_records_count > 0 %}verified{% else %}pending{% endif %}</span>
+            <span style="font-size:0.75rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Trạng thái sẵn sàng</span>
+          </div>
+          <div>
+            {% if ready_records_count > 0 %}
+              <span class="cce-badge cce-badge-valid" style="font-size:0.8rem; padding:3px 10px;">Có {{ ready_records_count }} bài thi đã công bố</span>
+            {% else %}
+              <span class="cce-badge cce-badge-draft" style="font-size:0.8rem; padding:3px 10px;">Chưa có điểm nào được công bố</span>
+            {% endif %}
+          </div>
+          <div style="font-size:0.8rem; color:var(--c-text-muted); margin-top:4px;">Tổng thí sinh trong đợt: <strong style="color:var(--c-text);">{{ total_assignments_count }}</strong></div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3); padding:14px 18px; background:#F8FAFC; border:1px solid var(--c-border-subtle); border-radius:var(--radius-md);">
+        <form method="post" id="cceMyBKExportForm" style="display:inline-block; margin:0;" onsubmit="handleExportSubmit(event)">
+          {% csrf_token %}
+          <input type="hidden" name="period" value="{{ selected_period.pk }}">
+          <button class="cce-btn cce-btn-accent" id="btnExportMyBK" type="submit" {% if ready_records_count == 0 %}disabled style="opacity:0.55; cursor:not-allowed;"{% endif %} style="padding:9px 18px; font-size:0.9rem; font-weight:600; display:inline-flex; align-items:center; gap:var(--space-2);">
+            <span class="material-symbols-outlined" id="exportIcon" aria-hidden="true" style="font-size:1.15rem;">download</span>
+            <span id="exportText">Tải xuống file CSV cho MyBK ({{ ready_records_count }} bản ghi)</span>
+          </button>
+        </form>
+
+        <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-publish' %}?period={{ selected_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:0.9rem; font-weight:600; padding:8px 16px;">
+          <span class="material-symbols-outlined" style="font-size:1.125rem; color:var(--c-primary);" aria-hidden="true">campaign</span>
+          <span>Kiểm tra / Công bố thêm điểm</span>
+        </a>
+      </div>
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-6) var(--space-4);">
+        <p class="cce-empty-desc">Vui lòng chọn đợt thi ở danh sách bên trên để tải dữ liệu đối chiếu sang MyBK.</p>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+{# ── Lịch sử xuất dữ liệu gần đây ────────────────────────────────── #}
+<section class="cce-card">
+  <div class="cce-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
+    <div style="display:flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="color:var(--c-primary-mid); font-size:1.25rem;" aria-hidden="true">history</span>
+      <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Lịch sử xuất dữ liệu MyBK gần đây</h2>
+    </div>
+    <div style="display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+      {# Bộ lọc phạm vi nhật ký #}
+      <div style="display:inline-flex; background:var(--c-surface-subtle); border:1px solid var(--c-border-subtle); border-radius:var(--radius-pill); padding:2px;">
+        <a href="?{% if selected_period %}period={{ selected_period.pk }}&{% endif %}log_scope=all"
+           class="cce-tab-pill {% if log_scope == 'all' %}is-active{% endif %}"
+           style="padding:3px 10px; font-size:var(--font-size-xs); text-decoration:none; border-radius:var(--radius-pill); font-weight:var(--font-weight-medium); color:{% if log_scope == 'all' %}#fff{% else %}var(--c-text-muted){% endif %}; background:{% if log_scope == 'all' %}var(--c-primary){% else %}transparent{% endif %};">
+          Tất cả đợt thi
+        </a>
+        {% if selected_period %}
+          <a href="?period={{ selected_period.pk }}&log_scope=period"
+             class="cce-tab-pill {% if log_scope == 'period' %}is-active{% endif %}"
+             style="padding:3px 10px; font-size:var(--font-size-xs); text-decoration:none; border-radius:var(--radius-pill); font-weight:var(--font-weight-medium); color:{% if log_scope == 'period' %}#fff{% else %}var(--c-text-muted){% endif %}; background:{% if log_scope == 'period' %}var(--c-primary){% else %}transparent{% endif %};">
+            Chỉ đợt đang chọn
+          </a>
+        {% endif %}
+      </div>
+
+      <button type="button" class="cce-btn cce-btn-secondary cce-btn-sm" onclick="window.location.reload()" title="Cập nhật lại danh sách nhật ký mới nhất" style="display:inline-flex; align-items:center; gap:4px; font-size:var(--font-size-xs);">
+        <span class="material-symbols-outlined" style="font-size:15px;" aria-hidden="true">refresh</span>
+        <span>Làm mới</span>
+      </button>
+    </div>
+  </div>
+
+  {% if export_logs %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col" style="min-width:160px;">Thời điểm xuất</th>
+            <th scope="col" style="min-width:220px;">Đợt thi</th>
+            <th scope="col" style="min-width:180px;">Người thực hiện</th>
+            <th scope="col" style="min-width:120px; text-align:center;">Số bản ghi</th>
+            <th scope="col" style="min-width:200px;">Ghi chú xuất</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in export_logs %}
+            <tr {% if selected_period and log.exam_period.pk == selected_period.pk %}style="background:var(--c-primary-soft);"{% endif %}>
+              <td>
+                <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-weight:var(--font-weight-medium); color:var(--c-text);">
+                  <span class="material-symbols-outlined" style="font-size:1rem; color:var(--c-text-muted);" aria-hidden="true">schedule</span>
+                  <span>{{ log.exported_at|date:"d/m/Y H:i:s" }}</span>
+                </div>
+              </td>
+              <td>
+                <strong style="color:var(--c-text);">{{ log.exam_period.name }}</strong>
+                {% if selected_period and log.exam_period.pk == selected_period.pk %}
+                  <span class="cce-badge cce-badge-neutral" style="font-size:0.65rem; margin-left:4px;">Đang chọn</span>
+                {% endif %}
+              </td>
+              <td>
+                <div style="display:inline-flex; align-items:center; gap:var(--space-2);">
+                  <span class="material-symbols-outlined" style="font-size:1.125rem; color:var(--c-primary-light);" aria-hidden="true">person</span>
+                  <span>{{ log.exported_by.get_full_name|default:log.exported_by.username }}</span>
+                </div>
+              </td>
+              <td style="text-align:center;">
+                <span class="cce-badge cce-badge-valid" style="font-weight:var(--font-weight-bold); font-size:var(--font-size-sm);">
+                  {{ log.record_count }} bản ghi
+                </span>
+              </td>
+              <td style="color:var(--c-text-muted); font-size:var(--font-size-sm);">
+                {{ log.notes|default:"Xuất dữ liệu định kỳ" }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="lượt xuất" %}
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4); text-align:center;">
+      <span class="material-symbols-outlined cce-empty-icon" style="font-size:2.5rem; color:var(--c-text-muted);">history_toggle_off</span>
+      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-sm);">Chưa có lượt xuất dữ liệu nào</p>
+      <p class="cce-empty-desc" style="color:var(--c-text-muted); font-size:var(--font-size-xs);">Các lượt xuất file CSV đối chiếu sang hệ thống MyBK sẽ được tự động ghi nhận tại đây.</p>
+    </div>
+  {% endif %}
+</section>
+
+<script>
+  function handleExportSubmit(e) {
+    const btn = document.getElementById('btnExportMyBK');
+    const icon = document.getElementById('exportIcon');
+    const text = document.getElementById('exportText');
+    if (btn) {
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.75';
+      if (icon) {
+        icon.textContent = 'sync';
+        icon.style.animation = 'spin 1s linear infinite';
+      }
+      if (text) {
+        text.textContent = 'Đang tải file CSV & ghi nhật ký...';
+      }
+    }
+    // Tự động tải lại trang sau 1.2s để lập tức hiển thị lượt xuất mới nhất trên giao diện
+    setTimeout(function() {
+      window.location.reload();
+    }, 1200);
+  }
+</script>
+<style>
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
+{% endblock %}

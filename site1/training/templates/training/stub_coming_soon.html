@@ -1,0 +1,19 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb_title %}{{ page_title }}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<section class="cce-card" style="padding:var(--space-12) var(--space-6); text-align:center;">
+  <div style="font-size:3rem; margin-bottom:var(--space-4);">🚧</div>
+  <h3 style="color:var(--c-primary); margin-bottom:var(--space-3);">Đang phát triển</h3>
+  <p style="color:var(--c-text-muted); max-width:400px; margin:0 auto var(--space-5);">
+    Màn hình <strong>{{ page_title }}</strong> đang được xây dựng và sẽ có trong phiên bản tiếp theo.
+  </p>
+  <a class="cce-btn cce-btn-secondary" href="{% url 'dashboard' %}" style="display:inline-flex; align-items:center; gap:var(--space-2); padding:8px 18px; font-weight:var(--font-weight-semibold);">
+    <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">arrow_back</span>
+    <span>Quay về bảng điều khiển</span>
+  </a>
+</section>
+{% endblock %}

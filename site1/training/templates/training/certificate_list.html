@@ -1,0 +1,130 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Chứng nhận & Chứng chỉ{% endblock %}
+{% block breadcrumb_title %}Chứng nhận{% endblock %}
+{% block page_title %}Quản lý cấp chứng nhận & chứng chỉ{% endblock %}
+{% block page_description %}Tra cứu, in ấn và quản lý danh sách học viên, thí sinh đủ điều kiện cấp chứng chỉ hoàn thành.{% endblock %}
+
+{% block content %}
+{# 4 Thẻ chỉ số tổng quan chứng chỉ #}
+<div class="cce-stat-grid stat-theme-certificates" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng đủ điều kiện cấp</div>
+    <div class="cce-stat-value">{{ total_eligible|default:0 }}</div>
+    <div class="cce-stat-note">Thí sinh đạt điểm chuẩn khảo thí</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đã phát hành số hiệu</div>
+    <div class="cce-stat-value">{{ total_issued|default:0 }}</div>
+    <div class="cce-stat-note">Số hiệu chứng chỉ số lưu vết CCE</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Chờ phôi bằng giấy</div>
+    <div class="cce-stat-value">{{ pending_paper|default:0 }}</div>
+    <div class="cce-stat-note">Sẵn sàng xuất danh sách in bằng</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tỉ lệ tốt nghiệp</div>
+    <div class="cce-stat-value">{{ graduation_rate|default:"0%" }}</div>
+    <div class="cce-stat-note">Tỉ lệ đạt chứng chỉ toàn hệ thống</div>
+  </div>
+</div>
+
+{# Bảng danh sách chứng chỉ #}
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách học viên & thí sinh đủ điều kiện cấp chứng chỉ</h2>
+  </div>
+
+  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+
+  {% if page_obj.object_list %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col" style="min-width:200px;">Học viên / Thí sinh</th>
+            <th scope="col" style="min-width:140px;">Số CCCD</th>
+            <th scope="col" style="min-width:200px;">Khóa / Đợt khảo thí</th>
+            <th scope="col" style="min-width:140px;">Số hiệu chứng chỉ</th>
+            <th scope="col" style="min-width:90px; text-align:center;">Điểm thi</th>
+            <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
+            <th scope="col" style="min-width:110px; text-align:right;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in page_obj %}
+            <tr>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <strong style="color:var(--c-text); font-size:var(--font-size-base);">{{ item.full_name }}</strong>
+                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">SĐT: {{ item.phone }}</span>
+                </div>
+              </td>
+              <td>
+                <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); color:var(--c-text-muted);">
+                  {{ item.id_number }}
+                </span>
+              </td>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <strong style="color:var(--c-text); font-size:var(--font-size-sm);">{{ item.period_name }}</strong>
+                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">Ngày thi: {{ item.exam_date|date:"d/m/Y" }}</span>
+                </div>
+              </td>
+              <td>
+                <span style="font-family:var(--font-family-mono); font-weight:var(--font-weight-bold); font-size:var(--font-size-xs); color:var(--c-primary); background:rgba(3,105,161,0.08); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid rgba(3,105,161,0.18);">
+                  {{ item.cert_code }}
+                </span>
+              </td>
+              <td style="text-align:center;">
+                <span style="font-family:var(--font-family-mono); font-weight:var(--font-weight-extrabold); font-size:var(--font-size-md); color:var(--c-success);">
+                  {{ item.score }}
+                </span>
+              </td>
+              <td style="text-align:center;">
+                <span class="cce-badge cce-badge-published">Đã cấp số</span>
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" class="cce-table-btn cce-table-btn-outline" onclick="window.print()" title="In chứng nhận">
+                  <span class="material-symbols-outlined" style="font-size:0.95rem; vertical-align:middle;" aria-hidden="true">print</span>
+                  <span>In bản sao</span>
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Phân trang #}
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="cce-pagination" aria-label="Phân trang chứng chỉ" style="margin-top:var(--space-4);">
+        <div style="font-size:var(--font-size-sm); color:var(--c-text-muted);">
+          Trang <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong> (Tổng cộng {{ page_obj.paginator.count }} bản ghi)
+        </div>
+        <div class="cce-pagination-links">
+          {% if page_obj.has_previous %}
+            <a class="cce-page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.keyword %}&keyword={{ request.GET.keyword }}{% endif %}">&laquo; Trước</a>
+          {% endif %}
+          <span class="cce-page-link is-active">{{ page_obj.number }}</span>
+          {% if page_obj.has_next %}
+            <a class="cce-page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.keyword %}&keyword={{ request.GET.keyword }}{% endif %}">Sau &raquo;</a>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
+      <span class="material-symbols-outlined" style="font-size:3rem; color:var(--c-primary-light);">workspace_premium</span>
+      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có dữ liệu chứng chỉ</p>
+      <p style="max-width:440px; margin:0 auto var(--space-4); color:var(--c-text-muted);">
+        Chưa có thí sinh đạt chuẩn theo tiêu chí tìm kiếm hiện tại.
+      </p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

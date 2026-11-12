@@ -1,0 +1,118 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Nhập điểm từ file{% endblock %}
+{% block breadcrumb_title %}Nhập từ file{% endblock %}
+{% block page_title %}Nhập điểm từ file{% endblock %}
+{% block page_description %}Upload file CSV gồm cột: so_cccd, diem (và tuỳ chọn: vang_thi).{% endblock %}
+
+{% block content %}
+
+{# Bước 0: Chọn đợt thi và phòng thi #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">1. Chọn phòng thi cần nhập điểm</h2>
+  </div>
+  <form method="get" style="padding:var(--space-4);">
+    <div class="cce-form-row">
+      <div class="cce-form-group">
+        <label class="cce-label" for="id_period">Đợt thi</label>
+        <select name="period" id="id_period" class="cce-select"
+                onchange="this.form.submit()">
+          <option value="">— Chọn đợt thi —</option>
+          {% for p in periods %}
+            <option value="{{ p.pk }}" {% if selected_period and selected_period.pk == p.pk %}selected{% endif %}>
+              {{ p.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if rooms_for_period %}
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_room">Phòng thi</label>
+          <select name="room" id="id_room" class="cce-select"
+                  onchange="this.form.submit()">
+            <option value="">— Chọn phòng —</option>
+            {% for r in rooms_for_period %}
+              <option value="{{ r.pk }}" {% if selected_room and selected_room.pk == r.pk %}selected{% endif %}>
+                {{ r.name }} ({{ r.assigned_count }}/{{ r.capacity }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+{% if selected_room %}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">
+      2. Upload file điểm — phòng "{{ selected_room.name }}"
+    </h2>
+  </div>
+  <div style="padding:var(--space-4);">
+    <div class="cce-alert cce-alert-info" style="margin-bottom:var(--space-4);">
+      <span class="material-symbols-outlined">info</span>
+      <div>
+        <strong>Định dạng file CSV (UTF-8):</strong><br>
+        Cột bắt buộc: <code>so_cccd</code>, <code>diem</code><br>
+        Cột tuỳ chọn: <code>vang_thi</code> (giá trị: 1, x, có, true)<br>
+        Thang điểm đợt thi: <strong>0 – {{ selected_room.exam_period.score_scale }}</strong>
+      </div>
+    </div>
+    {% include "training/partials/upload_wizard.html" with wizard_id="score-upload" upload_url=upload_url mode="partial" %}
+  </div>
+</section>
+
+<section class="cce-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Thí sinh trong phòng</h2>
+  </div>
+  <div class="cce-table-wrap">
+    <table class="cce-table">
+      <thead>
+        <tr>
+          <th>Họ và tên</th>
+          <th>Số CCCD</th>
+          <th>Điểm hiện tại</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asgn in room_assignments_page_obj %}
+          {% with sc=asgn.score %}
+          <tr>
+            <td>{{ asgn.application.full_name }}</td>
+            <td><code>{{ asgn.application.id_number }}</code></td>
+            <td>
+              {% if sc.is_absent %}
+                <span class="cce-badge cce-badge-duplicate">Vắng</span>
+              {% elif sc.score is not None %}
+                {{ sc.score }}
+              {% else %}
+                <span style="color:var(--c-text-muted);">Chưa có</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="3" style="text-align:center; color:var(--c-text-muted); padding:var(--space-6);">
+            Chưa có thí sinh trong phòng.
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=room_assignments_page_obj page_param="roster_page" count_label="thí sinh" %}
+</section>
+
+{% else %}
+  <div class="cce-empty-state" style="margin-top:var(--space-6);">
+    <span class="material-symbols-outlined cce-empty-icon">upload_file</span>
+    <p class="cce-empty-title">Chọn đợt thi và phòng thi để bắt đầu</p>
+    <p class="cce-empty-desc">Chọn ở bước 1 bên trên để hiển thị form upload.</p>
+  </div>
+{% endif %}
+
+{% endblock %}

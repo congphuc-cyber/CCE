@@ -1,0 +1,226 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Thống kê đợt thi{% endblock %}
+{% block breadcrumb_title %}Thống kê{% endblock %}
+{% block page_title %}Thống kê đợt thi{% endblock %}
+{% block page_description %}{{ page_description|default:"Tổng quan kết quả đăng ký, điểm thi và tỉ lệ đạt theo từng đợt thi." }}{% endblock %}
+
+{% block content %}
+{# ── Bộ lọc chọn đợt thi ─────────────────────────────────────────── #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Lựa chọn đợt thi khảo sát</h2>
+  </div>
+  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+</section>
+
+{% if selected_period and stats %}
+
+{# ── Thông tin tóm tắt đợt thi ───────────────────────────────────── #}
+<div style="background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); margin-bottom:var(--space-6); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-3); box-shadow:var(--shadow-xs);">
+  <div>
+    <span style="font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); color:var(--c-text-muted); text-transform:uppercase; letter-spacing:0.5px;">Đang xem số liệu đợt thi</span>
+    <h3 style="margin:2px 0 0 0; font-size:var(--font-size-lg); color:var(--c-text); font-weight:var(--font-weight-bold);">
+      {{ selected_period.name }}
+    </h3>
+    <div style="display:flex; align-items:center; gap:var(--space-3); font-size:var(--font-size-sm); color:var(--c-text-muted); margin-top:4px;">
+      <span>Chứng chỉ: <strong style="color:var(--c-text);">{{ selected_period.cert_type.name }}</strong></span>
+      <span>•</span>
+      <span>Ngày thi: <strong style="color:var(--c-text);">{{ selected_period.exam_date|date:"d/m/Y" }}</strong></span>
+      <span>•</span>
+      <span>Thang điểm: <strong style="color:var(--c-text);">{{ selected_period.score_scale }}</strong></span>
+    </div>
+  </div>
+  <div>
+    {% if selected_period.status == 'published' %}
+      <span class="cce-badge cce-badge-published" style="font-size:var(--font-size-sm); padding:6px 12px;">Đang công bố</span>
+    {% elif selected_period.status == 'closed' %}
+      <span class="cce-badge cce-badge-closed" style="font-size:var(--font-size-sm); padding:6px 12px;">Đã kết thúc (Đóng)</span>
+    {% else %}
+      <span class="cce-badge cce-badge-draft" style="font-size:var(--font-size-sm); padding:6px 12px;">Bản nháp</span>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Nhóm 1: Tiến độ Tiếp nhận Hồ sơ & Tổ chức ───────────────────── #}
+<div style="margin-bottom:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); color:var(--c-text); text-transform:uppercase; letter-spacing:0.5px;">
+  1. Thống kê đăng ký & tổ chức phòng thi
+</div>
+<div class="cce-stat-grid stat-theme-stat-org" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng hồ sơ đăng ký</div>
+    <div class="cce-stat-value">{{ stats.total_apps|default:0 }}</div>
+    <div class="cce-stat-note">Chỉ tiêu tối đa: {{ selected_period.max_candidates }}</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Hồ sơ hợp lệ</div>
+    <div class="cce-stat-value">{{ stats.valid_apps|default:0 }}</div>
+    <div class="cce-stat-note">Đủ điều kiện xếp phòng ({{ stats.valid_rate }}%)</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Hồ sơ trùng lặp</div>
+    <div class="cce-stat-value">{{ stats.duplicate_apps|default:0 }}</div>
+    <div class="cce-stat-note">{% if stats.duplicate_apps > 0 %}Cần xử lý trước khi thi{% else %}Không có hồ sơ trùng{% endif %}</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Số phòng thi</div>
+    <div class="cce-stat-value">{{ stats.rooms|default:0 }}</div>
+    <div class="cce-stat-note">Phòng thi được phân bổ</div>
+  </div>
+</div>
+
+{# ── Nhóm 2: Kết quả Khảo thí & Điểm số ──────────────────────────── #}
+<div style="margin-bottom:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); color:var(--c-text); text-transform:uppercase; letter-spacing:0.5px;">
+  2. Kết quả điểm thi & Tỷ lệ đạt chứng chỉ
+</div>
+<div class="cce-stat-grid stat-theme-stat-score" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đã có điểm thi</div>
+    <div class="cce-stat-value">{{ stats.has_score|default:0 }}</div>
+    <div class="cce-stat-note">Đã công bố: {{ stats.published_count }} bài thi</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đạt yêu cầu (Đậu)</div>
+    <div class="cce-stat-value">{{ stats.passed|default:0 }}</div>
+    <div class="cce-stat-note">
+      Tỉ lệ đạt: <strong>{{ stats.pass_rate }}%</strong>
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Không đạt (Hỏng)</div>
+    <div class="cce-stat-value">{{ stats.failed|default:0 }}</div>
+    <div class="cce-stat-note">Tỉ lệ hỏng: {{ stats.fail_rate }}%</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Thí sinh vắng thi</div>
+    <div class="cce-stat-value">{{ stats.absent_count|default:0 }}</div>
+    <div class="cce-stat-note">Thí sinh bỏ thi / không dự thi</div>
+  </div>
+</div>
+
+{# ── Thống kê chi tiết theo phòng thi ────────────────────────────── #}
+{% if room_stats %}
+<section class="cce-card">
+  <div class="cce-card-header">
+    <div style="display:flex; align-items:center; gap:var(--space-2);">
+      <span class="material-symbols-outlined" style="color:var(--c-primary-mid); font-size:1.25rem;" aria-hidden="true">domain</span>
+      <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Chi tiết kết quả theo từng phòng thi</h2>
+    </div>
+  </div>
+
+  <div class="cce-table-wrap">
+    <table class="cce-table" role="table">
+      <thead>
+        <tr>
+          <th scope="col" style="min-width:110px;">Phòng thi</th>
+          <th scope="col" style="min-width:150px;">Ca thi</th>
+          <th scope="col" style="min-width:100px; text-align:center;">Sĩ số</th>
+          <th scope="col" style="min-width:100px; text-align:center;">Đã có điểm</th>
+          <th scope="col" style="min-width:90px; text-align:center;">Vắng thi</th>
+          <th scope="col" style="min-width:100px; text-align:center;">Đạt</th>
+          <th scope="col" style="min-width:100px; text-align:center;">Không đạt</th>
+          <th scope="col" style="min-width:160px;">Tỉ lệ đạt (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rs in room_stats %}
+          <tr>
+            <td>
+              <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-weight:var(--font-weight-bold); color:var(--c-text);">
+                <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-primary-mid);" aria-hidden="true">meeting_room</span>
+                <span>{{ rs.room.name }}</span>
+              </div>
+            </td>
+            <td>
+              <span style="font-size:var(--font-size-sm); color:var(--c-text-muted);">{{ rs.room.session }}</span>
+            </td>
+            <td style="text-align:center; font-weight:var(--font-weight-semibold);">
+              {{ rs.total }}
+            </td>
+            <td style="text-align:center;">
+              <span style="font-weight:var(--font-weight-semibold); color:var(--c-primary);">{{ rs.has_score }}</span>
+            </td>
+            <td style="text-align:center;">
+              {% if rs.absent > 0 %}
+                <span style="color:var(--c-danger); font-weight:var(--font-weight-bold);">{{ rs.absent }}</span>
+              {% else %}
+                <span style="color:var(--c-text-muted);">0</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              <span class="cce-badge cce-badge-valid">{{ rs.passed }}</span>
+            </td>
+            <td style="text-align:center;">
+              {% if rs.failed > 0 %}
+                <span class="cce-badge cce-badge-duplicate">{{ rs.failed }}</span>
+              {% else %}
+                <span style="color:var(--c-text-muted);">0</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display:flex; align-items:center; gap:var(--space-2);">
+                <div style="flex:1; background:var(--c-border-subtle); border-radius:var(--radius-pill); height:6px; overflow:hidden;">
+                  <div style="height:100%; background:{% if rs.percent_pass >= 70 %}var(--c-success){% elif rs.percent_pass >= 50 %}var(--c-primary){% else %}var(--c-danger){% endif %}; width:{{ rs.percent_pass }}%; border-radius:var(--radius-pill);"></div>
+                </div>
+                <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); min-width:45px; text-align:right;">
+                  {{ rs.percent_pass }}%
+                </span>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="phòng thi" %}
+</section>
+{% endif %}
+
+{% else %}
+{# ── Thống kê tổng quan toàn hệ thống khi chưa chọn đợt cụ thể ─────── #}
+<div style="margin-bottom:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); color:var(--c-text); text-transform:uppercase; letter-spacing:0.5px;">
+  Tổng quan khảo thí toàn hệ thống CCE
+</div>
+<div class="cce-stat-grid stat-theme-stat-global" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng số đợt thi</div>
+    <div class="cce-stat-value">{{ global_total_periods|default:0 }}</div>
+    <div class="cce-stat-note">Kế hoạch khảo thí đã lập</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng thí sinh đăng ký</div>
+    <div class="cce-stat-value">{{ global_total_apps|default:0 }}</div>
+    <div class="cce-stat-note">Hồ sơ từ tất cả các kênh</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng số phòng thi</div>
+    <div class="cce-stat-value">{{ global_total_rooms|default:0 }}</div>
+    <div class="cce-stat-note">Phòng thi được phân bổ</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Điểm thi đã hoàn tất</div>
+    <div class="cce-stat-value">{{ global_total_scores|default:0 }}</div>
+    <div class="cce-stat-note">Thí sinh vắng thi: {{ global_total_absent|default:0 }}</div>
+  </div>
+</div>
+
+<div class="cce-empty-state" style="padding:var(--space-10) var(--space-4); background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--radius-md);">
+  <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">insights</span>
+  <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chọn một đợt thi để xem báo cáo chi tiết</p>
+  <p class="cce-empty-desc" style="max-width:480px; margin:0 auto; color:var(--c-text-muted);">
+    Vui lòng sử dụng thanh bộ lọc ở trên để chọn đợt thi cần phân tích sâu về tiến độ hồ sơ, tỷ lệ đạt/hỏng và số liệu từng phòng thi.
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

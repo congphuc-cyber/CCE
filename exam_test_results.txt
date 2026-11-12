@@ -1,0 +1,67 @@
+﻿c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe : Creating test database for alias 'default' 
+('file:memorydb_default?mode=memory&cache=shared')...
+At line:1 char:208
++ ... } catch {}; c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...che=shared')...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Found 16 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles, unfold, unfold_filters, unfold_forms
+  Apply all migrations: admin, auth, contenttypes, sessions, training
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying sessions.0001_initial... OK
+  Applying training.0001_initial... OK
+  Applying training.0002_alter_trainingclass_learning_format_and_more... OK
+  Applying training.0003_auditlog_rolefeaturepermission... OK
+  Applying training.0004_alter_auditlog_action... OK
+test_exam_application_deduplicate_get_200 
+(training.tests.ExamModuleUrlTests.test_exam_application_deduplicate_get_200) ... ok
+test_exam_application_import_get_200 (training.tests.ExamModuleUrlTests.test_exam_application_import_get_200) ... ok
+test_exam_application_list_200 (training.tests.ExamModuleUrlTests.test_exam_application_list_200) ... ok
+test_exam_period_add_get_200 (training.tests.ExamModuleUrlTests.test_exam_period_add_get_200) ... ok
+test_exam_period_edit_get_200 (training.tests.ExamModuleUrlTests.test_exam_period_edit_get_200) ... ok
+test_exam_period_list_200 (training.tests.ExamModuleUrlTests.test_exam_period_list_200) ... ok
+test_exam_room_assign_get_200 (training.tests.ExamModuleUrlTests.test_exam_room_assign_get_200) ... ok
+test_exam_room_assign_with_room_id_200 (training.tests.ExamModuleUrlTests.test_exam_room_assign_with_room_id_200) ... 
+ok
+test_exam_room_list_200 (training.tests.ExamModuleUrlTests.test_exam_room_list_200) ... ok
+test_exam_score_entry_200 (training.tests.ExamModuleUrlTests.test_exam_score_entry_200) ... ok
+test_exam_score_list_200 (training.tests.ExamModuleUrlTests.test_exam_score_list_200) ... ok
+test_exam_score_publish_get_200 (training.tests.ExamModuleUrlTests.test_exam_score_publish_get_200) ... ok
+test_exam_score_upload_get_200 (training.tests.ExamModuleUrlTests.test_exam_score_upload_get_200) ... ok
+test_exam_statistics_200 (training.tests.ExamModuleUrlTests.test_exam_statistics_200) ... ok
+test_mybk_export_get_200 (training.tests.ExamModuleUrlTests.test_mybk_export_get_200) ... ok
+test_report_list_forbidden_for_canbothi (training.tests.ExamModuleUrlTests.test_report_list_forbidden_for_canbothi) 
+... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 15.537s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+  Applying training.0005_exam_models... OK
+System check identified no issues (0 silenced).

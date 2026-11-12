@@ -11,7 +11,12 @@ from training.access import user_has_feature
 from training.audit import record_audit, snapshot_account, snapshot_instance
 from training.forms import AccountAdminForm, CourseAdminForm, TeacherAdminForm, TrainingClassAdminForm
 from training.models import AuditLog, Course, Learner, Teacher, TrainingClass
+from training.models import (
+    ExamPeriod, ExamApplication, ExamRoom,
+    ExamRoomAssignment, ExamScore, MyBKExportLog,
+)
 from training.navigation import ROLE_ORDER, roles_for_user
+from training.pagination import PAGE_SIZE
 
 
 def can_manage_classes(user):
@@ -50,8 +55,8 @@ class BaseModelAdmin(UnfoldModelAdmin):
     change_list_template = "training/admin/change_list.html"
     allow_delete = False
     change_list_title = "Danh sách"
-    list_per_page = 25
-    list_max_show_all = 100
+    list_per_page = PAGE_SIZE
+    list_max_show_all = PAGE_SIZE
     show_full_result_count = False
     show_facets = admin.ShowFacets.NEVER
     empty_value_display = "Chưa có thông tin"
@@ -178,6 +183,7 @@ class TrainingClassAdmin(BaseModelAdmin):
         "course",
         "format_display",
         "schedule",
+        "start_date",
         "capacity_display",
         "status_badge",
         "edit_action",
@@ -187,7 +193,7 @@ class TrainingClassAdmin(BaseModelAdmin):
     list_filter = ("course", "learning_format", "status")
     search_fields = ("name", "course__name")
     ordering = ("name",)
-    fields = ("name", "course", "learning_format", "schedule", "max_students")
+    fields = ("name", "course", "learning_format", "schedule", "start_date", "max_students")
 
     def get_queryset(self, request):
         return (
@@ -400,3 +406,48 @@ role_admin_site.register(TrainingClass, TrainingClassAdmin)
 role_admin_site.register(Teacher, TeacherAdmin)
 role_admin_site.register(Learner, LearnerAdmin)
 role_admin_site.register(account_model, AccountAdmin)
+
+
+# ── Exam models ─────────────────────────────────────────────────────────────
+
+class ExamPageSizeAdmin(admin.ModelAdmin):
+    list_per_page = PAGE_SIZE
+    list_max_show_all = PAGE_SIZE
+
+
+@admin.register(ExamPeriod, site=role_admin_site)
+class ExamPeriodAdmin(ExamPageSizeAdmin):
+    list_display = ("name", "exam_date", "cert_type", "status", "application_count")
+    list_filter = ("status", "cert_type")
+    search_fields = ("name",)
+    ordering = ("-exam_date",)
+    readonly_fields = ("created_at",)
+
+
+@admin.register(ExamApplication, site=role_admin_site)
+class ExamApplicationAdmin(ExamPageSizeAdmin):
+    list_display = ("full_name", "id_number", "exam_period", "status", "registered_at")
+    list_filter = ("status", "exam_period")
+    search_fields = ("full_name", "id_number")
+    ordering = ("-registered_at",)
+
+
+@admin.register(ExamRoom, site=role_admin_site)
+class ExamRoomAdmin(ExamPageSizeAdmin):
+    list_display = ("name", "exam_period", "session", "capacity", "assigned_count")
+    list_filter = ("exam_period",)
+    search_fields = ("name",)
+
+
+@admin.register(ExamScore, site=role_admin_site)
+class ExamScoreAdmin(ExamPageSizeAdmin):
+    list_display = ("assignment", "score", "is_absent", "is_published", "is_locked")
+    list_filter = ("is_published", "is_locked", "is_absent")
+    readonly_fields = ("entered_at", "published_at")
+
+
+@admin.register(MyBKExportLog, site=role_admin_site)
+class MyBKExportLogAdmin(ExamPageSizeAdmin):
+    list_display = ("exam_period", "exported_by", "exported_at", "record_count")
+    list_filter = ("exam_period",)
+    readonly_fields = ("exported_at",)

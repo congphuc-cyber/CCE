@@ -1,0 +1,241 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Danh sách phòng thi{% endblock %}
+{% block breadcrumb_title %}Phòng thi{% endblock %}
+{% block page_title %}Danh sách phòng thi{% endblock %}
+{% block page_description %}Quản lý danh sách phòng thi, sức chứa và phân bổ thí sinh theo từng đợt thi.{% endblock %}
+
+{% block page_actions %}
+  <button type="button"
+          class="cce-btn cce-btn-accent"
+          onclick="openCreateRoomModal()"
+          style="display:inline-flex; align-items:center; gap:var(--space-1);">
+    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">add</span>
+    <span>Tạo phòng thi mới</span>
+  </button>
+  {% if selected_period %}
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-room-assign' selected_period.pk %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">group_add</span>
+      <span>Xếp thí sinh ({{ selected_period.name|truncatechars:24 }})</span>
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{# ── Thống kê tổng quan nhanh (KPI Cards) ────────────────────────── #}
+<div class="cce-stat-grid stat-theme-room" style="margin-bottom:var(--space-6);">
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng số phòng</div>
+    <div class="cce-stat-value">{{ total_rooms|default:0 }}</div>
+    <div class="cce-stat-note">
+      {% if selected_period %}Thuộc đợt thi đang lọc{% else %}Toàn bộ các đợt thi{% endif %}
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Tổng sức chứa</div>
+    <div class="cce-stat-value">{{ total_capacity|default:0 }}</div>
+    <div class="cce-stat-note">Số chỗ thi tối đa</div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Đã xếp thí sinh</div>
+    <div class="cce-stat-value">{{ total_assigned|default:0 }}</div>
+    <div class="cce-stat-note">
+      Tỷ lệ lấp đầy: <strong>{{ fill_rate|default:0 }}%</strong>
+    </div>
+  </div>
+
+  <div class="cce-stat-card">
+    <div class="cce-stat-label">Chờ xếp phòng</div>
+    <div class="cce-stat-value" style="color:{% if total_unassigned > 0 %}var(--c-accent){% else %}var(--c-text){% endif %};">{{ total_unassigned|default:0 }}</div>
+    <div class="cce-stat-note">Thí sinh hợp lệ đang chờ</div>
+  </div>
+</div>
+
+{# ── Bảng danh sách phòng thi ────────────────────────────────────── #}
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách chi tiết phòng thi</h2>
+  </div>
+
+  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+
+  {% if rooms_data %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col" style="min-width:110px;">Phòng thi</th>
+            <th scope="col" style="min-width:240px;">Đợt thi</th>
+            <th scope="col" style="min-width:160px;">Ca thi</th>
+            <th scope="col" style="min-width:160px;">Tình trạng lấp đầy</th>
+            <th scope="col" style="min-width:110px; text-align:center;">Trạng thái</th>
+            <th scope="col" style="text-align:right; min-width:130px;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in rooms_data %}
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:var(--space-2);">
+                  <span class="material-symbols-outlined" style="font-size:1.25rem; color:var(--c-primary-mid);" aria-hidden="true">meeting_room</span>
+                  <strong style="font-size:var(--font-size-base); color:var(--c-text);">{{ item.room.name }}</strong>
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">{{ item.room.exam_period.name }}</span>
+                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
+                    Ngày thi: {{ item.room.exam_period.exam_date|date:"d/m/Y" }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div style="display:inline-flex; align-items:center; gap:var(--space-1); color:var(--c-text-muted); font-size:var(--font-size-sm);">
+                  <span class="material-symbols-outlined" style="font-size:1rem;" aria-hidden="true">schedule</span>
+                  <span>{{ item.room.session }}</span>
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; flex-direction:column; gap:4px; max-width:180px;">
+                  <div style="display:flex; justify-content:space-between; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold);">
+                    <span>{{ item.assigned_count }} / {{ item.room.capacity }} thí sinh</span>
+                    <span style="color:var(--c-text-muted);">{{ item.pct }}%</span>
+                  </div>
+                  <div style="width:100%; height:6px; background:var(--c-border-subtle); border-radius:var(--radius-pill); overflow:hidden;">
+                    <div style="height:100%; width:{{ item.pct }}%; background:{% if item.remaining == 0 %}var(--c-badge-closed-text){% else %}var(--c-accent){% endif %}; border-radius:var(--radius-pill); transition:width var(--transition-normal);"></div>
+                  </div>
+                </div>
+              </td>
+              <td style="text-align:center;">
+                {% if item.remaining == 0 %}
+                  <span class="cce-badge cce-badge-closed">Đầy phòng</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-published">Còn {{ item.remaining }} chỗ</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                <a class="cce-btn cce-btn-sm cce-btn-primary"
+                   href="{% url 'exam-room-assign' item.room.exam_period.pk %}?room_id={{ item.room.pk }}"
+                   title="Quản lý và xếp thí sinh vào phòng {{ item.room.name }}"
+                   style="display:inline-flex; align-items:center; gap:4px; font-size:var(--font-size-xs); padding:5px 12px; font-weight:var(--font-weight-medium);">
+                  <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">group_add</span>
+                  <span>Xếp thí sinh</span>
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="phòng thi" %}
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
+      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">meeting_room</span>
+      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có phòng thi nào</p>
+      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
+        {% if selected_period %}
+          Đợt thi "<strong>{{ selected_period.name }}</strong>" hiện chưa được tạo phòng thi nào. Nhấn nút bên dưới để tạo phòng thi đầu tiên.
+        {% else %}
+          Chưa có phòng thi nào trong hệ thống. Nhấn nút "Tạo phòng thi mới" để bắt đầu tạo phòng và xếp thí sinh.
+        {% endif %}
+      </p>
+      <button type="button" class="cce-btn cce-btn-accent" onclick="openCreateRoomModal()">
+        + Tạo phòng thi mới
+      </button>
+    </div>
+  {% endif %}
+</section>
+
+{# ── Modal Tạo phòng thi mới ── #}
+<div class="cce-modal-backdrop" id="cceCreateRoomModal" role="dialog" aria-modal="true" aria-labelledby="cceCreateRoomTitle" style="display:none;">
+  <div class="cce-modal-dialog" style="max-width:520px;">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceCreateRoomTitle" style="display:flex; align-items:center; gap:var(--space-2);">
+        <span class="material-symbols-outlined" style="color:var(--c-primary);" aria-hidden="true">meeting_room</span>
+        <span>Tạo phòng thi mới</span>
+      </h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" onclick="closeCreateRoomModal()" aria-label="Đóng">&times;</button>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="create_room" value="1">
+      <div class="cce-modal-body" style="display:flex; flex-direction:column; gap:var(--space-4);">
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_exam_period">
+            Đợt thi áp dụng <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          {{ create_room_form.exam_period }}
+          <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); margin-top:2px;">
+            Chỉ hiển thị các đợt thi đã công bố và đang tiếp nhận hồ sơ.
+          </div>
+        </div>
+
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_name">
+            Tên phòng thi <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          {{ create_room_form.name }}
+        </div>
+
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_session">
+            Ca thi (Chọn khung giờ) <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          {{ create_room_form.session }}
+        </div>
+
+        <div class="cce-form-group">
+          <label class="cce-label" for="id_capacity">
+            Sức chứa (Số thí sinh tối đa) <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          {{ create_room_form.capacity }}
+        </div>
+      </div>
+      <div class="cce-modal-footer" style="padding:var(--space-4) var(--space-6); border-top:1px solid var(--c-border); display:flex; justify-content:flex-end; gap:var(--space-2);">
+        <button type="button" class="cce-btn cce-btn-secondary" onclick="closeCreateRoomModal()">Hủy bỏ</button>
+        <button type="submit" class="cce-btn cce-btn-accent" style="display:inline-flex; align-items:center; gap:4px;">
+          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">check</span>
+          <span>Tạo phòng & Xếp thí sinh</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function openCreateRoomModal() {
+    const modal = document.getElementById('cceCreateRoomModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('is-open');
+    }
+  }
+
+  function closeCreateRoomModal() {
+    const modal = document.getElementById('cceCreateRoomModal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('is-open');
+    }
+  }
+
+  // Đóng modal khi bấm phím Escape hoặc click nền ngoài
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeCreateRoomModal();
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    const modal = document.getElementById('cceCreateRoomModal');
+    if (e.target === modal) {
+      closeCreateRoomModal();
+    }
+  });
+</script>
+{% endblock %}

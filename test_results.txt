@@ -1,0 +1,384 @@
+﻿c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe : Creating test database for alias 'default'...
+At line:1 char:208
++ ... } catch {}; c:\Users\Admin\Downloads\lmssss\.venv\Scripts\python.exe  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...as 'default'...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+.........................F.....F............
+======================================================================
+FAIL: test_education_group_can_use_django_admin_lists_without_is_staff 
+(training.tests.PhaseFourTests.test_education_group_can_use_django_admin_lists_without_is_staff)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 367, in 
+test_education_group_can_use_django_admin_lists_without_is_staff
+    self.assertContains(response, "avatar-profile-gap-20261111")
+AssertionError: False is not true : Couldn't find 'avatar-profile-gap-20261111' in the following response
+b'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n<!DOCTYPE html>\n<html lang="vi" dir="ltr" class="light" x-data="theme(\'light\')" 
+x-bind="themeBindings" x-cloak>\n    <head>\n        <title> Danh s\xc3\xa1ch kh\xc3\xb3a h\xe1\xbb\x8dc | Trung 
+t\xc3\xa2m K\xe1\xbb\xb9 thu\xe1\xba\xadt \xc4\x90i\xe1\xbb\x87n to\xc3\xa1n</title>\n\n        <link 
+href="/static/unfold/fonts/inter/styles.css" rel="stylesheet">\n        <link 
+href="/static/unfold/fonts/material-symbols/styles.css" rel="stylesheet">\n\n        \n            <link 
+href="/static/training/css/tokens.css?v=shared-sidebar-20261111" rel="stylesheet">\n        \n            <link 
+href="/static/training/css/cce-core.css?v=audit-permission-status-20261111" rel="stylesheet">\n        \n            
+<link href="/static/training/css/cce-unfold.css?v=vietnamese-title-line-height-20261111" rel="stylesheet">\n        
+\n\n        \n\n        <link href="/static/unfold/css/styles.css" rel="stylesheet">\n\n        <script 
+src="/static/unfold/js/alpine/alpine.anchor.js" defer></script>\n        <script 
+src="/static/unfold/js/alpine/alpine.persist.js" defer></script>\n        <script 
+src="/static/unfold/js/alpine/alpine.sort.js" defer></script>\n        <script 
+src="/static/unfold/js/alpine/alpine.focus.js" defer></script>\n        <script 
+src="/static/unfold/js/alpine/alpine.resize.js" defer></script>\n        <script 
+src="/static/unfold/js/alpine/alpine.js" defer></script>\n        <script 
+src="/static/unfold/js/htmx/htmx.js"></script>\n        <script src="/static/unfold/js/chart/chart.js"></script>\n\n   
+     \n\n        \n    \n\n    <script src="/admin/jsi18n/"></script>\n\n    \n\n    \n\n\n        \n    \n    <script 
+src="/static/admin/js/vendor/jquery/jquery.min.js"></script>\n<script 
+src="/static/admin/js/jquery.init.js"></script>\n<script src="/static/admin/js/core.js"></script>\n<script 
+src="/static/admin/js/admin/RelatedObjectLookups.js"></script>\n<script 
+src="/static/admin/js/actions.js"></script>\n<script src="/static/admin/js/urlify.js"></script>\n<script 
+src="/static/admin/js/prepopulate.js"></script>\n<script 
+src="/static/admin/js/vendor/xregexp/xregexp.min.js"></script>\n\n\n        <script 
+src="/static/unfold/js/app.js"></script>\n\n        \n            <meta name="viewport" content="width=device-width, 
+initial-scale=1.0">\n        \n\n        \n            <meta name="robots" content="NONE,NOARCHIVE">\n        \n    
+</head>\n\n    <body class="antialiased bg-base-50 font-sans text-font-default-light text-sm dark:bg-base-900 
+dark:text-font-default-dark  app-training model-course change-list" data-admin-utc-offset="25200" x-data="{ activeTab: 
+\'general\', }" x-init="activeTab = getCurrentTab() || \'general\';">\n        \n            <style 
+id="unfold-theme-colors">\n                :root {\n                    \n\n                    \n                     
+   \n                            --color-base-50: oklch(98.5% .002 247.839);\n                        \n               
+             --color-base-100: oklch(96.7% .003 264.542);\n                        \n                            
+--color-base-200: oklch(92.8% .006 264.531);\n                        \n                            --color-base-300: 
+oklch(87.2% .01 258.338);\n                        \n                            --color-base-400: oklch(70.7% .022 
+261.325);\n                        \n                            --color-base-500: oklch(55.1% .027 264.364);\n        
+                \n                            --color-base-600: oklch(44.6% .03 256.802);\n                        \n  
+                          --color-base-700: oklch(37.3% .034 259.733);\n                        \n                     
+       --color-base-800: oklch(27.8% .033 256.848);\n                        \n                            
+--color-base-900: oklch(21% .034 264.665);\n                        \n                            --color-base-950: 
+oklch(13% .028 261.692);\n                        \n                    \n                        \n                   
+         --color-primary-50: rgb(241, 247, 250);\n                        \n                            
+--color-primary-100: rgb(226, 238, 244);\n                        \n                            --color-primary-200: 
+rgb(198, 221, 232);\n                        \n                            --color-primary-300: rgb(156, 196, 215);\n  
+                      \n                            --color-primary-400: rgb(111, 164, 190);\n                        
+\n                            --color-primary-500: rgb(61, 120, 152);\n                        \n                      
+      --color-primary-600: rgb(23, 59, 87);\n                        \n                            
+--color-primary-700: rgb(16, 47, 70);\n                        \n                            --color-primary-800: 
+rgb(13, 39, 59);\n                        \n                            --color-primary-900: rgb(9, 29, 45);\n         
+               \n                            --color-primary-950: rgb(6, 19, 29);\n                        \n          
+          \n                        \n                            --color-font-subtle-light: var(--color-base-500);\n  
+                      \n                            --color-font-subtle-dark: var(--color-base-400);\n                 
+       \n                            --color-font-default-light: var(--color-base-600);\n                        \n    
+                        --color-font-default-dark: var(--color-base-300);\n                        \n                  
+          --color-font-important-light: var(--color-base-900);\n                        \n                            
+--color-font-important-dark: var(--color-base-100);\n                        \n                    \n                
+}\n            </style>\n        \n\n        \n    <div id="page" class="flex max-w-full min-h-screen ">\n        \n   
+         \n                \n\n<div class="relative z-60" x-bind:class="{\'select-none\': resizing}" 
+x-on:mousemove.window="if (resizing) { sidebarWidth = Math.min(max, Math.max(min, getComputedStyle($el).direction === 
+\'rtl\' ? document.getElementById(\'nav-sidebar\').getBoundingClientRect().right - $event.clientX : $event.clientX)); 
+localStorage.setItem(\'sidebarWidth\', sidebarWidth); }" x-on:mouseup.window="resizing = false" x-data="{ min: 220, 
+max: 360, resizing: false }">\n    <div class="fixed xl:relative " x-show="sidebarOpen" x-bind:style="`width: 
+${sidebarWidth}px`">\n        <div class="bg-base-50 relative z-30 dark:bg-base-900">\n            <div 
+id="nav-sidebar" class="bg-base-50 border-e border-base-200 bottom-0 fixed max-h-screen top-0  dark:border-base-800 
+dark:bg-base-900 " x-bind:style="`width: ${sidebarWidth}px`">\n                \n                    <div 
+id="nav-sidebar-inner" class="cce-sidebar">\n  \n<div class="cce-sidebar-header">\n  <a class="cce-brand" href="/">\n  
+  <span class="cce-brand-badge material-symbols-outlined" aria-hidden="true">school</span>\n    <div 
+class="cce-brand-info">\n      <span class="cce-brand-title">Trung t\xc3\xa2m KT \xc4\x90i\xe1\xbb\x87n 
+to\xc3\xa1n</span>\n      <span class="cce-brand-sub">\xc4\x90H B\xc3\xa1ch Khoa TP.HCM</span>\n    </div>\n  
+</a>\n</div>\n\n<div class="cce-sidebar-user">\n  <div class="cce-sidebar-user-identity">\n    <span 
+class="cce-user-avatar" aria-hidden="true">\n      E\n    </span>\n    <div class="cce-user-details">\n      <div 
+class="cce-user-name">\n        education-admin\n      </div>\n      <div class="cce-user-meta">\n        <span 
+class="cce-user-role">\n          Gi\xc3\xa1o v\xe1\xbb\xa5\n        </span>\n      </div>\n    </div>\n  
+</div>\n</div>\n\n<div class="cce-sidebar-nav" id="nav-sidebar-apps" role="navigation" aria-label="Menu 
+ch\xe1\xbb\xa9c n\xc4\x83ng">\n  \n    \n      \n        <section class="cce-nav-group cce-nav-group-static">\n        
+  <div class="cce-nav-group-items">\n            \n              \n\n  \n  \n    <a class="cce-nav-link" 
+href="/dashboard/">\n      <span class="material-symbols-outlined cce-nav-icon" aria-hidden="true">dashboard</span>\n  
+    <span>B\xe1\xba\xa3ng \xc4\x91i\xe1\xbb\x81u khi\xe1\xbb\x83n</span>\n    </a>\n  \n\n\n            \n          
+</div>\n        </section>\n      \n    \n  \n    \n      <details class="cce-nav-group" open>\n        <summary 
+class="cce-nav-group-title">\n          <span>Qu\xe1\xba\xa3n l\xc3\xbd \xc4\x91\xc3\xa0o t\xe1\xba\xa1o</span>\n      
+    <span class="cce-nav-group-chevron" aria-hidden="true"></span>\n        </summary>\n        <div 
+class="cce-nav-group-items">\n          \n            \n\n  \n  \n    <a class="cce-nav-link is-active active" 
+href="/admin/training/course/" aria-current="page">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">auto_stories</span>\n      <span>Ch\xc6\xb0\xc6\xa1ng tr\xc3\xacnh \xc4\x91\xc3\xa0o 
+t\xe1\xba\xa1o</span>\n    </a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" 
+href="/admin/training/trainingclass/">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">groups</span>\n      <span>L\xe1\xbb\x9bp h\xe1\xbb\x8dc</span>\n    </a>\n  \n\n\n          \n     
+       \n\n  \n  \n    <a class="cce-nav-link" href="/admin/training/teacher/">\n      <span 
+class="material-symbols-outlined cce-nav-icon" aria-hidden="true">person_celebrate</span>\n      <span>Gi\xc3\xa1o 
+vi\xc3\xaan</span>\n    </a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" 
+href="/admin/training/learner/">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">badge</span>\n      <span>H\xe1\xbb\x8dc vi\xc3\xaan</span>\n    </a>\n  \n\n\n          \n         
+   \n\n  \n  \n    <a class="cce-nav-link" href="/certificates/">\n      <span class="material-symbols-outlined 
+cce-nav-icon" aria-hidden="true">workspace_premium</span>\n      <span>Ch\xe1\xbb\xa9ng nh\xe1\xba\xadn</span>\n    
+</a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" href="/reports/">\n      <span 
+class="material-symbols-outlined cce-nav-icon" aria-hidden="true">analytics</span>\n      <span>B\xc3\xa1o 
+c\xc3\xa1o</span>\n    </a>\n  \n\n\n          \n        </div>\n      </details>\n    \n  \n\n  <section 
+class="cce-nav-group cce-nav-group-static cce-nav-group-untitled">\n    <div class="cce-nav-group-items">\n      <a 
+class="cce-nav-link" href="/profile/">\n        <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">manage_accounts</span>\n        <span>H\xe1\xbb\x93 s\xc6\xa1 &amp; M\xe1\xba\xadt 
+kh\xe1\xba\xa9u</span>\n      </a>\n    </div>\n  </section>\n</div>\n\n</div>\n\n                \n\n                
+<div class="absolute bottom-0 cursor-col-resize flex group items-center justify-center end-[-3px] top-0 resize 
+w-[7px]" x-on:mousedown="resizing = true">\n                    <div class="h-full w-[3px] transition-colors 
+group-hover:bg-base-300 group-hover:dark:bg-base-700">\n                    </div>\n                </div>\n           
+ </div>\n        </div>\n    </div>\n</div>\n\n            \n        \n\n        <div id="main" class="bg-white flex 
+flex-col grow min-w-0 dark:bg-base-900 ">\n            \n                \n\n<div class="bg-white border-b 
+border-base-200 mb-4 px-4 z-40 dark:bg-base-900 dark:border-base-800 dark:text-font-default-dark ">\n    <div 
+class="container flex items-center h-16 mx-auto py-4 ">\n        <div id="header-inner" class="flex items-center 
+relative w-full">\n            <div class="flex items-center w-full">\n                \n                    \n        
+                \n                            \n\n<div class="flex flex-row grow font-semibold items-center min-w-0 
+me-3">\n    \n        <span class="cursor-pointer flex flex-row items-center">\n            <span 
+class="material-symbols-outlined rtl:-scale-x-100" x-on:click="sidebarToggle()">\n                dock_to_right\n      
+      </span>\n        </span>\n\n        <span class="block bg-base-200 h-5 mx-3 w-px dark:bg-base-700"></span>\n    
+\n\n    \n        \n\n\n\n    \n\n    <h1 class="overflow-hidden leading-5 text-important flex items-center 
+whitespace-nowrap xl:text-base">\n        <a href="/admin/training/" class="align-middle inline-block leading-5 
+min-w-0 truncate tracking-tight">\n        Qu\xe1\xba\xa3n l\xc3\xbd \xc4\x91\xc3\xa0o t\xe1\xba\xa1o\n        </a 
+><span class="material-symbols-outlined inline-block align-middle leading-5 mx-2 text-base-400 dark:text-base-500 
+rtl:-scale-x-100">chevron_right</span><a href="/admin/training/course/" class="align-middle inline-block leading-5 
+min-w-0 truncate tracking-tight">\n        Kh\xc3\xb3a h\xe1\xbb\x8dc\n        </a >\n\n\n        \n            <span 
+class="font-medium ms-2 text-subtle text-xs">\n                1 k\xe1\xba\xbft qu\xe1\xba\xa3 (<a 
+href="?">Hi\xe1\xbb\x87n t\xe1\xba\xa5t c\xe1\xba\xa3</a>)\n            </span>\n        \n    </h1>\n</div>\n\n       
+                 \n\n                        \n                            \n\n\n    <div class="flex flex-row gap-3 
+items-center ml-auto">\n        \n\n        \n\n\n\n\n        \n\n        \n            <form method="post" 
+action="/admin/logout/" class="cce-admin-header-logout">\n                <input type="hidden" 
+name="csrfmiddlewaretoken" value="ProszhpDwYevXAeq84TgSyNbFYIQmh0CmaKm61YbHFSNuOFKo9UscJnT2VoU3NXa">\n                
+<button class="cce-logout-button" type="submit">\n                    <span>\xc4\x90\xc4\x83ng 
+xu\xe1\xba\xa5t</span>\n                    <span class="material-symbols-outlined" aria-hidden="true">logout</span>\n 
+               </button>\n            </form>\n        \n    </div>\n\n\n                        \n                    
+\n                \n            </div>\n        </div>\n    </div>\n</div>\n\n            \n\n            \n           
+     \n            \n\n            <div class="@container px-4 pb-4 grow">\n                <div id="content" 
+class="container mx-auto  ">\n                    \n                        \n\n                    \n\n               
+     \n    <div id="content-main">\n        \n\n        <div class="flex -mx-4 module" id="changelist" x-data="{ 
+changeListWidth: 0 }">\n            <div class="result-list-wrapper changelist-form-container flex flex-row grow gap-4 
+min-w-0 px-4">\n                <div class="grow min-w-0" x-resize="changeListWidth = $width">\n                    \n 
+                       \n                    \n\n                    \n\n                    <div class="flex flex-col 
+flex-wrap gap-3 mb-4 sm:flex-row empty:hidden lg:border lg:border-base-200 lg:dark:border-base-800 lg:-mb-8 lg:p-3 
+lg:pb-11 lg:rounded-t-default"><div class="cce-admin-search-actions"><div id="toolbar"><form id="changelist-search" 
+method="get" role="search"><div class="bg-white border border-base-200 flex flex-row items-center px-3 rounded-default 
+relative shadow-xs w-full focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-primary-600 
+lg:w-96 dark:bg-base-900 dark:border-base-700"><button type="submit" class="flex items-center focus:outline-hidden" 
+id="searchbar-submit"><span class="material-symbols-outlined md-18 text-base-400 
+dark:text-base-500">search</span></button><input type="text"\n                       class="grow font-medium min-w-0 
+overflow-hidden p-2 placeholder-font-subtle-light truncate focus:outline-hidden dark:bg-base-900 
+dark:placeholder-font-subtle-dark dark:text-font-default-dark"\n                       name="q"\n                      
+ value=""\n                       id="searchbar"\n                       placeholder="Nh\xe1\xba\xadp t\xe1\xbb\xab 
+kh\xc3\xb3a \xc4\x91\xe1\xbb\x83 t\xc3\xacm ki\xe1\xba\xbfm." /><kbd class="bg-base-50 border border-base-200 flex 
+flex-row items-center font-sans h-[20px] min-w-[20px] justify-center text-xs text-subtle rounded-xs px-1 uppercase 
+whitespace-nowrap dark:bg-white/[.04] dark:border-base-700"><span class="block font-medium leading-[18px]">\n          
+  /\n        </span></kbd></div></form></div></div><div class="cce-admin-filter-add"><div class="flex flex-row 
+items-center"><a href="/admin/training/course/add/" class="addlink border border-primary-700 bg-primary-600 flex 
+items-center h-[38px] justify-center -my-1 rounded-default w-[38px] hover:bg-primary-600/80 dark:border-primary-500" 
+title="Th\xc3\xaam v\xc3\xa0o Kh\xc3\xb3a h\xe1\xbb\x8dc"><span class="material-symbols-outlined 
+text-white">add</span></a></div></div></div>\n\n                    <form id="changelist-form" class="group" 
+method="post" novalidate>\n                        <input type="hidden" name="csrfmiddlewaretoken" 
+value="ProszhpDwYevXAeq84TgSyNbFYIQmh0CmaKm61YbHFSNuOFKo9UscJnT2VoU3NXa">\n\n                        \n\n              
+          \n                            \n\n\n    \n        <div class="bottom-0 end-0 hidden 
+group-has-[input.action-select:checked]:flex fixed gap-3 lg:bottom-0 lg:h-[64px] items-center p-3 z-50 lg:flex-row" 
+x-bind:style="{\'inset-inline-start\': sidebarOpen ? sidebarWidth + \'px\' : \'0px\'}">\n            <div 
+id="changelist-actions-wrapper" class="grow group changelist-actions">\n                \n            </div>\n        
+</div>\n    \n\n\n\n                            \n\n\n\n\n    <div class="rounded-default lg:rounded-t-none 
+lg:rounded-b-default overflow-x-auto scrollbar-default border border-base-200 shadow-xs dark:border-base-800 bg-white 
+dark:bg-base-900">\n        <table id="result_list" class="result-list border-spacing-none border-separate w-full" >\n 
+           \n\n<thead>\n    <tr>\n        \n\n        \n\n        \n            <th class="align-middle font-semibold 
+py-2 text-start text-important whitespace-nowrap sortable column-name sorted ascending px-3" scope="col">\n            
+    <div class="flex items-center ">\n                    <div class="text">\n                        \n               
+             <a href="?o=-0">\n                                T\xc3\xaan kh\xc3\xb3a h\xe1\xbb\x8dc\n                 
+           </a>\n                        \n                    </div>\n\n                    \n                        
+\n                            <div class="sortoptions flex items-center ms-2">\n                                <a 
+href="?o=-0" class="flex items-center leading-none text-base-400 hover:text-base-500 dark:text-base-500 
+dark:hover:text-base-400 toggle ascending" title="Ho\xc3\xa1n \xc4\x91\xe1\xbb\x95i s\xe1\xba\xafp x\xe1\xba\xbfp">\n  
+                                  \n                                        <span class="block 
+material-symbols-outlined">arrow_circle_down</span>\n                                    \n                            
+    </a>\n\n                                <a class="sortremove flex items-center leading-none ms-1 text-base-400 
+dark:text-base-500 transition-all hover:text-red-700 dark:hover:text-red-500" href="?o=" title="B\xe1\xbb\x8f 
+kh\xe1\xbb\x8fi s\xe1\xba\xafp x\xe1\xba\xbfp">\n                                    <span class="block 
+material-symbols-outlined">cancel</span>\n                                </a>\n                            </div>\n\n 
+                           \n                        \n                    \n                </div>\n            
+</th>\n        \n            <th class="align-middle font-semibold py-2 text-start text-important whitespace-nowrap 
+column-threshold_display px-3" scope="col">\n                <div class="flex items-center ">\n                    
+<div class="text">\n                        \n                            \n                                <span>\n   
+                                 Ng\xc6\xb0\xe1\xbb\xa1ng \xc4\x91\xe1\xba\xa1t\n                                
+</span>\n                            \n                        \n                    </div>\n\n                    \n  
+              </div>\n            </th>\n        \n            <th class="align-middle font-semibold py-2 text-start 
+text-important whitespace-nowrap column-class_count_display px-3" scope="col">\n                <div class="flex 
+items-center ">\n                    <div class="text">\n                        \n                            \n      
+                          <span>\n                                    S\xe1\xbb\x91 l\xe1\xbb\x9bp\n                   
+             </span>\n                            \n                        \n                    </div>\n\n           
+         \n                </div>\n            </th>\n        \n            <th class="align-middle font-semibold py-2 
+text-start text-important whitespace-nowrap column-edit_action px-3" scope="col">\n                <div class="flex 
+items-center ">\n                    <div class="text">\n                        \n                            \n      
+                          <span>\n                                    H\xc3\xa0nh \xc4\x91\xe1\xbb\x99ng\n             
+                   </span>\n                            \n                        \n                    </div>\n\n     
+               \n                </div>\n            </th>\n        \n    </tr>\n</thead>\n\n\n            \n          
+      <tbody class="relative " x-data="{rowOpen: false}" >\n                    \n\n                    <tr 
+class="data-row relative">\n                        \n\n                        \n\n                        \n         
+                   <td class="field-name align-middle border-t border-base-200 font-normal gap-4 items-center min-w-0 
+overflow-hidden px-3 py-1.5 h-[45px] text-start first:border-t dark:border-base-800">An to\xc3\xa0n 
+\xc4\x91i\xe1\xbb\x87n</td>\n                        \n                            <td class="field-threshold_display 
+align-middle border-t border-base-200 font-normal gap-4 items-center min-w-0 overflow-hidden px-3 py-1.5 h-[45px] 
+text-start first:border-t dark:border-base-800">75.00%</td>\n                        \n                            <td 
+class="field-class_count_display align-middle border-t border-base-200 font-normal gap-4 items-center min-w-0 
+overflow-hidden px-3 py-1.5 h-[45px] text-start first:border-t dark:border-base-800">1</td>\n                        
+\n                            <td class="field-edit_action align-middle border-t border-base-200 font-normal gap-4 
+items-center min-w-0 overflow-hidden px-3 py-1.5 h-[45px] text-start first:border-t dark:border-base-800"><a 
+class="cce-table-btn" href="/admin/training/course/1/change/">S\xe1\xbb\xada</a></td>\n                        \n\n    
+                    \n\n\n\n                    </tr>\n\n                    \n                </tbody>\n            
+\n        </table>\n    </div>\n\n\n                        \n                    </form>\n\n                    \n    
+            </div>\n\n                \n\n\n    \n\n\n            </div>\n        </div>\n    </div>\n\n\n             
+       \n                </div>\n            </div>\n\n            \n    \n        \n\n\n    <div class="px-4 
+lg:backdrop-blur-xs lg:bg-white/80 lg:dark:bg-base-900/80 lg:left-0 lg:right-0 lg:bottom-0 lg:sticky relative z-40 
+lg:border-t lg:border-base-200 lg:relative lg:scrollable-top lg:dark:border-base-800 ">\n        <div class="lg:flex 
+lg:items-center container mx-auto">\n            \n\n<div class="flex flex-row grow items-center lg:h-[64px]">\n    \n 
+       \n\n\n\n<div class="py-4">\n    \n\n    1\n\n    \n        Kh\xc3\xb3a h\xe1\xbb\x8dc\n    \n</div>\n\n    \n\n 
+   \n\n    \n</div>\n\n        </div>\n    </div>\n\n\n    \n\n        </div>\n    </div>\n\n\n        <div 
+id="modal-overlay" class="backdrop-blur-xs bg-base-900/20 bottom-0 fixed left-0 mr-1 right-0 top-0 z-60 
+dark:bg-base-900/80"\n     x-cloak\n     x-transition.opacity.duration.25ms\n     x-transition:leave.duration.0ms\n    
+ x-show="openModal || shortcutsOpen || filterModalOpen || openCommandResults"\n     
+x-on:keydown.escape.window="openModal = shortcutsOpen = filterModalOpen = openCommandResults = false">\n</div>\n\n<div 
+class="flex flex-col fixed inset-0 p-4 lg:p-32 z-[1000]"\n     x-cloak\n     x-show="openModal"\n     
+x-transition:enter\n     x-trap.noautofocus.noscroll="openModal"\n     x-on:keydown.escape.window="openModal = 
+false">\n    <div id="modal-content" class="bg-white dark:bg-base-800 flex flex-col max-w-2xl min-h-0 mx-auto 
+overflow-hidden rounded-default shadow-lg w-full" x-bind:class="modalContentClasses" x-on:click.outside="openModal = 
+false"></div>\n</div>\n\n\n        \n\n\n\n\n        \n\n\n\n    </body>\n</html>\n'
+
+======================================================================
+FAIL: test_education_dashboard_renders_truthful_empty_metrics 
+(training.tests.PhaseThreeTests.test_education_dashboard_renders_truthful_empty_metrics)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\Users\Admin\Downloads\lmssss\site1\training\tests.py", line 287, in 
+test_education_dashboard_renders_truthful_empty_metrics
+    self.assertContains(response, "avatar-profile-gap-20261111")
+AssertionError: False is not true : Couldn't find 'avatar-profile-gap-20261111' in the following response
+b'\n<!DOCTYPE html>\n<html lang="vi">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" 
+content="width=device-width, initial-scale=1">\n  <title>B\xe1\xba\xa3ng \xc4\x91i\xe1\xbb\x81u khi\xe1\xbb\x83n | 
+CCE</title>\n  <link rel="stylesheet" href="/static/unfold/fonts/material-symbols/styles.css">\n  <link 
+rel="stylesheet" href="/static/training/css/tokens.css?v=edtech-rich-surfaces-20261111">\n  <link rel="stylesheet" 
+href="/static/training/css/cce-core.css?v=audit-permission-status-20261111">\n  \n</head>\n<body>\n  <a 
+class="cce-skip-link" href="#main-content">Chuy\xe1\xbb\x83n \xc4\x91\xe1\xba\xbfn n\xe1\xbb\x99i dung 
+ch\xc3\xadnh</a>\n\n  <div class="cce-internal-frame">\n    <!-- Sidebar -->\n    <aside class="cce-sidebar" 
+aria-label="Menu ch\xe1\xbb\xa9c n\xc4\x83ng">\n      \n<div class="cce-sidebar-header">\n  <a class="cce-brand" 
+href="/">\n    <span class="cce-brand-badge material-symbols-outlined" aria-hidden="true">school</span>\n    <div 
+class="cce-brand-info">\n      <span class="cce-brand-title">Trung t\xc3\xa2m KT \xc4\x90i\xe1\xbb\x87n 
+to\xc3\xa1n</span>\n      <span class="cce-brand-sub">\xc4\x90H B\xc3\xa1ch Khoa TP.HCM</span>\n    </div>\n  
+</a>\n</div>\n\n<div class="cce-sidebar-user">\n  <div class="cce-sidebar-user-identity">\n    <span 
+class="cce-user-avatar" aria-hidden="true">\n      E\n    </span>\n    <div class="cce-user-details">\n      <div 
+class="cce-user-name">\n        education-user\n      </div>\n      <div class="cce-user-meta">\n        <span 
+class="cce-user-role">\n          Gi\xc3\xa1o v\xe1\xbb\xa5\n        </span>\n      </div>\n    </div>\n  
+</div>\n</div>\n\n<div class="cce-sidebar-nav" id="nav-sidebar-apps" role="navigation" aria-label="Menu 
+ch\xe1\xbb\xa9c n\xc4\x83ng">\n  \n    \n      \n        <section class="cce-nav-group cce-nav-group-static">\n        
+  <div class="cce-nav-group-items">\n            \n              \n\n  \n  \n    <a class="cce-nav-link is-active 
+active" href="/dashboard/" aria-current="page">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">dashboard</span>\n      <span>B\xe1\xba\xa3ng \xc4\x91i\xe1\xbb\x81u khi\xe1\xbb\x83n</span>\n    
+</a>\n  \n\n\n            \n          </div>\n        </section>\n      \n    \n  \n    \n      <details 
+class="cce-nav-group">\n        <summary class="cce-nav-group-title">\n          <span>Qu\xe1\xba\xa3n l\xc3\xbd 
+\xc4\x91\xc3\xa0o t\xe1\xba\xa1o</span>\n          <span class="cce-nav-group-chevron" aria-hidden="true"></span>\n    
+    </summary>\n        <div class="cce-nav-group-items">\n          \n            \n\n  \n  \n    <a 
+class="cce-nav-link" href="/admin/training/course/">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">auto_stories</span>\n      <span>Ch\xc6\xb0\xc6\xa1ng tr\xc3\xacnh \xc4\x91\xc3\xa0o 
+t\xe1\xba\xa1o</span>\n    </a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" 
+href="/admin/training/trainingclass/">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">groups</span>\n      <span>L\xe1\xbb\x9bp h\xe1\xbb\x8dc</span>\n    </a>\n  \n\n\n          \n     
+       \n\n  \n  \n    <a class="cce-nav-link" href="/admin/training/teacher/">\n      <span 
+class="material-symbols-outlined cce-nav-icon" aria-hidden="true">person_celebrate</span>\n      <span>Gi\xc3\xa1o 
+vi\xc3\xaan</span>\n    </a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" 
+href="/admin/training/learner/">\n      <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">badge</span>\n      <span>H\xe1\xbb\x8dc vi\xc3\xaan</span>\n    </a>\n  \n\n\n          \n         
+   \n\n  \n  \n    <a class="cce-nav-link" href="/certificates/">\n      <span class="material-symbols-outlined 
+cce-nav-icon" aria-hidden="true">workspace_premium</span>\n      <span>Ch\xe1\xbb\xa9ng nh\xe1\xba\xadn</span>\n    
+</a>\n  \n\n\n          \n            \n\n  \n  \n    <a class="cce-nav-link" href="/reports/">\n      <span 
+class="material-symbols-outlined cce-nav-icon" aria-hidden="true">analytics</span>\n      <span>B\xc3\xa1o 
+c\xc3\xa1o</span>\n    </a>\n  \n\n\n          \n        </div>\n      </details>\n    \n  \n\n  <section 
+class="cce-nav-group cce-nav-group-static cce-nav-group-untitled">\n    <div class="cce-nav-group-items">\n      <a 
+class="cce-nav-link" href="/profile/">\n        <span class="material-symbols-outlined cce-nav-icon" 
+aria-hidden="true">manage_accounts</span>\n        <span>H\xe1\xbb\x93 s\xc6\xa1 &amp; M\xe1\xba\xadt 
+kh\xe1\xba\xa9u</span>\n      </a>\n    </div>\n  </section>\n</div>\n\n    </aside>\n\n    <!-- Main Content Area 
+-->\n    <div class="cce-content-area">\n      <header class="cce-topbar">\n        <nav class="cce-breadcrumbs" 
+aria-label="\xc4\x90\xc6\xb0\xe1\xbb\x9dng d\xe1\xba\xabn \xc4\x91i\xe1\xbb\x81u h\xc6\xb0\xe1\xbb\x9bng">\n          
+<a href="/">Trang ch\xe1\xbb\xa7</a>\n          \n            <span class="cce-breadcrumbs-sep" 
+aria-hidden="true">/</span>\n            <span class="cce-breadcrumbs-current" aria-current="page">B\xe1\xba\xa3ng 
+\xc4\x91i\xe1\xbb\x81u khi\xe1\xbb\x83n</span>\n          \n        </nav>\n\n        <div 
+class="cce-topbar-actions">\n          \n          \n            <form action="/logout/" method="post" 
+class="cce-topbar-logout">\n              <input type="hidden" name="csrfmiddlewaretoken" 
+value="vzvSSkjjSMr8CJ74lk4HzZSTuGr2xWWuMtktqL4MFLdxNA3AziFCItCsyVuPpUwv">\n              <button class="cce-btn 
+cce-btn-secondary cce-logout-button" type="submit">\n                <span>\xc4\x90\xc4\x83ng xu\xe1\xba\xa5t</span>\n 
+               <span class="material-symbols-outlined" aria-hidden="true">logout</span>\n              </button>\n     
+       </form>\n          \n        </div>\n      </header>\n\n      <main class="cce-page-container" 
+id="main-content" role="main">\n        \n\n\n\n        <div class="cce-page-header">\n          <div 
+class="cce-page-title-block">\n            <h1>B\xe1\xba\xa3ng \xc4\x91i\xe1\xbb\x81u khi\xe1\xbb\x83n ho\xe1\xba\xa1t 
+\xc4\x91\xe1\xbb\x99ng</h1>\n            T\xe1\xbb\x95ng quan c\xc3\xa1c ch\xe1\xbb\x89 s\xe1\xbb\x91 
+\xc4\x91\xc3\xa0o t\xe1\xba\xa1o, ti\xe1\xba\xbfn \xc4\x91\xe1\xbb\x99 l\xe1\xbb\x9bp h\xe1\xbb\x8dc v\xc3\xa0 
+\xc4\x91\xc4\x83ng k\xc3\xbd c\xe1\xbb\xa7a Trung t\xc3\xa2m.\n          </div>\n          <div 
+class="cce-page-actions">\n            \n          </div>\n        </div>\n\n        \n<div 
+class="cce-dashboard-view">\n  <!-- Stats Grid -->\n  <section class="cce-stat-grid" aria-label="C\xc3\xa1c 
+s\xe1\xbb\x91 li\xe1\xbb\x87u t\xe1\xbb\x95ng quan">\n    \n      <div class="cce-stat-card">\n  <div 
+class="cce-stat-label">T\xe1\xbb\x95ng \xc4\x91\xc4\x83ng k\xc3\xbd tr\xe1\xbb\xb1c tuy\xe1\xba\xbfn</div>\n  <div 
+class="cce-stat-value">\xe2\x80\x94</div>\n  \n    <p class="cce-stat-note">Ch\xc6\xb0a c\xc3\xb3 ngu\xe1\xbb\x93n 
+d\xe1\xbb\xaf li\xe1\xbb\x87u \xc4\x91\xc4\x83ng k\xc3\xbd tr\xe1\xbb\xb1c tuy\xe1\xba\xbfn.</p>\n  \n</div>\n\n\n    
+\n      <div class="cce-stat-card">\n  <div class="cce-stat-label">L\xe1\xbb\x9bp \xc4\x91ang m\xe1\xbb\x9f</div>\n  
+<div class="cce-stat-value">0</div>\n  \n    <p class="cce-stat-note">S\xe1\xbb\x91 l\xe1\xbb\x9bp hi\xe1\xbb\x87n 
+c\xc3\xb3 tr\xe1\xba\xa1ng th\xc3\xa1i \xc4\x91ang m\xe1\xbb\x9f.</p>\n  \n</div>\n\n\n    \n      <div 
+class="cce-stat-card">\n  <div class="cce-stat-label">H\xe1\xbb\x8dc vi\xc3\xaan</div>\n  <div 
+class="cce-stat-value">0</div>\n  \n    <p class="cce-stat-note">T\xe1\xbb\x95ng s\xe1\xbb\x91 h\xe1\xbb\x93 s\xc6\xa1 
+h\xe1\xbb\x8dc vi\xc3\xaan.</p>\n  \n</div>\n\n\n    \n      <div class="cce-stat-card">\n  <div 
+class="cce-stat-label">Ch\xe1\xbb\xa9ng nh\xe1\xba\xadn \xc4\x91\xc3\xa3 c\xe1\xba\xa5p</div>\n  <div 
+class="cce-stat-value">\xe2\x80\x94</div>\n  \n    <p class="cce-stat-note">Ch\xc6\xb0a c\xc3\xb3 d\xe1\xbb\xaf 
+li\xe1\xbb\x87u ch\xe1\xbb\xa9ng nh\xe1\xba\xadn.</p>\n  \n</div>\n\n\n    \n  </section>\n\n  <!-- Daily Registration 
+Chart -->\n  <div class="cce-card" style="margin-top: var(--space-6);">\n  <div class="cce-card-header">\n    <h2 
+class="cce-card-title">\xc4\x90\xc4\x83ng k\xc3\xbd tr\xe1\xbb\xb1c tuy\xe1\xba\xbfn theo ng\xc3\xa0y</h2>\n    \n     
+ <form method="get" class="cce-filter-actions" style="margin: 0;">\n        <div style="display: flex; gap: 
+var(--space-2); align-items: center;">\n          <label style="font-size: var(--font-size-xs);" 
+for="id_from_date">T\xe1\xbb\xab:</label>\n          <input type="date" name="from_date" class="form-control" 
+id="id_from_date">\n          <label style="font-size: var(--font-size-xs);" 
+for="id_to_date">\xc4\x90\xe1\xba\xbfn:</label>\n          <input type="date" name="to_date" class="form-control" 
+id="id_to_date">\n          <button class="cce-btn cce-btn-secondary cce-btn-sm" 
+type="submit">L\xe1\xbb\x8dc</button>\n        </div>\n        \n      </form>\n    \n  </div>\n\n  <div 
+style="position: relative; min-height: 260px; display: flex; align-items: center; justify-content: center;">\n    \n   
+   <div class="cce-empty-state">\n        <p style="margin: 0; font-size: var(--font-size-sm); color: 
+var(--c-text-muted);">\n          Ch\xc6\xb0a c\xc3\xb3 d\xe1\xbb\xaf li\xe1\xbb\x87u trong kho\xe1\xba\xa3ng 
+th\xe1\xbb\x9di gian n\xc3\xa0y.\n        </p>\n      </div>\n    \n  </div>\n</div>\n\n\n\n</div>\n\n      </main>\n  
+  </div>\n  </div>\n\n  \n</body>\n</html>\n'
+
+----------------------------------------------------------------------
+Ran 44 tests in 22.628s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...
+
+Found 44 test(s).
+System check identified no issues (0 silenced).
+Demo data ready: 8 courses, 24 classes, 12 teachers, 120 learners, 32 assignments, 258 enrollments, 99 audit entries added.
+Demo data ready: 8 courses, 24 classes, 12 teachers, 120 learners, 0 assignments, 0 enrollments, 0 audit entries added.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.
+Created CCE role group.

@@ -85,6 +85,12 @@ class TrainingClass(models.Model):
         choices=LearningFormat.choices,
     )
     schedule = models.CharField("Lịch học", max_length=255)
+    start_date = models.DateField(
+        "Ngày khai giảng",
+        null=True,
+        blank=True,
+        help_text="Ngày dự kiến hoặc thực tế khai giảng lớp học",
+    )
     max_students = models.PositiveIntegerField(
         "Sĩ số tối đa",
         validators=[MinValueValidator(1)],
@@ -278,3 +284,224 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} — {self.object_label}"
+
+
+class ExamPeriod(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Chưa công bố"
+        PUBLISHED = "published", "Đã công bố"
+        CLOSED = "closed", "Đã đóng"
+
+    name = models.CharField("Tên đợt thi", max_length=200)
+    cert_type = models.ForeignKey(
+        "Course", verbose_name="Loại chứng chỉ",
+        related_name="exam_periods", on_delete=models.PROTECT,
+    )
+    exam_date = models.DateField("Ngày thi")
+    registration_deadline = models.DateField("Hạn đăng ký")
+    max_candidates = models.PositiveIntegerField("Số thí sinh tối đa", validators=[MinValueValidator(1)])
+    score_scale = models.DecimalField("Thang điểm", max_digits=5, decimal_places=2, default=100)
+    status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField("Ngày tạo", auto_now_add=True)
+
+    class Meta:
+        db_table = "home_examperiod"
+        ordering = ("-exam_date", "name")
+        verbose_name = "Đợt thi"
+        verbose_name_plural = "Đợt thi"
+
+    def __str__(self): return self.name
+
+    def clean(self):
+        super().clean()
+        if self.registration_deadline and self.exam_date:
+            if self.registration_deadline >= self.exam_date:
+                raise ValidationError({"registration_deadline": "Hạn đăng ký phải trước ngày thi."})
+        if self.pk and self.status == self.Status.DRAFT and self.applications.exists():
+            raise ValidationError({"status": "Không thể chuyển đợt thi về 'Chưa công bố' khi đã có hồ sơ đăng ký."})
+        if self.pk and self.max_candidates:
+            curr_apps = self.applications.count()
+            if self.max_candidates < curr_apps:
+                raise ValidationError({"max_candidates": f"Số hồ sơ tối đa ({self.max_candidates}) không được nhỏ hơn số hồ sơ hiện có ({curr_apps})."})
+        if self.pk:
+            orig = ExamPeriod.objects.filter(pk=self.pk).first()
+            if orig and orig.status == self.Status.CLOSED:
+                changed = any(
+                    getattr(self, f) != getattr(orig, f)
+                    for f in ["name", "cert_type_id", "exam_date", "registration_deadline", "max_candidates", "score_scale", "status"]
+                )
+                if changed:
+                    raise ValidationError("Đợt thi đã đóng, không thể chỉnh sửa thông tin.")
+
+    @property
+    def application_count(self):
+        if self.status == self.Status.DRAFT:
+            return 0
+        return self.applications.count() if self.pk else 0
+
+
+class ExamApplication(models.Model):
+    class Source(models.TextChoices):
+        ONLINE = "online", "Trực tuyến"
+        GOOGLE_FORM = "google_form", "Google Form"
+        PARTNER = "partner", "Đối tác"
+        DIRECT = "direct", "Tại cơ sở"
+
+    class Status(models.TextChoices):
+        NEW = "new", "Mới"
+        VALID = "valid", "Hợp lệ"
+        DUPLICATE = "duplicate", "Trùng"
+
+    exam_period = models.ForeignKey(
+        ExamPeriod, verbose_name="Đợt thi",
+        related_name="applications", on_delete=models.PROTECT,
+    )
+    full_name = models.CharField("Họ và tên", max_length=150)
+    phone = models.CharField("Số điện thoại", max_length=30, blank=True)
+    id_number = models.CharField("Số CCCD / CMND", max_length=20)
+    source = models.CharField("Nguồn", max_length=20, choices=Source.choices, default=Source.ONLINE)
+    registered_at = models.DateTimeField("Ngày đăng ký", auto_now_add=True)
+    status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.NEW)
+
+    class Meta:
+        db_table = "home_examapplication"
+        ordering = ("-registered_at",)
+        verbose_name = "Hồ sơ đăng ký dự thi"
+        verbose_name_plural = "Hồ sơ đăng ký dự thi"
+
+    def __str__(self):
+        return f"{self.full_name} — {self.exam_period}"
+
+    def clean(self):
+        super().clean()
+        if self.exam_period_id and self.exam_period.status == ExamPeriod.Status.DRAFT:
+            raise ValidationError(
+                {"exam_period": "Đợt thi chưa công bố không thể tiếp nhận hồ sơ đăng ký."}
+            )
+        if self.exam_period_id and self.exam_period.status == ExamPeriod.Status.CLOSED:
+            raise ValidationError(
+                {"exam_period": "Đợt thi đã đóng, không thể tiếp nhận thêm hồ sơ đăng ký."}
+            )
+        if self.exam_period_id and self.exam_period.max_candidates:
+            existing = self.exam_period.applications.exclude(pk=self.pk).count()
+            if existing >= self.exam_period.max_candidates:
+                raise ValidationError(
+                    {"exam_period": f"Đợt thi đã đạt số lượng hồ sơ tối đa ({self.exam_period.max_candidates})."}
+                )
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+
+class ExamRoom(models.Model):
+    exam_period = models.ForeignKey(
+        ExamPeriod, verbose_name="Đợt thi",
+        related_name="rooms", on_delete=models.PROTECT,
+    )
+    name = models.CharField("Tên phòng", max_length=100)
+    session = models.CharField("Ca thi", max_length=100)
+    capacity = models.PositiveIntegerField("Sức chứa", validators=[MinValueValidator(1)])
+
+    class Meta:
+        db_table = "home_examroom"
+        ordering = ("exam_period", "name")
+        verbose_name = "Phòng thi"
+        verbose_name_plural = "Phòng thi"
+
+    def __str__(self):
+        return f"{self.name} — {self.exam_period}"
+
+    @property
+    def assigned_count(self):
+        return self.room_assignments.count() if self.pk else 0
+
+    @property
+    def remaining_capacity(self):
+        return max(0, self.capacity - self.assigned_count)
+
+
+class ExamRoomAssignment(models.Model):
+    exam_room = models.ForeignKey(
+        ExamRoom, verbose_name="Phòng thi",
+        related_name="room_assignments", on_delete=models.CASCADE,
+    )
+    application = models.ForeignKey(
+        ExamApplication, verbose_name="Hồ sơ đăng ký",
+        related_name="room_assignments", on_delete=models.PROTECT,
+    )
+    assigned_at = models.DateTimeField("Thời điểm xếp phòng", auto_now_add=True)
+
+    class Meta:
+        db_table = "home_examroomassignment"
+        ordering = ("exam_room", "application__full_name")
+        verbose_name = "Xếp phòng thi"
+        verbose_name_plural = "Xếp phòng thi"
+        constraints = [
+            models.UniqueConstraint(fields=("exam_room", "application"), name="unique_room_application"),
+        ]
+
+    def __str__(self):
+        return f"{self.application.full_name} → {self.exam_room.name}"
+
+    def clean(self):
+        super().clean()
+        if self.application_id and self.application.status != ExamApplication.Status.VALID:
+            raise ValidationError({"application": "Chỉ hồ sơ Hợp lệ mới được xếp phòng thi."})
+        if self.exam_room_id:
+            current = self.exam_room.room_assignments.exclude(pk=self.pk).count()
+            if current >= self.exam_room.capacity:
+                raise ValidationError({"exam_room": "Phòng thi đã đủ sức chứa."})
+
+
+class ExamScore(models.Model):
+    assignment = models.OneToOneField(
+        ExamRoomAssignment, verbose_name="Xếp phòng",
+        related_name="score", on_delete=models.PROTECT,
+    )
+    score = models.DecimalField("Điểm", max_digits=5, decimal_places=2, null=True, blank=True)
+    is_absent = models.BooleanField("Vắng thi", default=False)
+    is_published = models.BooleanField("Đã công bố", default=False)
+    is_locked = models.BooleanField("Đã chốt", default=False)
+    entered_at = models.DateTimeField("Thời điểm nhập điểm", null=True, blank=True)
+    published_at = models.DateTimeField("Thời điểm công bố", null=True, blank=True)
+
+    class Meta:
+        db_table = "home_examscore"
+        verbose_name = "Điểm thi"
+        verbose_name_plural = "Điểm thi"
+
+    def __str__(self):
+        return f"Điểm {self.assignment}"
+
+    def clean(self):
+        super().clean()
+        if self.score is not None:
+            scale = self.assignment.exam_room.exam_period.score_scale if self.assignment_id else None
+            if scale is not None and self.score > scale:
+                raise ValidationError({"score": f"Điểm không được vượt thang điểm {scale}."})
+            if self.score < 0:
+                raise ValidationError({"score": "Điểm không được âm."})
+
+
+class MyBKExportLog(models.Model):
+    exam_period = models.ForeignKey(
+        ExamPeriod, verbose_name="Đợt thi",
+        related_name="mybk_exports", on_delete=models.PROTECT,
+    )
+    exported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="Người thực hiện",
+        null=True, blank=True, on_delete=models.SET_NULL,
+    )
+    exported_at = models.DateTimeField("Thời điểm xuất", auto_now_add=True)
+    record_count = models.PositiveIntegerField("Số bản ghi", default=0)
+    notes = models.TextField("Ghi chú", blank=True)
+
+    class Meta:
+        db_table = "home_mybkexportlog"
+        ordering = ("-exported_at",)
+        verbose_name = "Nhật ký xuất MyBK"
+        verbose_name_plural = "Nhật ký xuất MyBK"
+
+    def __str__(self):
+        return f"Xuất MyBK {self.exam_period} — {self.exported_at:%d/%m/%Y}"

@@ -1,0 +1,33 @@
+{% load i18n unfold %}
+
+<div class="cce-filter-spec-group" style="margin-bottom: 16px;">
+    {% if not horizontal %}
+        <div class="cce-filter-spec-title" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h3 style="font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; margin: 0; display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: #0284C7;">tune</span>
+                {% if has_label and label %}
+                    {{ label }}
+                {% else %}
+                    {{ title|cut:"Bởi "|cut:"By " }}
+                {% endif %}
+            </h3>
+        </div>
+    {% endif %}
+
+    {% for choice in choices %}
+        {% if choice.selected and spec.lookup_val.0 %}
+            <input type="hidden" name="{{ spec.lookup_kwarg }}" value="{{ spec.lookup_val.0 }}" />
+        {% endif %}
+    {% endfor %}
+
+    <div class="cce-filter-options-card" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 6px; max-height: 220px; overflow-y: auto;">
+        {% for choice in choices %}
+            <a href="{{ choice.query_string|iriencode }}" title="{{ choice.display }}" class="cce-filter-item-link {% if choice.selected %}is-selected{% endif %}" style="display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 6px; font-size: 0.8125rem; font-weight: {% if choice.selected %}600{% else %}500{% endif %}; text-decoration: none; margin-bottom: 2px; color: {% if choice.selected %}#0284C7{% else %}#334155{% endif %}; background-color: {% if choice.selected %}#E0F2FE{% else %}transparent{% endif %}; transition: all 0.15s ease;">
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;">{{ choice.display }}</span>
+                {% if choice.selected %}
+                    <span class="material-symbols-outlined" style="font-size: 16px; color: #0284C7; font-weight: bold; flex-shrink: 0;" aria-hidden="true">check</span>
+                {% endif %}
+            </a>
+        {% endfor %}
+    </div>
+</div>

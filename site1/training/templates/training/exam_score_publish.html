@@ -1,0 +1,278 @@
+{% extends "training/base_internal.html" %}
+{% load ui_components %}
+
+{% block title %}Công bố / Thu hồi điểm thi{% endblock %}
+{% block breadcrumb_title %}Công bố điểm{% endblock %}
+{% block page_title %}Công bố / Thu hồi điểm thi{% endblock %}
+{% block page_description %}Kiểm tra điều kiện và công bố điểm thi theo đợt hoặc từng phòng.{% endblock %}
+
+{% block content %}
+
+{# Chọn đợt thi #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Chọn đợt thi</h2>
+  </div>
+  <form method="get" style="padding:var(--space-4);">
+    <div class="cce-form-row">
+      <div class="cce-form-group">
+        <label class="cce-label" for="id_period">Đợt thi</label>
+        <select name="period" id="id_period" class="cce-select" onchange="this.form.submit()">
+          <option value="">— Chọn đợt thi —</option>
+          {% for p in periods %}
+            <option value="{{ p.pk }}" {% if selected_period and selected_period.pk == p.pk %}selected{% endif %}>
+              {{ p.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </form>
+</section>
+
+{% if selected_period %}
+
+{# Nút công bố toàn đợt #}
+<section class="cce-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Thao tác cho toàn đợt: {{ selected_period.name }}</h2>
+  </div>
+  <div style="padding:var(--space-4); display:flex; gap:var(--space-3); flex-wrap:wrap;">
+
+    {# Công bố toàn đợt — popup confirm #}
+    <button type="button" class="cce-btn cce-btn-accent"
+            onclick="document.getElementById('modal-publish-all').classList.add('is-open')">
+      Công bố tất cả phòng đủ điều kiện
+    </button>
+
+    {# Thu hồi toàn đợt — popup require reason #}
+    <button type="button" class="cce-btn cce-btn-danger-quiet"
+            onclick="document.getElementById('modal-revoke-all').classList.add('is-open')">
+      Thu hồi toàn bộ
+    </button>
+  </div>
+</section>
+
+{# Trạng thái từng phòng #}
+<section class="cce-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Trạng thái từng phòng thi</h2>
+  </div>
+
+  {% if room_status_list %}
+    <div class="cce-table-wrap">
+      <table class="cce-table" role="table">
+        <thead>
+          <tr>
+            <th>Phòng thi</th>
+            <th>Ca thi</th>
+            <th>Tổng thí sinh</th>
+            <th>Chưa có điểm</th>
+            <th>Đã công bố</th>
+            <th>Điều kiện</th>
+            <th style="text-align:right;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rs in room_status_list %}
+            <tr>
+              <td><strong>{{ rs.room.name }}</strong></td>
+              <td>{{ rs.room.session }}</td>
+              <td>{{ rs.total }}</td>
+              <td>
+                {% if rs.missing_count > 0 %}
+                  <span class="cce-badge cce-badge-duplicate">{{ rs.missing_count }}</span>
+                  {% if rs.missing %}
+                    <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); margin-top:2px;">
+                      {{ rs.missing|join:", " }}{% if rs.missing_count > 5 %}…{% endif %}
+                    </div>
+                  {% endif %}
+                {% else %}
+                  <span class="cce-badge cce-badge-valid">0</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if rs.is_all_published %}
+                  <span class="cce-badge cce-badge-published">Tất cả</span>
+                {% elif rs.published_count > 0 %}
+                  <span class="cce-badge cce-badge-new">{{ rs.published_count }}/{{ rs.total }}</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-draft">Chưa có</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if rs.can_publish %}
+                  <span class="cce-badge cce-badge-valid">Đủ điều kiện</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-duplicate">Chưa đủ</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                {% if rs.can_publish and not rs.is_all_published %}
+                  <button type="button" class="cce-table-btn"
+                          onclick="document.getElementById('modal-pub-{{ rs.room.pk }}').classList.add('is-open')">
+                    Công bố
+                  </button>
+                {% endif %}
+                {% if rs.published_count > 0 %}
+                  <button type="button" class="cce-table-btn table-action-delete"
+                          onclick="document.getElementById('modal-rev-{{ rs.room.pk }}').classList.add('is-open')">
+                    Thu hồi
+                  </button>
+                {% endif %}
+                <a class="cce-table-btn cce-table-btn-outline"
+                   href="{% url 'exam-score-entry' rs.room.pk %}">Điểm</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="phòng thi" %}
+  {% else %}
+    <div class="cce-empty-state">
+      <span class="material-symbols-outlined cce-empty-icon">meeting_room</span>
+      <p class="cce-empty-title">Chưa có phòng thi nào trong đợt này</p>
+    </div>
+  {% endif %}
+</section>
+
+{# ── Modals công bố / thu hồi từng phòng ──────────────────────────────── #}
+{% for rs in room_status_list %}
+
+{# Modal công bố từng phòng #}
+<div class="cce-modal-backdrop" id="modal-pub-{{ rs.room.pk }}" role="dialog" aria-modal="true">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title">Công bố điểm — {{ rs.room.name }}</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+              onclick="document.getElementById('modal-pub-{{ rs.room.pk }}').classList.remove('is-open')">&times;</button>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="publish">
+      <input type="hidden" name="period" value="{{ selected_period.pk }}">
+      <input type="hidden" name="scope_room_id" value="{{ rs.room.pk }}">
+      <div class="cce-modal-body">
+        <p>Công bố điểm cho <strong>{{ rs.total }} thí sinh</strong> trong phòng <strong>{{ rs.room.name }}</strong>?</p>
+        <p style="color:var(--c-text-muted); font-size:var(--font-size-sm);">
+          Thí sinh sẽ có thể tra cứu kết quả sau khi công bố.
+        </p>
+      </div>
+      <div class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary"
+                onclick="document.getElementById('modal-pub-{{ rs.room.pk }}').classList.remove('is-open')">Hủy</button>
+        <button type="submit" class="cce-btn cce-btn-accent">Xác nhận công bố</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Modal thu hồi từng phòng — bắt buộc lý do #}
+<div class="cce-modal-backdrop" id="modal-rev-{{ rs.room.pk }}" role="dialog" aria-modal="true">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title">Thu hồi điểm — {{ rs.room.name }}</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+              onclick="document.getElementById('modal-rev-{{ rs.room.pk }}').classList.remove('is-open')">&times;</button>
+    </div>
+    <form method="post" onsubmit="return document.getElementById('reason-rev-{{ rs.room.pk }}').value.trim() !== ''
+        || (alert('Vui lòng nhập lý do thu hồi.'), false);">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="revoke">
+      <input type="hidden" name="period" value="{{ selected_period.pk }}">
+      <input type="hidden" name="scope_room_id" value="{{ rs.room.pk }}">
+      <div class="cce-modal-body">
+        <div class="cce-form-group">
+          <label class="cce-label" for="reason-rev-{{ rs.room.pk }}">
+            Lý do thu hồi <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          <input type="text" name="reason" id="reason-rev-{{ rs.room.pk }}"
+                 class="cce-input" placeholder="Nhập lý do bắt buộc..." required>
+        </div>
+      </div>
+      <div class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary"
+                onclick="document.getElementById('modal-rev-{{ rs.room.pk }}').classList.remove('is-open')">Hủy</button>
+        <button type="submit" class="cce-btn cce-btn-danger">Thu hồi điểm</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endfor %}
+
+{# Modal công bố toàn đợt #}
+<div class="cce-modal-backdrop" id="modal-publish-all" role="dialog" aria-modal="true">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title">Công bố toàn đợt: {{ selected_period.name }}</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+              onclick="document.getElementById('modal-publish-all').classList.remove('is-open')">&times;</button>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="publish">
+      <input type="hidden" name="period" value="{{ selected_period.pk }}">
+      <div class="cce-modal-body">
+        <p>Công bố điểm cho tất cả các phòng đủ điều kiện trong đợt thi <strong>{{ selected_period.name }}</strong>?</p>
+        <p style="color:var(--c-text-muted); font-size:var(--font-size-sm);">
+          Phòng chưa đủ điều kiện (còn thí sinh thiếu điểm) sẽ được bỏ qua.
+        </p>
+      </div>
+      <div class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary"
+                onclick="document.getElementById('modal-publish-all').classList.remove('is-open')">Hủy</button>
+        <button type="submit" class="cce-btn cce-btn-accent">Xác nhận công bố</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Modal thu hồi toàn đợt — bắt buộc lý do #}
+<div class="cce-modal-backdrop" id="modal-revoke-all" role="dialog" aria-modal="true">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title">Thu hồi toàn bộ — {{ selected_period.name }}</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+              onclick="document.getElementById('modal-revoke-all').classList.remove('is-open')">&times;</button>
+    </div>
+    <form method="post" onsubmit="return document.getElementById('reason-revoke-all').value.trim() !== ''
+        || (alert('Vui lòng nhập lý do thu hồi.'), false);">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="revoke">
+      <input type="hidden" name="period" value="{{ selected_period.pk }}">
+      <div class="cce-modal-body">
+        <div class="cce-form-group">
+          <label class="cce-label" for="reason-revoke-all">
+            Lý do thu hồi <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          <input type="text" name="reason" id="reason-revoke-all"
+                 class="cce-input" placeholder="Nhập lý do bắt buộc..." required>
+        </div>
+      </div>
+      <div class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary"
+                onclick="document.getElementById('modal-revoke-all').classList.remove('is-open')">Hủy</button>
+        <button type="submit" class="cce-btn cce-btn-danger">Thu hồi toàn bộ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+  <div class="cce-empty-state" style="margin-top:var(--space-6);">
+    <span class="material-symbols-outlined cce-empty-icon">grading</span>
+    <p class="cce-empty-title">Chọn đợt thi để xem trạng thái công bố</p>
+  </div>
+{% endif %}
+
+<script>
+// Đóng modal khi click backdrop
+document.querySelectorAll('.cce-modal-backdrop').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    if (e.target === el) el.classList.remove('is-open');
+  });
+});
+</script>
+{% endblock %}
