@@ -1,0 +1,22 @@
+{% extends "training/base_public_exam.html" %}
+
+{% block title %}Đăng ký thành công{% endblock %}
+{% block meta_description %}Xác nhận hồ sơ đăng ký dự thi đã được gửi đến Trung tâm Kỹ thuật Điện toán.{% endblock %}
+
+{% block content %}
+<section class="public-exam-panel">
+  <h1>Đăng ký dự thi</h1>
+  {% include "training/partials/public_state.html" with state="success" title="Đã nhận hồ sơ đăng ký" message="Thông tin đăng ký của bạn đã được gửi đến Trung tâm." period=application.exam_period %}
+  <dl class="public-state-details">
+    <div>
+      <dt>Loại chứng chỉ</dt>
+      <dd>{{ application.exam_period.cert_type.name }}</dd>
+    </div>
+    <div>
+      <dt>Thí sinh</dt>
+      <dd>{{ application.full_name }}</dd>
+    </div>
+  </dl>
+  <a class="cce-btn cce-btn-primary public-state-action" href="{% url 'home' %}">Về trang chủ</a>
+</section>
+{% endblock %}

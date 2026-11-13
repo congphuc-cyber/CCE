@@ -1,0 +1,48 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Lịch sử chuyển lớp{% endblock %}
+{% block breadcrumb_title %}Lịch sử chuyển lớp{% endblock %}
+{% block page_title %}Lịch sử chuyển lớp{% endblock %}
+{% block page_description %}Tra cứu các lần chuyển lớp theo học viên hoặc lớp học.{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-accent" href="{{ transfer_url }}">
+    <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
+    <span>Chuyển lớp</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+<section class="cce-card">
+  <div class="cce-filter-bar">
+    <form method="get" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:flex-end; width:100%;">
+      <div class="cce-filter-item">
+        <label for="{{ filter_form.learner.id_for_label }}">Học viên</label>
+        {{ filter_form.learner }}
+        {% for error in filter_form.learner.errors %}
+          <div class="cce-form-error" role="alert">{{ error }}</div>
+        {% endfor %}
+      </div>
+      <div class="cce-filter-item">
+        <label for="{{ filter_form.training_class.id_for_label }}">Lớp học</label>
+        {{ filter_form.training_class }}
+        {% for error in filter_form.training_class.errors %}
+          <div class="cce-form-error" role="alert">{{ error }}</div>
+        {% endfor %}
+      </div>
+      <div class="cce-filter-actions">
+        <button class="cce-btn cce-btn-primary" type="submit">
+          <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+          <span>Áp dụng lọc</span>
+        </button>
+        <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?">
+          <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+          <span>Đặt lại</span>
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {% include "training/partials/data_table.html" with columns=columns rows=rows page_obj=page_obj hide_actions=True %}
+</section>
+{% endblock %}

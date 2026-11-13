@@ -1,0 +1,9 @@
+{% extends "training/admin/change_list.html" %}
+
+{% block search %}
+    {{ block.super }}
+    <a class="cce-btn cce-btn-secondary" href="{% url 'learner-import' %}">
+        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+        <span>Nhập từ file</span>
+    </a>
+{% endblock %}

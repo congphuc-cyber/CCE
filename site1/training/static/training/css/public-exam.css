@@ -1,0 +1,521 @@
+.public-exam-page .cce-public-frame {
+  background: var(--c-bg);
+}
+
+.public-exam-page .cce-public-header {
+  padding: 0 var(--space-6);
+  border-bottom-color: var(--c-border);
+  background: var(--c-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.public-exam-page .cce-brand-badge {
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.public-exam-page .cce-brand-title,
+.public-exam-page .cce-footer-brand-name {
+  color: var(--c-text);
+}
+
+.public-exam-page .cce-public-footer {
+  border-top-color: var(--c-border);
+  background: var(--c-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.public-exam-page .cce-footer-brand-sub,
+.public-exam-page .cce-footer-bottom {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.public-exam-main {
+  display: block;
+  width: 100%;
+  padding: var(--space-8) var(--space-4);
+}
+
+.public-exam-content {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.public-exam-header {
+  position: relative;
+  height: auto;
+  min-height: 74px;
+}
+
+.public-exam-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.public-exam-nav .cce-btn,
+.public-exam-primary-action,
+.public-exam-actions .cce-btn,
+.public-period-action,
+.public-state-action {
+  min-height: 44px;
+}
+
+.public-exam-hero,
+.public-exam-panel,
+.public-exam-section {
+  margin-bottom: var(--space-8);
+}
+
+.public-exam-hero,
+.public-exam-panel {
+  padding: var(--space-6);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-xl);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.public-exam-hero {
+  padding: var(--space-8);
+  background: var(--c-primary-soft);
+}
+
+.public-exam-hero h1,
+.public-exam-panel h1 {
+  margin-bottom: var(--space-3);
+}
+
+.public-exam-lead {
+  max-width: 65ch;
+  margin-bottom: var(--space-5);
+  color: var(--c-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.public-action-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.public-action-link {
+  display: flex;
+  min-height: 132px;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.public-action-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--c-primary-mid);
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.public-action-link:focus-visible,
+.public-exam-contact:focus-visible,
+.public-exam-text-link:focus-visible {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
+.public-action-title {
+  color: var(--c-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.public-exam-section h2 {
+  margin-bottom: var(--space-4);
+}
+
+.public-period-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--c-border);
+}
+
+.public-period-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.public-period-row h3 {
+  margin-bottom: var(--space-1);
+}
+
+.public-period-row p {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-md);
+}
+
+.public-exam-room-note {
+  padding: var(--space-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface-muted);
+}
+
+.public-exam-room-note p,
+.public-exam-section > p {
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.public-exam-text-link,
+.public-exam-contact {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--c-primary-mid);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.public-exam-footer .cce-footer-inner {
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.public-exam-footer .cce-footer-tagline {
+  font-size: var(--font-size-sm);
+  color: var(--c-text-muted);
+}
+
+.public-exam-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.public-exam-form legend {
+  margin-bottom: var(--space-4);
+  color: var(--c-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.public-exam-field {
+  margin-bottom: var(--space-4);
+}
+
+.public-exam-field .cce-input,
+.public-exam-field .cce-select {
+  min-height: 48px;
+  font-size: var(--font-size-md);
+}
+
+.public-required {
+  color: var(--c-danger);
+}
+
+.public-form-error-summary {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--c-danger-border);
+  border-radius: var(--radius-md);
+  background: var(--c-danger-soft);
+  color: var(--c-text);
+}
+
+.public-form-error-summary:focus {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
+.public-form-error-summary h2 {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-lg);
+}
+
+.public-form-error-summary ul {
+  margin: 0;
+  padding-left: var(--space-6);
+}
+
+.public-form-error-summary a {
+  color: var(--c-danger);
+  text-decoration: underline;
+}
+
+.public-exam-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.public-state {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+}
+
+.public-state--success {
+  border-color: var(--c-success-border);
+  background: var(--c-success-soft);
+}
+
+.public-state--warning {
+  border-color: var(--c-warning-border);
+  background: var(--c-warning-soft);
+}
+
+.public-state--error {
+  border-color: var(--c-danger-border);
+  background: var(--c-danger-soft);
+}
+
+.public-state-title {
+  margin-bottom: var(--space-2);
+}
+
+.public-state p {
+  margin-bottom: 0;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.public-state-details {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.public-state-details dt {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.public-state-details dd {
+  margin: 0;
+  color: var(--c-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.public-state-action {
+  margin-top: var(--space-4);
+}
+
+.public-exam-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.public-exam-field label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--c-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.public-exam-field img.captcha {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+
+.public-captcha-audio {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--c-primary-mid);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.public-exam-field input[name$="_1"] {
+  min-height: 48px;
+  font-size: var(--font-size-md);
+}
+
+.public-field-errors {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--c-danger);
+}
+
+.public-field-help {
+  margin-top: var(--space-2);
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.public-lookup-results {
+  margin-top: var(--space-5);
+}
+
+.public-lookup-result-list {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--c-border);
+}
+
+.public-lookup-result {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.public-lookup-result h3 {
+  margin-bottom: var(--space-2);
+}
+
+.public-lookup-result p {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.public-lookup-certificates {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.public-lookup-certificates li {
+  margin-bottom: var(--space-1);
+}
+
+.public-room-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+
+.public-room-details dt {
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.public-room-details dd {
+  margin: var(--space-1) 0 0;
+  color: var(--c-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.public-exam-form .cce-btn,
+.public-exam-actions .cce-btn {
+  min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  .public-action-list {
+    grid-template-columns: 1fr;
+  }
+
+  .public-action-link {
+    min-height: 88px;
+  }
+}
+
+@media (max-width: 576px) {
+  .public-exam-main {
+    padding: var(--space-5) var(--space-3);
+  }
+
+  .public-exam-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .public-exam-nav {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .public-exam-nav .cce-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .public-exam-hero,
+  .public-exam-panel {
+    padding: var(--space-4);
+  }
+
+  .public-period-row,
+  .public-exam-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .public-room-details {
+    grid-template-columns: 1fr;
+  }
+
+  .public-period-action,
+  .public-exam-actions .cce-btn,
+  .public-exam-form .cce-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .public-exam-footer .cce-footer-inner {
+    align-items: center;
+  }
+}
+
+@media print {
+  .cce-skip-link,
+  .cce-public-header,
+  .cce-public-footer,
+  .public-exam-actions {
+    display: none !important;
+  }
+
+  .cce-public-main {
+    padding: 0;
+  }
+
+  .public-exam-panel {
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-action-link {
+    transition: none;
+  }
+}

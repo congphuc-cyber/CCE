@@ -1,0 +1,34 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Nhập học viên từ file{% endblock %}
+{% block breadcrumb_title %}Nhập học viên từ file{% endblock %}
+{% block page_title %}Nhập học viên từ file{% endblock %}
+{% block page_description %}Tải lên CSV hoặc Excel, kiểm tra dữ liệu rồi chỉ lưu các hồ sơ hợp lệ chưa có trong hệ thống.{% endblock %}
+
+{% block content %}
+<div>
+  <section class="cce-card" style="padding:var(--space-6); margin-bottom:var(--space-4);">
+    <h2 style="font-size:var(--font-size-base); font-weight:var(--font-weight-bold); margin-bottom:var(--space-3);">
+      Chuẩn bị file
+    </h2>
+    <p style="font-size:var(--font-size-sm); color:var(--c-text-muted); margin-bottom:var(--space-3);">
+      File cần có đủ các cột: Họ và tên, Ngày sinh, Số CCCD, Số điện thoại và Email.
+      Dùng ngày theo dạng YYYY-MM-DD trong CSV; Excel có thể dùng định dạng ngày.
+    </p>
+    <p style="font-size:var(--font-size-sm); color:var(--c-text-muted); margin:0;">
+      CCCD phải gồm đúng 12 chữ số. Dòng lỗi và CCCD đã có sẽ được bỏ qua; các hồ sơ hiện có không bị ghi đè.
+      Đặt cột CCCD và điện thoại ở định dạng Văn bản để giữ số 0 ở đầu. Tối đa 5 MB và 5.000 dòng.
+    </p>
+  </section>
+
+  <section class="cce-card" style="padding:var(--space-6);">
+    {% include "training/partials/upload_wizard.html" with wizard_id="learner-import-wizard" upload_url=import_url mode="partial" supports_xlsx=True accepted_extensions="csv,xlsx" accept_types=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" file_format_hint="CSV UTF-8 hoặc Excel (.xlsx)" %}
+    <div style="margin-top:var(--space-6);">
+      <a class="cce-btn cce-btn-secondary" href="{% url 'admin:training_learner_changelist' %}">
+        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+        <span>Quay lại danh sách học viên</span>
+      </a>
+    </div>
+  </section>
+</div>
+{% endblock %}

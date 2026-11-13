@@ -179,6 +179,19 @@ cd site1
 python manage.py bootstrap --demo
 ```
 
+Để tạo dữ liệu kiểm thử cho các luồng kết quả cuối khóa, chứng nhận/chứng chỉ,
+lịch sử chuyển lớp và tra cứu công khai, chạy lệnh sau trong môi trường
+`DEBUG=True`. Dữ liệu dùng tên tự nhiên và email thuộc miền dành riêng
+`example.test`; đây là dữ liệu tổng hợp, không phải hồ sơ thật. Lệnh có thể
+chạy lặp lại và không xóa dữ liệu đang có:
+
+```bash
+python manage.py seed_workflow_test_data
+```
+
+Thông tin tra cứu được in sau khi chạy lệnh. Email `.test` không nhận thư thật
+và chỉ dành cho môi trường phát triển.
+
 Lệnh hoàn toàn idempotent (chạy nhiều lần không gây lỗi hay trùng lặp).
 
 ---

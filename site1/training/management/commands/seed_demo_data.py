@@ -1,3 +1,4 @@
+from datetime import timedelta
 import os
 import secrets
 
@@ -5,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from training.audit import record_audit, snapshot_instance
 from training.models import (

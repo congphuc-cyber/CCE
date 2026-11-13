@@ -1,0 +1,19 @@
+{% extends "training/base_public_exam.html" %}
+
+{% block title %}Đợt thi không nhận đăng ký{% endblock %}
+{% block meta_description %}Đợt thi đã đóng, hết hạn hoặc không còn chỗ nhận hồ sơ đăng ký.{% endblock %}
+
+{% block content %}
+<section class="public-exam-panel">
+  <h1>Đăng ký dự thi</h1>
+  {% if state == "expired" %}
+    {% include "training/partials/public_state.html" with state="warning" title="Đợt thi đã hết hạn đăng ký" message="Hệ thống không nhận thêm hồ sơ cho đợt thi này." period=period action_url="/" action_label="Xem đợt thi khác" %}
+  {% elif state == "full" %}
+    {% include "training/partials/public_state.html" with state="warning" title="Đợt thi đã đủ số lượng" message="Hệ thống không nhận thêm hồ sơ cho đợt thi này." period=period action_url="/" action_label="Xem đợt thi khác" %}
+  {% elif period %}
+    {% include "training/partials/public_state.html" with state="warning" title="Đợt thi đã đóng đăng ký" message="Hệ thống không nhận thêm hồ sơ cho đợt thi này." period=period action_url="/" action_label="Xem đợt thi khác" %}
+  {% else %}
+    {% include "training/partials/public_state.html" with state="empty" title="Chưa có đợt thi nhận đăng ký" message="Hiện chưa có đợt thi công khai đang trong thời hạn nhận hồ sơ." action_url="/" action_label="Về trang chủ" %}
+  {% endif %}
+</section>
+{% endblock %}

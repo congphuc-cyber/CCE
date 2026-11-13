@@ -1,113 +1,153 @@
 {% extends "training/base_internal.html" %}
 
-{% block title %}Chứng nhận & Chứng chỉ{% endblock %}
+{% block title %}Chứng nhận{% endblock %}
 {% block breadcrumb_title %}Chứng nhận{% endblock %}
-{% block page_title %}Quản lý cấp chứng nhận & chứng chỉ{% endblock %}
-{% block page_description %}Tra cứu, in ấn và quản lý danh sách học viên, thí sinh đủ điều kiện cấp chứng chỉ hoàn thành.{% endblock %}
+{% block page_title %}Quản lý chứng nhận{% endblock %}
+{% block page_description %}Cấp, theo dõi, thu hồi và thay thế chứng nhận cho học viên đạt kết quả cuối khóa.{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-primary" href="#issue-certificate-form">Cấp chứng nhận</a>
+{% endblock %}
 
 {% block content %}
-{# 4 Thẻ chỉ số tổng quan chứng chỉ #}
 <div class="cce-stat-grid stat-theme-certificates" style="margin-bottom:var(--space-6);">
   <div class="cce-stat-card">
     <div class="cce-stat-label">Tổng đủ điều kiện cấp</div>
     <div class="cce-stat-value">{{ total_eligible|default:0 }}</div>
-    <div class="cce-stat-note">Thí sinh đạt điểm chuẩn khảo thí</div>
+    <div class="cce-stat-note">Học viên đạt ngưỡng cuối khóa</div>
   </div>
-
   <div class="cce-stat-card">
-    <div class="cce-stat-label">Đã phát hành số hiệu</div>
+    <div class="cce-stat-label">Đã cấp</div>
     <div class="cce-stat-value">{{ total_issued|default:0 }}</div>
-    <div class="cce-stat-note">Số hiệu chứng chỉ số lưu vết CCE</div>
+    <div class="cce-stat-note">Chứng nhận còn hiệu lực</div>
   </div>
-
   <div class="cce-stat-card">
     <div class="cce-stat-label">Chờ phôi bằng giấy</div>
     <div class="cce-stat-value">{{ pending_paper|default:0 }}</div>
-    <div class="cce-stat-note">Sẵn sàng xuất danh sách in bằng</div>
+    <div class="cce-stat-note">Sẵn sàng xuất danh sách in</div>
   </div>
-
   <div class="cce-stat-card">
-    <div class="cce-stat-label">Tỉ lệ tốt nghiệp</div>
+    <div class="cce-stat-label">Tỷ lệ đạt</div>
     <div class="cce-stat-value">{{ graduation_rate|default:"0%" }}</div>
-    <div class="cce-stat-note">Tỉ lệ đạt chứng chỉ toàn hệ thống</div>
+    <div class="cce-stat-note">Theo dữ liệu hoạt động hiện tại</div>
   </div>
 </div>
 
-{# Bảng danh sách chứng chỉ #}
+<section class="cce-card" id="issue-certificate-form" style="margin-bottom: var(--space-6);">
+  <div class="cce-card-header" style="padding-bottom:0; border-bottom:none;">
+    <h2 class="cce-card-title">Cấp chứng nhận</h2>
+  </div>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="issue_certificate" value="1">
+    <div class="cce-form-grid two-col">
+      <div class="cce-form-field">
+        <label for="id_training_class">Lớp học</label>
+        {{ issue_form.training_class }}
+        {% if issue_form.training_class.errors %}<div class="cce-error">{{ issue_form.training_class.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div class="cce-form-field">
+        <label for="id_learner">Học viên</label>
+        {{ issue_form.learner }}
+        {% if issue_form.learner.errors %}<div class="cce-error">{{ issue_form.learner.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+    {% if issue_form.non_field_errors %}
+      <div class="cce-error" style="margin-top:var(--space-3);">{{ issue_form.non_field_errors|join:", " }}</div>
+    {% endif %}
+    <div class="cce-form-actions" style="margin-top: var(--space-4);">
+      <button type="submit" class="cce-btn cce-btn-primary">Xác nhận cấp</button>
+    </div>
+  </form>
+</section>
+
 <section class="cce-card">
-  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
-    <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách học viên & thí sinh đủ điều kiện cấp chứng chỉ</h2>
+  <div class="cce-card-header" style="padding-bottom:0; border-bottom:none;">
+    <h2 class="cce-card-title">Danh sách chứng nhận</h2>
   </div>
 
-  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+  <form method="get" class="cce-filter-bar" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:end; margin-top: var(--space-4);">
+    <div class="cce-filter-item">
+      <label for="keyword">Tìm kiếm</label>
+      <input class="cce-input" type="text" id="keyword" name="keyword" value="{{ keyword|default:'' }}" placeholder="Tên học viên, lớp, số chứng nhận">
+    </div>
+    <div class="cce-filter-item">
+      <label for="class_id">Lớp</label>
+      <select class="cce-select" id="class_id" name="class_id">
+        <option value="">Tất cả</option>
+        {% for item in classes %}
+          <option value="{{ item.pk }}" {% if class_id == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cce-filter-item">
+      <label for="learner_id">Học viên</label>
+      <select class="cce-select" id="learner_id" name="learner_id">
+        <option value="">Tất cả</option>
+        {% for item in learners %}
+          <option value="{{ item.pk }}" {% if learner_id == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cce-filter-item">
+      <label for="status">Trạng thái</label>
+      <select class="cce-select" id="status" name="status">
+        <option value="">Tất cả</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cce-filter-actions">
+      <button class="cce-btn cce-btn-primary" type="submit">Áp dụng lọc</button>
+      <a class="cce-btn cce-btn-secondary" href="{% url 'certificate-list' %}">Đặt lại</a>
+    </div>
+  </form>
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table cce-table-centered" role="table">
+      <table class="cce-table">
         <thead>
           <tr>
-            <th scope="col" style="min-width:200px;">Học viên / Thí sinh</th>
-            <th scope="col" style="min-width:140px;">Số CCCD</th>
-            <th scope="col" style="min-width:200px;">Khóa / Đợt khảo thí</th>
-            <th scope="col" style="min-width:140px;">Số hiệu chứng chỉ</th>
-            <th scope="col" style="min-width:90px; text-align:center;">Điểm thi</th>
-            <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
-            <th scope="col" style="min-width:110px;">Thao tác</th>
+            <th>Số chứng nhận</th>
+            <th>Học viên</th>
+            <th>Lớp</th>
+            <th>Ngày cấp</th>
+            <th>Trạng thái</th>
+            <th>Hành động</th>
           </tr>
         </thead>
         <tbody>
-          {% for item in page_obj %}
+          {% for certificate in page_obj %}
             <tr>
+              <td><strong>{{ certificate.certificate_number }}</strong></td>
+              <td>{{ certificate.learner.full_name }}</td>
+              <td>{{ certificate.training_class.name }}</td>
+              <td>{{ certificate.issued_at|date:"d/m/Y" }}</td>
               <td>
-                <div style="display:flex; flex-direction:column; gap:2px;">
-                  <strong style="color:var(--c-text); font-size:var(--font-size-base);">{{ item.full_name }}</strong>
-                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">SĐT: {{ item.phone }}</span>
-                </div>
-              </td>
-              <td>
-                <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); color:var(--c-text-muted);">
-                  {{ item.id_number }}
-                </span>
-              </td>
-              <td>
-                <div style="display:flex; flex-direction:column; gap:2px;">
-                  <strong style="color:var(--c-text); font-size:var(--font-size-sm);">{{ item.period_name }}</strong>
-                  <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">Ngày thi: {{ item.exam_date|date:"d/m/Y" }}</span>
-                </div>
-              </td>
-              <td>
-                <span style="font-family:var(--font-family-mono); font-weight:var(--font-weight-bold); font-size:var(--font-size-xs); color:var(--c-primary); background:rgba(3,105,161,0.08); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid rgba(3,105,161,0.18);">
-                  {{ item.cert_code }}
-                </span>
-              </td>
-              <td style="text-align:center;">
-                <span style="font-family:var(--font-family-mono); font-weight:var(--font-weight-extrabold); font-size:var(--font-size-md); color:var(--c-success);">
-                  {{ item.score }}
-                </span>
-              </td>
-              <td style="text-align:center;">
-                <span class="cce-badge cce-badge-published">Đã cấp số</span>
+                {% if certificate.status == 'issued' %}
+                  <span class="cce-badge cce-badge-published">Đã cấp</span>
+                {% elif certificate.status == 'revoked' %}
+                  <span class="cce-badge cce-badge-closed">Thu hồi</span>
+                {% else %}
+                  <span class="cce-badge cce-badge-duplicate">Đã thay thế</span>
+                {% endif %}
               </td>
               <td style="white-space:nowrap;">
-                <button type="button" class="cce-table-btn cce-table-btn-outline" onclick="window.print()" title="In chứng nhận">
-                  <span class="material-symbols-outlined" style="font-size:0.95rem; vertical-align:middle;" aria-hidden="true">print</span>
-                  <span>In bản sao</span>
-                </button>
+                <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{% url 'certificate-history' certificate.pk %}">Lịch sử</a>
+                <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'certificate-status-change' certificate.pk %}">Cập nhật</a>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
+    <div class="cce-empty-state" style="padding:var(--space-8); text-align:center;">
       <span class="material-symbols-outlined" style="font-size:3rem; color:var(--c-primary-light);">workspace_premium</span>
-      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có dữ liệu chứng chỉ</p>
-      <p style="max-width:440px; margin:0 auto var(--space-4); color:var(--c-text-muted);">
-        Chưa có thí sinh đạt chuẩn theo tiêu chí tìm kiếm hiện tại.
-      </p>
+      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có chứng nhận nào</p>
+      <p style="color:var(--c-text-muted);">Danh sách trống theo tiêu chí tìm kiếm hiện tại.</p>
     </div>
   {% endif %}
 </section>

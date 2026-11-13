@@ -1,0 +1,14 @@
+<header class="cce-public-header public-exam-header" role="banner">
+  <a class="cce-brand" href="{% url 'home' %}" aria-label="Trang chủ Trung tâm Kỹ thuật Điện toán">
+    <span class="cce-brand-badge" aria-hidden="true">CCE</span>
+    <span class="cce-brand-info">
+      <span class="cce-brand-title">Trung tâm Kỹ thuật Điện toán</span>
+      <span class="cce-brand-sub">Trường Đại học Bách Khoa — ĐHQG-HCM</span>
+    </span>
+  </a>
+  <nav class="cce-public-nav public-exam-nav" aria-label="Điều hướng công khai">
+    <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'exam-room-public-lookup' %}">Xem phòng thi</a>
+    <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'exam-public-lookup' %}">Tra cứu điểm và chứng chỉ</a>
+    <a class="cce-btn cce-btn-primary cce-btn-sm" href="{% url 'exam-application-public-register' %}">Đăng ký dự thi</a>
+  </nav>
+</header>

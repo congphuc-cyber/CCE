@@ -1,0 +1,58 @@
+{% if step == "verify" %}
+  {% with form=otp_form %}
+    <form class="public-exam-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="verify_code">
+      {% if form.non_field_errors %}
+        <div class="public-form-error-summary" role="alert" tabindex="-1">
+          <h2>Không thể xác thực</h2>
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+      {% for field in form %}
+        <div class="public-exam-field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="public-required" aria-hidden="true"> *</span>{% endif %}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="public-field-help">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}
+            <ul class="public-field-errors" id="{{ field.id_for_label }}-error">
+              {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="public-exam-actions">
+        <button class="cce-btn cce-btn-primary" type="submit">Xác thực và tiếp tục</button>
+        <a class="cce-btn cce-btn-outline" href="?new=1">Nhập lại CCCD và email</a>
+      </div>
+    </form>
+  {% endwith %}
+{% else %}
+  {% with form=request_form %}
+    <form class="public-exam-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="request_code">
+      {% if form.non_field_errors %}
+        <div class="public-form-error-summary" role="alert" tabindex="-1">
+          <h2>Thông tin chưa hợp lệ</h2>
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+      {% for field in form %}
+        <div class="public-exam-field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="public-required" aria-hidden="true"> *</span>{% endif %}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="public-field-help">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}
+            <ul class="public-field-errors" id="{{ field.id_for_label }}-error">
+              {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="public-exam-actions">
+        <button class="cce-btn cce-btn-primary" type="submit">Gửi mã xác thực</button>
+      </div>
+    </form>
+  {% endwith %}
+{% endif %}

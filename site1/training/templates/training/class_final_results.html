@@ -1,0 +1,156 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Kết quả cuối khóa — {{ training_class.name }}{% endblock %}
+{% block breadcrumb_title %}Kết quả cuối khóa{% endblock %}
+{% block page_title %}Kết quả cuối khóa{% endblock %}
+{% block page_description %}
+  {{ training_class.name }} · Ngưỡng đạt {{ training_class.course.pass_threshold }} điểm.
+  Bài đánh giá diễn ra ngoài hệ thống.
+{% endblock %}
+
+{% block page_actions %}
+  {% if can_upload_results %}
+    <a class="cce-btn cce-btn-secondary" href="{{ upload_url }}">
+      <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+      Upload file điểm
+    </a>
+  {% endif %}
+  <a class="cce-btn cce-btn-secondary" href="{% url 'class-detail' training_class.pk %}">
+    Quay lại lớp
+  </a>
+{% endblock %}
+
+{% block content %}
+  {% if final_results_locked %}
+    <div class="cce-alert cce-alert-warning" role="status" style="margin-bottom:var(--space-4); color:var(--c-warning-hover);">
+      <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+      <div>
+        <strong>Kết quả đã chốt</strong>
+        <p style="margin:var(--space-1) 0 0;">
+          Chốt lúc {{ final_results_locked_at|date:"d/m/Y H:i" }}
+          {% if final_results_locked_by %} bởi {{ final_results_locked_by.get_full_name|default:final_results_locked_by.username }}{% endif %}.
+          {% if can_manage_results %}
+            Mọi chỉnh sửa đều cần lý do.
+          {% else %}
+            Chỉ Giáo vụ và Quản trị viên được sửa điểm sau khi chốt.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  {% else %}
+    <div class="cce-alert cce-alert-info" role="status" style="margin-bottom:var(--space-4);">
+      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      Để trống ô điểm nếu không muốn thay đổi điểm đã lưu. Có thể sửa điểm trước khi chốt kết quả.
+    </div>
+  {% endif %}
+
+  {% if reason_error %}
+    <div class="cce-alert cce-alert-error" role="alert" style="margin-bottom:var(--space-4);">
+      {{ reason_error }}
+    </div>
+  {% endif %}
+
+  <section class="cce-card" aria-labelledby="final-results-heading">
+    <div class="cce-card-header">
+      <div>
+        <h2 class="cce-card-title" id="final-results-heading">Bảng điểm lớp</h2>
+        <p style="margin:var(--space-1) 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm);">
+          {% if missing_score_count %}
+            Còn {{ missing_score_count }} học viên đang ghi danh chưa có điểm.
+          {% else %}
+            Tất cả học viên đang ghi danh đã có điểm.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="{% if final_results_locked %}save_locked{% else %}save{% endif %}">
+
+      {% if final_results_locked and can_manage_results %}
+        <div class="cce-form-group" style="padding:var(--space-4);">
+          <label class="cce-label" for="final-results-reason">
+            Lý do sửa điểm <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          <textarea class="cce-textarea" id="final-results-reason" name="reason"
+                    rows="3" required aria-describedby="final-results-reason-help">{{ reason_value }}</textarea>
+          <p class="cce-form-help" id="final-results-reason-help">
+            Lý do sẽ được ghi lại trong nhật ký thao tác.
+          </p>
+        </div>
+      {% endif %}
+
+      <div class="cce-table-wrap">
+        <table class="cce-table">
+          <thead>
+            <tr>
+              <th scope="col">Họ và tên</th>
+              <th scope="col">Số CCCD</th>
+              <th scope="col">Điểm cuối khóa (0–100)</th>
+              <th scope="col">Kết quả</th>
+              <th scope="col">Kiểm tra</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td><strong>{{ row.learner.full_name }}</strong></td>
+                <td>{% if row.learner.id_number %}<code>{{ row.learner.id_number }}</code>{% else %}—{% endif %}</td>
+                <td>
+                  <input class="cce-input" type="number" inputmode="decimal"
+                         id="{{ row.input_id }}" name="score_{{ row.learner.pk }}"
+                         min="0" max="100" step="0.01"
+                         value="{{ row.score_value }}"
+                         {% if not can_edit_scores %}readonly aria-readonly="true"{% endif %}
+                         aria-label="Điểm cuối khóa của {{ row.learner.full_name }}">
+                </td>
+                <td>{{ row.outcome }}</td>
+                <td>
+                  {% if row.error %}
+                    <span class="cce-form-error">{{ row.error }}</span>
+                  {% else %}
+                    <span style="color:var(--c-text-muted);">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="cce-empty-state" style="padding:var(--space-8);">
+                  Lớp chưa có học viên ghi danh hoặc kết quả cần xem.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% include "training/partials/pagination.html" with page_obj=page_obj count_label="học viên" %}
+
+      {% if rows and can_edit_scores %}
+        <div class="cce-form-actions" style="padding:var(--space-4); display:flex; gap:var(--space-3); flex-wrap:wrap;">
+          <button class="cce-btn cce-btn-primary" type="submit">Lưu điểm</button>
+          {% if final_results_locked %}
+            <span class="cce-form-help">Sau khi lưu, kết quả vẫn giữ trạng thái đã chốt.</span>
+          {% endif %}
+        </div>
+      {% endif %}
+    </form>
+  </section>
+
+  {% if can_finalize %}
+    <form method="post" action="{{ results_url }}" style="margin-top:var(--space-4);">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="finalize">
+      <button class="cce-btn cce-btn-accent" type="submit"
+              onclick="return confirm('Chốt kết quả cuối khóa cho lớp {{ training_class.name|escapejs }}? Sau khi chốt, mọi chỉnh sửa cần lý do.');">
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        Chốt kết quả
+      </button>
+    </form>
+  {% elif not final_results_locked and training_class.enrolled_count %}
+    <p class="cce-form-help" style="margin-top:var(--space-3);">
+      Nhập điểm cho tất cả học viên đang ghi danh để có thể chốt kết quả lớp.
+    </p>
+  {% endif %}
+{% endblock %}

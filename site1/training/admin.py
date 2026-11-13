@@ -9,7 +9,13 @@ from unfold.sites import UnfoldAdminSite
 
 from training.access import user_has_feature
 from training.audit import record_audit, snapshot_account, snapshot_instance
-from training.forms import AccountAdminForm, CourseAdminForm, TeacherAdminForm, TrainingClassAdminForm
+from training.forms import (
+    AccountAdminForm,
+    CourseAdminForm,
+    LearnerAdminForm,
+    TeacherAdminForm,
+    TrainingClassAdminForm,
+)
 from training.models import AuditLog, Course, Learner, Teacher, TrainingClass
 from training.models import (
     ExamPeriod, ExamApplication, ExamRoom,
@@ -280,18 +286,66 @@ class TeacherAdmin(BaseModelAdmin):
 class LearnerAdmin(BaseModelAdmin):
     feature_key = "learners"
     allow_delete = True
-    list_display = ("full_name", "phone", "email", "delete_action")
+    change_list_title = "Danh sách học viên"
+    form = LearnerAdminForm
+    change_list_template = "training/admin/learner_change_list.html"
+    change_form_template = "training/admin/learner_change_form.html"
+    fields = ("full_name", "date_of_birth", "id_number", "phone", "email")
+    list_display = (
+        "full_name",
+        "id_number",
+        "phone",
+        "classes_display",
+        "edit_action",
+        "delete_action",
+    )
+    list_display_links = None
     actions = None
-    search_fields = ("full_name", "phone", "email")
+    search_fields = ("full_name", "id_number", "phone", "email")
     ordering = ("full_name",)
 
-    @admin.display(description="Hành động")
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("enrollments__training_class")
+
+    @admin.display(description="Lớp đang học")
+    def classes_display(self, obj):
+        classes = (
+            enrollment.training_class.name
+            for enrollment in obj.enrollments.all()
+        )
+        return ", ".join(classes) or "Chưa ghi danh"
+
+    @admin.display(description="Sửa")
+    def edit_action(self, obj):
+        url = reverse(f"{self.admin_site.name}:training_learner_change", args=(obj.pk,))
+        return format_html('<a class="cce-table-btn" href="{}">Sửa</a>', url)
+
+    @admin.display(description="Xóa")
     def delete_action(self, obj):
+        if obj.enrollments.exists():
+            return ""
         url = reverse(f"{self.admin_site.name}:training_learner_delete", args=(obj.pk,))
         return format_html(
             '<a class="cce-table-btn table-action-delete" href="{}">Xóa</a>',
             url,
         )
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.enrollments.exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        admin_form = context.get("adminform")
+        form = getattr(admin_form, "form", None)
+        duplicate_learner = getattr(form, "duplicate_learner", None)
+        if duplicate_learner:
+            context["duplicate_learner"] = duplicate_learner
+            context["duplicate_learner_url"] = reverse(
+                f"{self.admin_site.name}:training_learner_change",
+                args=(duplicate_learner.pk,),
+            )
+        return super().render_change_form(request, context, add, change, form_url, obj)
 
 
 class CceRoleFilter(SimpleListFilter):

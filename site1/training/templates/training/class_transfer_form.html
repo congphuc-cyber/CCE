@@ -1,0 +1,33 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Chuyển lớp{% endblock %}
+{% block breadcrumb_title %}Chuyển lớp{% endblock %}
+{% block page_title %}Chuyển lớp{% endblock %}
+{% block page_description %}Chọn học viên, lớp hiện tại và lớp mới. Sĩ số được kiểm tra lại trước khi chuyển.{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-secondary" href="{{ history_url }}">
+    <span class="material-symbols-outlined" aria-hidden="true">history</span>
+    <span>Lịch sử chuyển lớp</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+<section class="cce-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Thông tin chuyển lớp</h2>
+  </div>
+
+  {% if has_enrollments %}
+    <p class="cce-form-help">
+      Danh sách lớp hiển thị sĩ số và trạng thái. Lớp đã đóng, lớp đầy hoặc học viên đã có trong lớp mới sẽ bị từ chối; lớp hiện tại được giữ nguyên.
+    </p>
+    {% include "training/partials/form_fields.html" with form=form submit_label="Xác nhận chuyển lớp" cancel_url=cancel_url %}
+  {% else %}
+    <div class="cce-empty-state">
+      <p>Chưa có học viên ghi danh để chuyển lớp.</p>
+      <a class="cce-btn cce-btn-secondary" href="{{ cancel_url }}">Quay lại danh sách lớp</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

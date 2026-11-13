@@ -1,0 +1,43 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Cập nhật trạng thái chứng chỉ{% endblock %}
+{% block breadcrumb_title %}Chứng chỉ khảo thí{% endblock %}
+{% block page_title %}Cập nhật trạng thái chứng chỉ{% endblock %}
+{% block page_description %}Nhập lý do bắt buộc khi thay đổi trạng thái hoặc thu hồi chứng chỉ.{% endblock %}
+
+{% block content %}
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title">Chứng chỉ: {{ certificate.certificate_number }}</h2>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:var(--space-3); margin-bottom: var(--space-5); color:var(--c-text-muted);">
+    <span>Thí sinh: <strong style="color:var(--c-text);">{{ certificate.application.full_name }}</strong></span>
+    <span>Đợt thi: <strong style="color:var(--c-text);">{{ certificate.exam_period.name }}</strong></span>
+    <span>Trạng thái hiện tại: <strong style="color:var(--c-text);">{{ certificate.get_status_display }}</strong></span>
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="cce-form-grid two-col">
+      <div class="cce-form-field">
+        <label for="id_status">Trạng thái mới</label>
+        {{ form.status }}
+        {% if form.status.errors %}<div class="cce-error">{{ form.status.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div class="cce-form-field cce-form-field-full-width">
+        <label for="id_reason">Lý do</label>
+        {{ form.reason }}
+        {% if form.reason.errors %}<div class="cce-error">{{ form.reason.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+    {% if form.non_field_errors %}
+      <div class="cce-error" style="margin-top: var(--space-3);">{{ form.non_field_errors|join:", " }}</div>
+    {% endif %}
+
+    <div class="cce-form-actions" style="margin-top: var(--space-4);">
+      <button type="submit" class="cce-btn cce-btn-primary">Lưu thay đổi</button>
+      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-certificate-list' %}">Quay lại</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

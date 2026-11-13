@@ -1,0 +1,56 @@
+{% extends "training/base_public_exam.html" %}
+
+{% block title %}Tra cứu điểm và chứng chỉ{% endblock %}
+
+{% block content %}
+<section class="public-exam-panel">
+  <h1>Tra cứu điểm và chứng chỉ</h1>
+  <p class="public-exam-lead">Nhập CCCD và email đã đăng ký. Mã xác thực sẽ được gửi tới địa chỉ email bạn vừa nhập.</p>
+
+  {% if state %}
+    {% include "training/partials/public_state.html" with state=state title=state_title message=state_message %}
+  {% endif %}
+
+  {% if step == "results" %}
+    {% if no_results %}
+      {% include "training/partials/public_state.html" with state="warning" title="Không tìm thấy kết quả" message="Không tìm thấy kết quả phù hợp. Điểm có thể chưa được công bố hoặc thông tin tra cứu không khớp." %}
+    {% else %}
+      <section class="public-lookup-results" aria-labelledby="lookup-results-title">
+        <h2 id="lookup-results-title">Kết quả tra cứu</h2>
+        <p><strong>Thí sinh:</strong> {{ candidate_name }}</p>
+        <p><strong>CCCD:</strong> {{ masked_id_number }}</p>
+        <ul class="public-lookup-result-list">
+          {% for item in results %}
+            <li class="public-lookup-result">
+              <h3>{{ item.period.name }}</h3>
+              <p>{{ item.period.cert_type.name }} · Ngày thi {{ item.period.exam_date|date:"d/m/Y" }}</p>
+              {% if item.score.is_absent %}
+                <p><strong>Trạng thái:</strong> Vắng thi</p>
+              {% else %}
+                <p><strong>Điểm đã công bố:</strong> {{ item.score.score|floatformat:2 }} / {{ item.period.score_scale|floatformat:2 }}</p>
+              {% endif %}
+              <div class="public-lookup-certificate">
+                <strong>Chứng chỉ:</strong>
+                {% if item.certificates %}
+                  <ul class="public-lookup-certificates">
+                    {% for certificate in item.certificates %}
+                      <li>{{ certificate.certificate_number }} — {{ certificate.get_status_display }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <span>Chưa được cấp</span>
+                {% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+    <div class="public-exam-actions">
+      <a class="cce-btn cce-btn-outline" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
+    </div>
+  {% else %}
+    {% include "training/partials/public_lookup_auth_form.html" %}
+  {% endif %}
+</section>
+{% endblock %}

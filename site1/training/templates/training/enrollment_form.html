@@ -6,18 +6,72 @@
 {% block page_description %}Lớp học: {{ training_class.name }} (Khóa học: {{ training_class.course.name }}). Sĩ số: {{ training_class.enrolled_count }} / {{ training_class.max_students }}{% endblock %}
 
 {% block content %}
-<section class="cce-card" style="max-width: 640px;">
+<section class="cce-card">
   <div class="cce-card-header">
     <h2 class="cce-card-title">Chọn hồ sơ học viên</h2>
   </div>
 
-  {% if has_learners %}
+  {% if class_closed %}
+    <div class="cce-alert cce-alert-danger" role="alert">
+      Lớp đã đóng, không thể ghi danh thêm học viên.
+    </div>
+  {% elif class_full %}
+    <div class="cce-alert cce-alert-warning" role="alert" style="color:var(--c-warning-hover);">
+      Lớp đã đạt sĩ số tối đa, không thể ghi danh thêm.
+    </div>
+  {% endif %}
+
+  {% if has_learners and show_enrollment_form %}
+    <div class="cce-form-group">
+      <label class="cce-label" for="learner-search">Tìm học viên theo họ tên hoặc số CCCD</label>
+      <input class="cce-input" id="learner-search" type="search"
+             placeholder="Nhập họ tên hoặc số CCCD"
+             aria-controls="id_learner" autocomplete="off">
+      <div class="cce-form-help" id="learner-search-result" aria-live="polite"></div>
+    </div>
     {% include "training/partials/form_fields.html" with form=form submit_label="Xác nhận ghi danh" cancel_url=class_detail_url|default:"../" %}
-  {% else %}
+  {% elif not has_learners %}
     <div class="cce-empty-state">
       <p>Chưa có dữ liệu học viên trong hệ thống. Vui lòng thêm học viên trước.</p>
     </div>
   {% endif %}
 </section>
+
+{% if has_learners %}
+  <script>
+    (function() {
+      var search = document.getElementById("learner-search");
+      var select = document.getElementById("id_learner");
+      var result = document.getElementById("learner-search-result");
+      if (!search || !select || !result) return;
+
+      function normalize(value) {
+        return String(value || "")
+          .toLocaleLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/đ/g, "d");
+      }
+
+      function filterLearners() {
+        var term = normalize(search.value.trim());
+        var selectedValue = select.value;
+        var visibleCount = 0;
+        Array.prototype.forEach.call(select.options, function(option) {
+          if (!option.value) return;
+          var matches = normalize(option.textContent).indexOf(term) !== -1;
+          option.hidden = Boolean(term) && !matches && option.value !== selectedValue;
+          if (!option.hidden) visibleCount += 1;
+        });
+        result.textContent = term
+          ? visibleCount+" học viên phù hợp"
+          : visibleCount+" học viên trong danh sách";
+      }
+
+      search.addEventListener("input", filterLearners);
+      filterLearners();
+    }());
+  </script>
+{% endif %}
 {% endblock %}
 

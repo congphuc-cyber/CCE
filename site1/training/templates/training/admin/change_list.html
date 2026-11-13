@@ -47,16 +47,16 @@
     {% if cl.paginator.num_pages > 1 %}
         <nav class="cce-pagination" aria-label="Phân trang dữ liệu" style="padding-left:16px; padding-right:16px;">
             <div>
-                Trang <strong>{{ cl.page_num|add:1 }}</strong> / <strong>{{ cl.paginator.num_pages }}</strong>
+                Trang <strong>{{ cl.page_num }}</strong> / <strong>{{ cl.paginator.num_pages }}</strong>
                 (Tổng cộng {{ cl.result_count }} bản ghi)
             </div>
             <div class="cce-pagination-links">
-                {% if cl.page_num > 0 %}
+                {% if cl.page_num > 1 %}
                     {% page_url request cl.page_num|add:"-1" "p" as previous_url %}
                     <a class="cce-page-link" href="{{ previous_url }}">&laquo; Trước</a>
                 {% endif %}
-                <span class="cce-page-link is-active">{{ cl.page_num|add:1 }}</span>
-                {% if cl.page_num < cl.paginator.num_pages|add:"-1" %}
+                <span class="cce-page-link is-active">{{ cl.page_num }}</span>
+                {% if cl.page_num < cl.paginator.num_pages %}
                     {% page_url request cl.page_num|add:1 "p" as next_url %}
                     <a class="cce-page-link" href="{{ next_url }}">Sau &raquo;</a>
                 {% endif %}

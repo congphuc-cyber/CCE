@@ -1,4 +1,12 @@
-<div class="cce-upload-wizard" id="{{ wizard_id }}" data-mode="{{ mode|default:'strict' }}">
+<div class="cce-upload-wizard" id="{{ wizard_id }}" data-mode="{{ mode|default:'strict' }}"
+     data-extensions="{{ accepted_extensions|default:'csv' }}"
+     data-error-table="{{ error_table|yesno:'true,false' }}"
+     data-reason-required="{{ reason_required|yesno:'true,false' }}"
+     data-confirm-label="{{ confirm_label|default:'' }}"
+     data-retry-label="{{ retry_label|default:'' }}"
+     data-success-title="{{ success_title|default:'' }}"
+     data-use-response-message="{{ use_response_message|yesno:'true,false' }}"
+     data-zero-save-success="{{ zero_save_success|yesno:'true,false' }}">
   <form style="display:none;" aria-hidden="true">{% csrf_token %}</form>
   <div class="cce-upload-alert" id="{{ wizard_id }}-alert" role="alert" tabindex="-1" hidden></div>
 
@@ -11,12 +19,14 @@
             onclick="document.getElementById('{{ wizard_id }}-input').click()">
       <span class="material-symbols-outlined cce-dropzone-icon" aria-hidden="true">upload_file</span>
       <span class="cce-dropzone-copy">
-        <strong>Kéo file CSV vào đây</strong>
+        <strong>{% if supports_xlsx %}Kéo file CSV hoặc Excel vào đây{% else %}Kéo file CSV vào đây{% endif %}</strong>
         <span>hoặc nhấn để chọn từ thiết bị</span>
       </span>
-      <span class="cce-dropzone-hint" id="{{ wizard_id }}-dropzone-hint">Định dạng CSV UTF-8</span>
+      <span class="cce-dropzone-hint" id="{{ wizard_id }}-dropzone-hint">
+        {{ file_format_hint|default:"Định dạng CSV UTF-8" }}
+      </span>
     </button>
-    <input type="file" id="{{ wizard_id }}-input" accept=".csv,text/csv"
+    <input type="file" id="{{ wizard_id }}-input" accept="{{ accept_types|default:'.csv,text/csv' }}"
            class="cce-file-input" aria-label="Chọn file CSV"
            onchange="cceWizard.onFileSelect(event, '{{ wizard_id }}')">
     <div class="cce-selected-file" id="{{ wizard_id }}-file-info" hidden>
@@ -41,7 +51,9 @@
         <span class="cce-preview-filename" id="{{ wizard_id }}-preview-filename"></span>
       </div>
       <button type="button" class="cce-btn cce-btn-secondary"
-              onclick="cceWizard.reset('{{ wizard_id }}')">Chọn file khác</button>
+              onclick="cceWizard.reset('{{ wizard_id }}')">
+        {{ retry_label|default:"Chọn file khác" }}
+      </button>
     </div>
 
     <div class="cce-preview-counts" id="{{ wizard_id }}-preview-summary" aria-live="polite"></div>
@@ -54,6 +66,18 @@
         <ul class="cce-preview-errors" id="{{ wizard_id }}-preview-errors" hidden></ul>
       </div>
     </section>
+    <div class="cce-table-wrap" id="{{ wizard_id }}-preview-error-table-wrap" hidden>
+      <table class="cce-table">
+        <thead>
+          <tr>
+            <th scope="col">Số dòng</th>
+            <th scope="col">Cột</th>
+            <th scope="col">Lý do</th>
+          </tr>
+        </thead>
+        <tbody id="{{ wizard_id }}-preview-error-body"></tbody>
+      </table>
+    </div>
 
     <div class="cce-table-wrap cce-preview-table-wrap" id="{{ wizard_id }}-preview-table-wrap" hidden>
       <table class="cce-table">
@@ -75,9 +99,21 @@
 
   <div class="cce-wizard-step" data-step="3" style="display:none;">
     <div class="cce-upload-result" id="{{ wizard_id }}-result" role="status" aria-live="polite"></div>
+    <div class="cce-table-wrap" id="{{ wizard_id }}-result-error-table-wrap" hidden>
+      <table class="cce-table">
+        <thead>
+          <tr>
+            <th scope="col">Số dòng</th>
+            <th scope="col">Cột</th>
+            <th scope="col">Lý do</th>
+          </tr>
+        </thead>
+        <tbody id="{{ wizard_id }}-result-error-body"></tbody>
+      </table>
+    </div>
     <div class="cce-preview-actions">
       <button type="button" class="cce-btn cce-btn-secondary" onclick="cceWizard.reset('{{ wizard_id }}')">
-        Nhập danh sách khác
+        {{ retry_label|default:"Nhập danh sách khác" }}
       </button>
     </div>
   </div>
@@ -86,6 +122,72 @@
     <span class="cce-upload-spinner" aria-hidden="true"></span>
     <span id="{{ wizard_id }}-loading-message">Đang kiểm tra dữ liệu…</span>
   </div>
+
+  <div class="cce-modal-backdrop" id="{{ wizard_id }}-overwrite-modal"
+       role="dialog" aria-modal="true"
+       aria-labelledby="{{ wizard_id }}-overwrite-title"
+       aria-describedby="{{ wizard_id }}-overwrite-description"
+       style="display:none;" hidden>
+    <section class="cce-modal-dialog">
+      <header class="cce-modal-header">
+        <h2 class="cce-modal-title" id="{{ wizard_id }}-overwrite-title">Xác nhận ghi đè điểm</h2>
+      </header>
+      <div class="cce-modal-body">
+        <p id="{{ wizard_id }}-overwrite-description"></p>
+        <p>Điểm đã công bố sẽ không bị thay đổi. Thí sinh vắng vẫn giữ trạng thái vắng và không nhận điểm.</p>
+      </div>
+      <footer class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary"
+                onclick="cceWizard.closeOverwriteModal('{{ wizard_id }}')">
+          Hủy
+        </button>
+        <button type="button" class="cce-btn cce-btn-danger"
+                onclick="cceWizard.confirmOverwrite('{{ wizard_id }}', '{{ upload_url }}')">
+          Xác nhận ghi đè
+        </button>
+      </footer>
+    </section>
+  </div>
+
+  {% if reason_required %}
+    <div class="cce-modal-backdrop" id="{{ wizard_id }}-reason-modal"
+         role="dialog" aria-modal="true"
+         aria-labelledby="{{ wizard_id }}-reason-title"
+         aria-describedby="{{ wizard_id }}-reason-description"
+         style="display:none;">
+      <section class="cce-modal-dialog">
+        <header class="cce-modal-header">
+          <h2 class="cce-modal-title" id="{{ wizard_id }}-reason-title">
+            Lý do sửa điểm đã chốt
+          </h2>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  aria-label="Đóng"
+                  onclick="cceWizard.closeReasonModal('{{ wizard_id }}')">&times;</button>
+        </header>
+        <div class="cce-modal-body">
+          <p id="{{ wizard_id }}-reason-description">
+            Điểm sẽ được cập nhật sau khi xác nhận. Lý do được lưu trong nhật ký thao tác.
+          </p>
+          <label class="cce-label" for="{{ wizard_id }}-reason">
+            Lý do <span class="cce-required" aria-hidden="true">*</span>
+          </label>
+          <textarea class="cce-textarea" id="{{ wizard_id }}-reason"
+                    rows="3" required></textarea>
+          <p class="cce-form-error" id="{{ wizard_id }}-reason-error" hidden>
+            Vui lòng nhập lý do sửa điểm.
+          </p>
+        </div>
+        <footer class="cce-modal-footer">
+          <button type="button" class="cce-btn cce-btn-secondary"
+                  onclick="cceWizard.closeReasonModal('{{ wizard_id }}')">Hủy bỏ</button>
+          <button type="button" class="cce-btn cce-btn-primary"
+                  onclick="cceWizard.confirmWithReason('{{ wizard_id }}', '{{ upload_url }}')">
+            Xác nhận lưu điểm
+          </button>
+        </footer>
+      </section>
+    </div>
+  {% endif %}
 </div>
 
 <style>
@@ -377,6 +479,37 @@ var cceWizard = (function() {
     });
   }
 
+  function renderErrorTable(wrapId, bodyId, errors) {
+    var wrap = document.getElementById(wrapId);
+    var body = document.getElementById(bodyId);
+    if (!wrap || !body) return;
+
+    body.textContent = '';
+    (errors || []).forEach(function(error) {
+      var row = document.createElement('tr');
+      var rowNumber = Number(error && error.row);
+      appendCell(row, Number.isInteger(rowNumber) && rowNumber > 0 ? rowNumber : '—');
+      appendCell(row, error && (error.column || error.field) || 'Dữ liệu');
+      appendCell(row, error && (error.msg || error.message) || 'Dữ liệu không hợp lệ.');
+      body.appendChild(row);
+    });
+    wrap.hidden = !errors || errors.length === 0;
+  }
+
+  function openReasonModal(id) {
+    var modal = document.getElementById(id+'-reason-modal');
+    var reason = document.getElementById(id+'-reason');
+    var error = document.getElementById(id+'-reason-error');
+    if (!modal || !reason) return;
+    modal.style.display = 'flex';
+    modal.classList.add('is-open');
+    if (error) error.hidden = true;
+    reason.focus();
+    modal.onclick = function(event) {
+      if (event.target === modal) cceWizard.closeReasonModal(id);
+    };
+  }
+
   return {
     onDragOver: function(event, id) {
       event.preventDefault();
@@ -403,13 +536,22 @@ var cceWizard = (function() {
     },
     _setFile: function(id, file) {
       var root = document.getElementById(id);
-      if (!/\.csv$/i.test(file.name)) {
+      var allowedExtensions = (root.dataset.extensions || 'csv').split(',').map(function(extension) {
+        return extension.trim().toLowerCase().replace(/^\./, '');
+      });
+      var fileExtension = file.name.split('.').pop().toLowerCase();
+      if (allowedExtensions.indexOf(fileExtension) === -1) {
         _files[id] = null;
         root.classList.remove('has-file');
         document.getElementById(id+'-file-info').hidden = true;
         document.getElementById(id+'-filename').textContent = '';
         document.getElementById(id+'-filesize').textContent = '';
-        showAlert(id, 'Chỉ nhận file .csv. Hãy lưu danh sách dưới dạng CSV UTF-8 rồi thử lại.');
+        showAlert(
+          id,
+          'Chỉ nhận file '+allowedExtensions.map(function(extension) {
+            return '.'+extension;
+          }).join(' hoặc ')+'. Hãy chọn đúng định dạng rồi thử lại.'
+        );
         return;
       }
 
@@ -496,9 +638,15 @@ var cceWizard = (function() {
         summary.appendChild(errorLabel);
       }
 
-      errorList.hidden = errors.length === 0;
+      var useErrorTable = root.dataset.errorTable === 'true';
+      errorList.hidden = errors.length === 0 || useErrorTable;
+      renderErrorTable(
+        id+'-preview-error-table-wrap',
+        id+'-preview-error-body',
+        useErrorTable ? errors : []
+      );
       feedback.hidden = false;
-      var partialErrors = errors.length > 0 && mode === 'partial' && validCount > 0;
+      var partialErrors = errors.length > 0 && mode === 'partial' && newValidCount > 0;
       var feedbackState = 'is-success';
       var feedbackIcon = 'check_circle';
       if (errors.length) {
@@ -510,7 +658,11 @@ var cceWizard = (function() {
       }
       feedback.className = 'cce-preview-feedback '+feedbackState;
       document.getElementById(id+'-feedback-icon').textContent = feedbackIcon;
-      if (errors.length && mode === 'strict') {
+      if (mode === 'partial') {
+        document.getElementById(id+'-feedback-title').textContent = 'Kiểm tra dữ liệu học viên';
+        document.getElementById(id+'-feedback-message').textContent =
+          'Chỉ lưu các dòng hợp lệ không trùng CCCD sau khi xác nhận; dòng lỗi và CCCD trùng sẽ bị bỏ qua.';
+      } else if (errors.length && mode === 'strict') {
         document.getElementById(id+'-feedback-title').textContent = 'Chưa thể nhập danh sách';
         document.getElementById(id+'-feedback-message').textContent =
           'Chưa có dữ liệu nào được lưu. Sửa các lỗi bên dưới rồi kiểm tra lại file.';
@@ -549,6 +701,14 @@ var cceWizard = (function() {
           isDuplicate ? 'Trùng lặp' : 'Hợp lệ',
           isDuplicate ? 'cce-row-duplicate' : 'cce-row-valid'
         );
+        if (item.duplicate_url) {
+          var action = document.createElement('a');
+          action.className = 'cce-table-btn';
+          action.href = item.duplicate_url;
+          action.textContent = 'Dùng hồ sơ hiện có';
+          row.lastChild.appendChild(document.createElement('br'));
+          row.lastChild.appendChild(action);
+        }
         body.appendChild(row);
       });
       var tableWrap = document.getElementById(id+'-preview-table-wrap');
@@ -564,31 +724,38 @@ var cceWizard = (function() {
         body.appendChild(moreRow);
       }
 
-      confirmButton.hidden = validCount === 0 || (errors.length > 0 && mode === 'strict');
-      confirmButton.textContent = mode === 'partial'
-        ? 'Nhập '+validCount+' dòng hợp lệ'
-        : 'Xác nhận nhập '+validCount+' hồ sơ';
+      confirmButton.hidden = (mode === 'partial' ? newValidCount === 0 : validCount === 0)
+        || (errors.length > 0 && mode === 'strict');
+      confirmButton.textContent = root.dataset.confirmLabel || (
+        mode === 'partial'
+          ? 'Nhập '+newValidCount+' học viên hợp lệ'
+          : 'Xác nhận nhập '+validCount+' hồ sơ'
+      );
       showStep(id, 2);
     },
     confirm: function(id, url, confirmedOverwriteCount) {
       var file = _files[id];
       if (!file) return;
       var root = document.getElementById(id);
+      var reasonField = document.getElementById(id+'-reason');
+      var reason = reasonField ? reasonField.value.trim() : '';
+      if (root.dataset.reasonRequired === 'true' && !reason) {
+        openReasonModal(id);
+        return;
+      }
       var overwriteCount = Number(root.dataset.overwriteCount) || 0;
       if (overwriteCount && Number(confirmedOverwriteCount) !== overwriteCount) {
-        if (!window.confirm(
-          'File sẽ ghi đè '+overwriteCount+' điểm chưa công bố. Bạn có xác nhận tiếp tục không?'
-        )) {
-          showAlert(id, 'Đã hủy; chưa có điểm nào được ghi đè.');
-          return;
-        }
-        confirmedOverwriteCount = overwriteCount;
+        this.openOverwriteModal(id, overwriteCount);
+        return;
       }
       var period = document.getElementById('select-exam-period');
       var formData = new FormData();
       formData.append('file', file);
       if (period) formData.append('exam_period', period.value);
       formData.append('csrfmiddlewaretoken', getCsrf(id));
+      if (root.dataset.reasonRequired === 'true') {
+        formData.append('reason', reason);
+      }
       if (Number(confirmedOverwriteCount) > 0) {
         formData.append('confirm_overwrite_count', String(confirmedOverwriteCount));
       }
@@ -610,15 +777,103 @@ var cceWizard = (function() {
           showAlert(id, 'Không thể lưu dữ liệu: '+error.message);
         });
     },
+    confirmWithReason: function(id, url) {
+      var reasonField = document.getElementById(id+'-reason');
+      var error = document.getElementById(id+'-reason-error');
+      if (!reasonField || !reasonField.value.trim()) {
+        if (error) error.hidden = false;
+        if (reasonField) reasonField.focus();
+        return;
+      }
+      if (error) error.hidden = true;
+      var modal = document.getElementById(id+'-reason-modal');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('is-open');
+      }
+      var root = document.getElementById(id);
+      cceWizard.confirm(id, url, null);
+    },
+    openOverwriteModal: function(id, overwriteCount) {
+      var modal = document.getElementById(id+'-overwrite-modal');
+      var description = document.getElementById(id+'-overwrite-description');
+      var cancelButton = modal && modal.querySelector('.cce-modal-footer .cce-btn-secondary');
+      if (!modal || !description) return;
+      description.textContent =
+        'File sẽ ghi đè '+overwriteCount+' điểm chưa công bố. Bạn có muốn tiếp tục không?';
+      modal.hidden = false;
+      modal.style.display = 'flex';
+      modal.classList.add('is-open');
+      if (cancelButton) cancelButton.focus();
+      modal.onkeydown = function(event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          cceWizard.closeOverwriteModal(id);
+        } else if (event.key === 'Tab') {
+          var buttons = modal.querySelectorAll('button:not(:disabled)');
+          if (!buttons.length) return;
+          if (event.shiftKey && document.activeElement === buttons[0]) {
+            event.preventDefault();
+            buttons[buttons.length - 1].focus();
+          } else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) {
+            event.preventDefault();
+            buttons[0].focus();
+          }
+        }
+      };
+    },
+    closeOverwriteModal: function(id) {
+      var modal = document.getElementById(id+'-overwrite-modal');
+      var confirmButton = document.getElementById(id+'-confirm-btn');
+      if (!modal) return;
+      modal.style.display = 'none';
+      modal.hidden = true;
+      modal.classList.remove('is-open');
+      if (confirmButton && !confirmButton.hidden) confirmButton.focus();
+      showAlert(id, 'Đã hủy; chưa có điểm nào được ghi đè.');
+    },
+    confirmOverwrite: function(id, url) {
+      var root = document.getElementById(id);
+      var overwriteCount = Number(root.dataset.overwriteCount) || 0;
+      var modal = document.getElementById(id+'-overwrite-modal');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.hidden = true;
+        modal.classList.remove('is-open');
+      }
+      this.confirm(id, url, overwriteCount);
+    },
+    closeReasonModal: function(id) {
+      var modal = document.getElementById(id+'-reason-modal');
+      var reasonField = document.getElementById(id+'-reason');
+      var confirmButton = document.getElementById(id+'-confirm-btn');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('is-open');
+      }
+      if (reasonField) reasonField.value = '';
+      if (confirmButton && !confirmButton.hidden) confirmButton.focus();
+    },
     _showResult: function(id, data) {
+      var root = document.getElementById(id);
       var result = document.getElementById(id+'-result');
+      var mode = root.dataset.mode;
       var errors = Array.isArray(data.errors) ? data.errors : [];
       var saved = Number(data.saved) || 0;
       var duplicateCount = Number(data.duplicate_count) || 0;
       var overwriteCount = Number(data.overwrite_count) || 0;
-      var success = Boolean(data.ok && saved > 0);
+      var success = Boolean(data.ok && (
+        saved > 0
+        || mode === 'partial'
+        || (root.dataset.zeroSaveSuccess === 'true' && saved === 0)
+      ));
       var hasWarnings = duplicateCount > 0 || (success && errors.length > 0);
       result.innerHTML = '';
+      renderErrorTable(
+        id+'-result-error-table-wrap',
+        id+'-result-error-body',
+        root.dataset.errorTable === 'true' ? errors : []
+      );
 
       var icon = document.createElement('span');
       icon.className = 'material-symbols-outlined cce-preview-feedback-icon';
@@ -630,7 +885,9 @@ var cceWizard = (function() {
       heading.style.color = !success
         ? 'var(--c-danger)'
         : hasWarnings ? 'var(--c-warning)' : 'var(--c-success)';
-      heading.textContent = success
+      heading.textContent = mode === 'partial'
+        ? 'Kết quả nhập học viên'
+        : success
         ? (errors.length
           ? 'Đã nhập một phần'
           : duplicateCount
@@ -639,10 +896,17 @@ var cceWizard = (function() {
               ? 'Đã nhập và ghi đè điểm'
             : 'Đã nhập danh sách')
         : 'Không có dữ liệu nào được nhập';
+      if (success && root.dataset.successTitle) {
+        heading.textContent = root.dataset.successTitle;
+      }
       result.appendChild(heading);
 
       var description = document.createElement('p');
-      description.textContent = success && errors.length
+      description.textContent = root.dataset.useResponseMessage === 'true' && data.message
+        ? data.message
+        : mode === 'partial'
+        ? 'Đã lưu '+saved+' dòng; '+errors.length+' dòng lỗi; '+duplicateCount+' CCCD trùng (không lưu).'
+        : success && errors.length
         ? 'Đã nhập '+saved+' dòng; bỏ qua '+errors.length+' dòng bị lỗi.'
         : success && duplicateCount
           ? 'Đã nhập '+saved+' hồ sơ; '+duplicateCount+' hồ sơ được đánh dấu Trùng lặp.'
@@ -653,7 +917,7 @@ var cceWizard = (function() {
           : (data.message || data.error || 'Không có dòng hợp lệ để lưu.');
       result.appendChild(description);
 
-      if (errors.length) {
+      if (errors.length && root.dataset.errorTable !== 'true') {
         var list = document.createElement('ul');
         list.className = 'cce-result-errors';
         appendGroupedErrors(list, errors);
@@ -676,8 +940,24 @@ var cceWizard = (function() {
       document.getElementById(id+'-preview-body').innerHTML = '';
       document.getElementById(id+'-preview-feedback').hidden = true;
       document.getElementById(id+'-preview-table-wrap').hidden = true;
+      renderErrorTable(id+'-preview-error-table-wrap', id+'-preview-error-body', []);
+      renderErrorTable(id+'-result-error-table-wrap', id+'-result-error-body', []);
       document.getElementById(id+'-confirm-btn').hidden = true;
       document.getElementById(id+'-result').innerHTML = '';
+      root.dataset.overwriteCount = '0';
+      var reasonField = document.getElementById(id+'-reason');
+      if (reasonField) reasonField.value = '';
+      var reasonModal = document.getElementById(id+'-reason-modal');
+      if (reasonModal) {
+        reasonModal.style.display = 'none';
+        reasonModal.classList.remove('is-open');
+      }
+      var overwriteModal = document.getElementById(id+'-overwrite-modal');
+      if (overwriteModal) {
+        overwriteModal.style.display = 'none';
+        overwriteModal.hidden = true;
+        overwriteModal.classList.remove('is-open');
+      }
       clearAlert(id);
       setLoading(id, false);
       showStep(id, 1);

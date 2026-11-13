@@ -37,15 +37,40 @@
   <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách lớp được phân công</h2>
   </div>
-  {% if not teacher %}
-    <div style="margin:var(--space-4); padding:12px 16px; background:#F0F9FF; border:1px solid #BAE6FD; border-radius:var(--radius-md); display:flex; align-items:flex-start; gap:12px;">
-      <span class="material-symbols-outlined" style="color:#0284C7; font-size:1.35rem; margin-top:1px; flex-shrink:0;" aria-hidden="true">info</span>
-      <div style="font-size:var(--font-size-sm); color:#0F172A; line-height:1.5;">
-        <strong>Lưu ý:</strong> Tài khoản này hiện chưa được liên kết với hồ sơ Giáo viên trong hệ thống. Để xem danh sách toàn bộ các lớp đào tạo của Trung tâm, vui lòng chuyển sang menu <a href="/admin/training/trainingclass/" style="color:#0284C7; font-weight:600; text-decoration:underline;">Quản lý Lớp học</a>.
-      </div>
-    </div>
-  {% endif %}
-  {% include "training/partials/data_table.html" with columns=columns rows=rows page_obj=page_obj center_columns=True %}
+  <div class="cce-table-wrap">
+    <table class="cce-table cce-table-centered" role="table">
+      <thead>
+        <tr>
+          <th scope="col">Tên lớp</th>
+          <th scope="col">Khóa học</th>
+          <th scope="col">Lịch học</th>
+          <th scope="col">Trạng thái</th>
+          <th scope="col" style="text-align:right;">Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><strong>{{ row.name }}</strong></td>
+            <td>{{ row.course }}</td>
+            <td>{{ row.schedule }}</td>
+            <td>{% include "training/partials/status_badge.html" with status=row.status %}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <a class="cce-table-btn cce-table-btn-outline" href="{{ row.view_url }}">Xem lớp</a>
+              <a class="cce-table-btn" href="{{ row.results_url }}">Ghi nhận kết quả</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="cce-empty-state">
+              Chưa được phân công lớp nào.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="lớp" %}
 </section>
 {% endblock %}
 

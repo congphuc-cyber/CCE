@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Trung tâm Kỹ thuật Điện toán{% endblock %} | CCE</title>
+  <meta name="description" content="{% block meta_description %}Thông tin đăng ký dự thi của Trung tâm Kỹ thuật Điện toán.{% endblock %}">
+  <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}?v=edtech-rich-surfaces-20261111">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=forbidden-page-center-20261111">
+  <link rel="stylesheet" href="{% static 'training/css/public-exam.css' %}">
+</head>
+<body class="public-exam-page">
+  <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
+  <div class="cce-public-frame">
+    {% include "training/partials/public_exam_header.html" %}
+    <main class="cce-public-main public-exam-main" id="main-content" role="main">
+      <div class="public-exam-content">
+        {% include "training/partials/messages.html" %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+    {% include "training/partials/public_exam_footer.html" %}
+  </div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<section class="public-state public-state--{{ state }}" role="{% if state == 'error' %}alert{% else %}status{% endif %}" aria-live="polite">
+  <h2 class="public-state-title">{{ title }}</h2>
+  <p>{{ message }}</p>
+  {% if period %}
+    <dl class="public-state-details">
+      <div>
+        <dt>Đợt thi</dt>
+        <dd>{{ period.name }}</dd>
+      </div>
+      <div>
+        <dt>Loại chứng chỉ</dt>
+        <dd>{{ period.cert_type.name }}</dd>
+      </div>
+      {% if period.exam_date %}
+        <div>
+          <dt>Ngày thi</dt>
+          <dd>{{ period.exam_date|date:"d/m/Y" }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  {% endif %}
+  {% if action_url and action_label %}
+    <a class="cce-btn cce-btn-primary public-state-action" href="{{ action_url }}">{{ action_label }}</a>
+  {% endif %}
+</section>

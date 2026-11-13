@@ -1,0 +1,52 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Upload điểm cuối khóa — {{ training_class.name }}{% endblock %}
+{% block breadcrumb_title %}Upload file điểm{% endblock %}
+{% block page_title %}Upload điểm cuối khóa{% endblock %}
+{% block page_description %}
+  {{ training_class.name }} · CSV UTF-8 gồm lớp, họ tên, CCCD và điểm cuối khóa.
+  Lớp trong từng dòng phải khớp với lớp đang mở; file được kiểm tra toàn bộ trước khi lưu.
+{% endblock %}
+
+{% block page_actions %}
+  <a class="cce-btn cce-btn-secondary" href="{{ results_url }}">Bảng điểm</a>
+  <a class="cce-btn cce-btn-secondary" href="{% url 'class-detail' training_class.pk %}">Quay lại lớp</a>
+{% endblock %}
+
+{% block content %}
+  {% if locked %}
+    <div class="cce-alert cce-alert-warning" role="status" style="margin-bottom:var(--space-4); color:var(--c-warning-hover);">
+      <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+      Kết quả đã chốt. Khi xác nhận upload, bạn phải nhập lý do sửa điểm.
+    </div>
+  {% endif %}
+
+  <section class="cce-card" aria-labelledby="final-results-upload-heading">
+    <div class="cce-card-header">
+      <div>
+        <h2 class="cce-card-title" id="final-results-upload-heading">Chọn và kiểm tra file</h2>
+        <p style="margin:var(--space-1) 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm);">
+          Nếu có bất kỳ lỗi nào trong file, không dòng nào được lưu. Đánh giá cuối khóa diễn ra ngoài hệ thống.
+        </p>
+      </div>
+      {% if has_sample_rows %}
+        <a class="cce-btn cce-btn-secondary" href="{{ sample_url }}">
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          Tải file mẫu
+        </a>
+      {% endif %}
+    </div>
+
+    <div style="padding:var(--space-4);">
+      {% if not has_learners %}
+        <div class="cce-empty-state">
+          <span class="material-symbols-outlined cce-empty-icon" aria-hidden="true">group_off</span>
+          <p class="cce-empty-title">Chưa có học viên cần nhập điểm</p>
+          <p class="cce-empty-desc">Ghi danh học viên vào lớp trước khi tải file kết quả.</p>
+        </div>
+      {% else %}
+        {% include "training/partials/upload_wizard.html" with wizard_id="final-results-upload" upload_url=upload_url mode="strict" accepted_extensions="csv" accept_types=".csv,text/csv" file_format_hint="CSV UTF-8 · Lớp, Họ và tên, Số CCCD, Điểm cuối khóa" preview_title="Kiểm tra điểm cuối khóa" preview_column_label="Lớp, học viên và điểm" error_table=True reason_required=locked confirm_label="Xác nhận lưu điểm cuối khóa" retry_label="Tải file khác" success_title="Hoàn tất cập nhật kết quả" use_response_message=True zero_save_success=True %}
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

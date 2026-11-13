@@ -1,0 +1,54 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Lịch sử chứng nhận{% endblock %}
+{% block breadcrumb_title %}Chứng nhận{% endblock %}
+{% block page_title %}Lịch sử thay đổi chứng nhận{% endblock %}
+{% block page_description %}Theo dõi trạng thái cũ-sang-mới, người thực hiện và lý do cập nhật của chứng nhận.{% endblock %}
+
+{% block content %}
+<section class="cce-card" style="margin-bottom: var(--space-6);">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title">Chứng nhận {{ certificate.certificate_number }}</h2>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:var(--space-3); color:var(--c-text-muted);">
+    <span>Học viên: <strong style="color:var(--c-text);">{{ certificate.learner.full_name }}</strong></span>
+    <span>Lớp: <strong style="color:var(--c-text);">{{ certificate.training_class.name }}</strong></span>
+    <span>Trạng thái hiện tại: <strong style="color:var(--c-text);">{{ certificate.get_status_display }}</strong></span>
+  </div>
+</section>
+
+<section class="cce-card">
+  <div class="cce-card-header" style="border-bottom:none; padding-bottom:0;">
+    <h2 class="cce-card-title">Dòng thời gian</h2>
+  </div>
+
+  {% if history %}
+    <div class="cce-timeline" style="display:flex; flex-direction:column; gap:var(--space-4); margin-top: var(--space-4);">
+      {% for item in history %}
+        <div class="cce-timeline-item" style="display:grid; grid-template-columns: 120px 1fr; gap: var(--space-3); align-items:start; padding: var(--space-3) 0; border-bottom:1px solid var(--c-border);">
+          <div style="font-size:var(--font-size-xs); color:var(--c-text-muted);">{{ item.changed_at|date:"d/m/Y H:i" }}</div>
+          <div>
+            <div style="font-weight:var(--font-weight-bold); margin-bottom:4px;">
+              {{ item.old_status }} → {{ item.new_status }}
+            </div>
+            <div style="color:var(--c-text-muted); margin-bottom:4px;">Người thực hiện:
+              {% if item.changed_by %}{{ item.changed_by.get_full_name|default:item.changed_by.username }}{% else %}Hệ thống{% endif %}
+            </div>
+            {% if item.reason %}
+              <div style="color:var(--c-text-muted);">Lý do: {{ item.reason }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="cce-empty-state" style="padding:var(--space-6); text-align:center;">
+      <p>Chưa có lịch sử thay đổi cho chứng nhận này.</p>
+    </div>
+  {% endif %}
+
+  <div class="cce-form-actions" style="margin-top: var(--space-4);">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'certificate-list' %}">Quay lại danh sách</a>
+  </div>
+</section>
+{% endblock %}

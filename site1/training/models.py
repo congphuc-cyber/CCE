@@ -1,8 +1,8 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 
@@ -50,6 +50,20 @@ class Teacher(models.Model):
 
 class Learner(models.Model):
     full_name = models.CharField("Họ và tên", max_length=150)
+    date_of_birth = models.DateField("Ngày sinh", null=True, blank=True)
+    id_number = models.CharField(
+        "Số CCCD",
+        max_length=12,
+        null=True,
+        blank=True,
+        unique=True,
+        validators=[
+            RegexValidator(
+                regex=r"^[0-9]{12}$",
+                message="Số CCCD phải gồm đúng 12 chữ số.",
+            )
+        ],
+    )
     phone = models.CharField("Số điện thoại", max_length=30, blank=True)
     email = models.EmailField("Địa chỉ email", blank=True)
 
@@ -102,6 +116,19 @@ class TrainingClass(models.Model):
         default=Status.OPEN,
     )
     close_reason = models.TextField("Lý do đóng lớp", blank=True)
+    final_results_locked_at = models.DateTimeField(
+        "Thời điểm chốt kết quả cuối khóa",
+        null=True,
+        blank=True,
+    )
+    final_results_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người chốt kết quả cuối khóa",
+        related_name="locked_final_result_classes",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
     teachers = models.ManyToManyField(
         Teacher,
         through="ClassAssignment",
@@ -129,6 +156,10 @@ class TrainingClass(models.Model):
         if not self.pk:
             return 0
         return self.enrollments.count()
+
+    @property
+    def final_results_locked(self):
+        return self.final_results_locked_at is not None
 
     def clean(self):
         super().clean()
@@ -217,6 +248,211 @@ class Enrollment(models.Model):
             raise ValidationError({"training_class": "Lớp đã đạt sĩ số tối đa."})
 
 
+class EnrollmentTransferHistory(models.Model):
+    learner = models.ForeignKey(
+        Learner,
+        verbose_name="Học viên",
+        related_name="transfer_history",
+        on_delete=models.PROTECT,
+    )
+    source_class = models.ForeignKey(
+        TrainingClass,
+        verbose_name="Lớp cũ",
+        related_name="transfers_out",
+        on_delete=models.PROTECT,
+    )
+    destination_class = models.ForeignKey(
+        TrainingClass,
+        verbose_name="Lớp mới",
+        related_name="transfers_in",
+        on_delete=models.PROTECT,
+    )
+    transferred_at = models.DateTimeField("Thời điểm chuyển", default=timezone.now, editable=False)
+    transferred_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người thực hiện",
+        related_name="enrollment_transfers",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+
+    class Meta:
+        db_table = "home_enrollmenttransferhistory"
+        ordering = ("-transferred_at", "-pk")
+        verbose_name = "Lịch sử chuyển lớp"
+        verbose_name_plural = "Lịch sử chuyển lớp"
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(source_class=F("destination_class")),
+                name="distinct_transfer_classes",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.learner}: {self.source_class} → {self.destination_class}"
+
+
+class FinalCourseResult(models.Model):
+    training_class = models.ForeignKey(
+        TrainingClass,
+        verbose_name="Lớp học",
+        related_name="final_results",
+        on_delete=models.PROTECT,
+    )
+    learner = models.ForeignKey(
+        Learner,
+        verbose_name="Học viên",
+        related_name="final_course_results",
+        on_delete=models.PROTECT,
+    )
+    score = models.DecimalField(
+        "Điểm cuối khóa",
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    modified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người cập nhật",
+        related_name="modified_final_course_results",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField("Thời điểm tạo", auto_now_add=True)
+    updated_at = models.DateTimeField("Thời điểm cập nhật", auto_now=True)
+
+    class Meta:
+        db_table = "home_finalcourseresult"
+        ordering = ("training_class__name", "learner__full_name")
+        verbose_name = "Kết quả cuối khóa"
+        verbose_name_plural = "Kết quả cuối khóa"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("training_class", "learner"),
+                name="unique_final_course_result",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.learner} — {self.training_class}: {self.score}"
+
+    @property
+    def outcome(self):
+        return (
+            "Đạt"
+            if self.score >= self.training_class.course.pass_threshold
+            else "Không đạt"
+        )
+
+
+class Certificate(models.Model):
+    class Status(models.TextChoices):
+        ISSUED = "issued", "Đã cấp"
+        REVOKED = "revoked", "Thu hồi"
+        REPLACED = "replaced", "Đã thay thế"
+
+    training_class = models.ForeignKey(
+        TrainingClass,
+        verbose_name="Lớp học",
+        related_name="certificates",
+        on_delete=models.PROTECT,
+    )
+    learner = models.ForeignKey(
+        Learner,
+        verbose_name="Học viên",
+        related_name="certificates",
+        on_delete=models.PROTECT,
+    )
+    certificate_number = models.CharField("Số chứng nhận", max_length=50, unique=True)
+    status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.ISSUED)
+    issued_at = models.DateTimeField("Thời điểm cấp", default=timezone.now)
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người cấp",
+        related_name="issued_certificates",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    reason = models.TextField("Lý do", blank=True)
+    replaced_by = models.ForeignKey(
+        "self",
+        verbose_name="Thay thế bởi",
+        related_name="replaced_certificate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    replaced_at = models.DateTimeField("Thời điểm thay thế", null=True, blank=True)
+
+    class Meta:
+        db_table = "home_certificate"
+        ordering = ("-issued_at", "-pk")
+        verbose_name = "Chứng nhận"
+        verbose_name_plural = "Chứng nhận"
+
+    def __str__(self):
+        return f"{self.certificate_number} — {self.learner}"
+
+    @property
+    def is_active(self):
+        return self.status == self.Status.ISSUED
+
+    def clean(self):
+        super().clean()
+        if self.training_class_id and self.learner_id:
+            final_result = FinalCourseResult.objects.filter(
+                training_class=self.training_class,
+                learner=self.learner,
+            ).first()
+            if final_result is None:
+                raise ValidationError({"learner": "Học viên chưa có kết quả cuối khóa trong lớp này."})
+            if final_result.score < self.training_class.course.pass_threshold:
+                raise ValidationError({"learner": "Học viên chưa đạt điều kiện cấp chứng nhận."})
+            active_qs = Certificate.objects.filter(
+                training_class=self.training_class,
+                learner=self.learner,
+            ).exclude(pk=self.pk)
+            if self.status == self.Status.ISSUED and active_qs.filter(status=self.Status.ISSUED).exists():
+                raise ValidationError({"status": "Học viên này đã có chứng nhận còn hiệu lực trong lớp."})
+
+
+class CertificateHistory(models.Model):
+    certificate = models.ForeignKey(
+        Certificate,
+        verbose_name="Chứng nhận",
+        related_name="history",
+        on_delete=models.CASCADE,
+    )
+    old_status = models.CharField("Trạng thái cũ", max_length=20, choices=Certificate.Status.choices)
+    new_status = models.CharField("Trạng thái mới", max_length=20, choices=Certificate.Status.choices)
+    reason = models.TextField("Lý do", blank=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người thay đổi",
+        related_name="certificate_history",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    changed_at = models.DateTimeField("Thời điểm thay đổi", default=timezone.now)
+
+    class Meta:
+        db_table = "home_certificatehistory"
+        ordering = ("-changed_at", "-pk")
+        verbose_name = "Lịch sử thay đổi chứng nhận"
+        verbose_name_plural = "Lịch sử thay đổi chứng nhận"
+
+    def __str__(self):
+        return f"{self.certificate_number} — {self.old_status} → {self.new_status}"
+
+    @property
+    def certificate_number(self):
+        return self.certificate.certificate_number
+
+
 class RoleFeaturePermission(models.Model):
     group = models.ForeignKey(
         "auth.Group",
@@ -252,6 +488,7 @@ class AuditLog(models.Model):
         PUBLISH = "publish", "Công bố"
         ISSUE = "issue", "Cấp"
         REVOKE = "revoke", "Thu hồi"
+        REPLACE = "replace", "Thay thế"
         EXPORT = "export", "Xuất dữ liệu"
 
     actor = models.ForeignKey(
@@ -357,8 +594,10 @@ class ExamApplication(models.Model):
         related_name="applications", on_delete=models.PROTECT,
     )
     full_name = models.CharField("Họ và tên", max_length=150)
+    date_of_birth = models.DateField("Ngày sinh", null=True, blank=True)
     phone = models.CharField("Số điện thoại", max_length=30, blank=True)
     id_number = models.CharField("Số CCCD / CMND", max_length=20)
+    email = models.EmailField("Địa chỉ email", blank=True)
     source = models.CharField("Nguồn", max_length=20, choices=Source.choices, default=Source.ONLINE)
     registered_at = models.DateTimeField("Ngày đăng ký", auto_now_add=True)
     status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.NEW)
@@ -490,6 +729,110 @@ class ExamScore(models.Model):
                 raise ValidationError({"score": f"Điểm không được vượt thang điểm {scale}."})
             if self.score < 0:
                 raise ValidationError({"score": "Điểm không được âm."})
+
+
+class ExamCertificate(models.Model):
+    class Status(models.TextChoices):
+        ISSUED = "issued", "Đã cấp"
+        REVOKED = "revoked", "Thu hồi"
+        REPLACED = "replaced", "Đã thay thế"
+
+    exam_period = models.ForeignKey(
+        ExamPeriod, verbose_name="Đợt thi",
+        related_name="certificates", on_delete=models.PROTECT,
+    )
+    application = models.ForeignKey(
+        ExamApplication, verbose_name="Thí sinh",
+        related_name="certificates", on_delete=models.PROTECT,
+    )
+    certificate_number = models.CharField("Số chứng chỉ", max_length=50, unique=True)
+    status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.ISSUED)
+    issued_at = models.DateTimeField("Thời điểm cấp", default=timezone.now)
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người cấp",
+        related_name="issued_exam_certificates",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    reason = models.TextField("Lý do", blank=True)
+    replaced_by = models.ForeignKey(
+        "self",
+        verbose_name="Thay thế bởi",
+        related_name="replaced_certificate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    replaced_at = models.DateTimeField("Thời điểm thay thế", null=True, blank=True)
+
+    class Meta:
+        db_table = "home_examcertificate"
+        ordering = ("-issued_at", "-pk")
+        verbose_name = "Chứng chỉ khảo thí"
+        verbose_name_plural = "Chứng chỉ khảo thí"
+
+    def __str__(self):
+        return f"{self.certificate_number} — {self.application.full_name}"
+
+    @property
+    def is_active(self):
+        return self.status == self.Status.ISSUED
+
+    def clean(self):
+        super().clean()
+        if self.exam_period_id and self.application_id:
+            score = ExamScore.objects.filter(
+                assignment__application=self.application,
+                assignment__exam_room__exam_period=self.exam_period,
+            ).select_related("assignment__exam_room__exam_period").first()
+            if not score:
+                raise ValidationError({"application": "Thí sinh chưa có điểm trong đợt thi này."})
+            if score.is_absent or score.score is None or score.score < 5:
+                raise ValidationError({"application": "Thí sinh chưa đạt hoặc điểm chưa được công bố."})
+            if not score.is_published:
+                raise ValidationError({"application": "Điểm phải được công bố trước khi cấp chứng chỉ."})
+            if (
+                ExamCertificate.objects.filter(
+                    exam_period=self.exam_period,
+                    application=self.application,
+                )
+                .exclude(pk=self.pk)
+                .filter(status=ExamCertificate.Status.ISSUED)
+                .exists()
+            ):
+                raise ValidationError({"status": "Thí sinh này đã có chứng chỉ còn hiệu lực trong đợt thi."})
+
+
+class ExamCertificateHistory(models.Model):
+    certificate = models.ForeignKey(
+        ExamCertificate,
+        verbose_name="Chứng chỉ",
+        related_name="history",
+        on_delete=models.CASCADE,
+    )
+    old_status = models.CharField("Trạng thái cũ", max_length=20, choices=ExamCertificate.Status.choices)
+    new_status = models.CharField("Trạng thái mới", max_length=20, choices=ExamCertificate.Status.choices)
+    reason = models.TextField("Lý do", blank=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Người thay đổi",
+        related_name="exam_certificate_history",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    changed_at = models.DateTimeField("Thời điểm thay đổi", default=timezone.now)
+
+    class Meta:
+        db_table = "home_examcertificatehistory"
+        ordering = ("-changed_at", "-pk")
+        verbose_name = "Lịch sử thay đổi chứng chỉ"
+        verbose_name_plural = "Lịch sử thay đổi chứng chỉ"
+
+    def __str__(self):
+        return f"{self.certificate.certificate_number} — {self.old_status} → {self.new_status}"
 
 
 class MyBKExportLog(models.Model):

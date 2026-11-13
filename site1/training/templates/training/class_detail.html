@@ -17,6 +17,20 @@
         <span class="material-symbols-outlined">badge</span>
         <span>Phân công giáo viên</span>
       </a>
+      {% if training_class.enrolled_count %}
+        <a class="cce-btn cce-btn-secondary" href="{{ transfer_url }}">
+          <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
+          <span>Chuyển lớp</span>
+        </a>
+      {% endif %}
+      <a class="cce-btn cce-btn-secondary" href="{{ transfer_history_url }}">
+        <span class="material-symbols-outlined" aria-hidden="true">history</span>
+        <span>Lịch sử chuyển lớp</span>
+      </a>
+      <a class="cce-btn cce-btn-secondary" href="{% url 'class-results' training_class.pk %}">
+        <span class="material-symbols-outlined" aria-hidden="true">grading</span>
+        <span>Kết quả cuối khóa</span>
+      </a>
 
       {% if training_class.status == "open" %}
         {% if can_enroll %}

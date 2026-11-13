@@ -1,66 +1,61 @@
-{% extends "training/base_public.html" %}
+{% extends "training/base_public_exam.html" %}
 
 {% block title %}Trang chủ{% endblock %}
+{% block meta_description %}Đăng ký dự thi và tra cứu thông tin dành cho thí sinh của Trung tâm Kỹ thuật Điện toán.{% endblock %}
 
 {% block content %}
-<div class="cce-split-container">
-  <!-- LEFT: CCE Identity panel -->
-  <div class="cce-split-hero">
-    <div class="cce-hero-header">
-      <span class="cce-hero-badge">ĐH BÁCH KHOA · ĐHQG-HCM</span>
-      <h1 class="cce-hero-title">Trung tâm Kỹ thuật<br>Điện toán</h1>
-      <p class="cce-hero-desc">Đào tạo kỹ năng công nghệ, tổ chức khảo thí và cấp chứng chỉ chuẩn quốc tế.</p>
-    </div>
+<section class="public-exam-hero">
+  <h1>Trung tâm Kỹ thuật Điện toán</h1>
+  <p class="public-exam-lead">Thông tin đăng ký dự thi, phòng thi, kết quả và chứng chỉ dành cho thí sinh.</p>
+  <a class="cce-btn cce-btn-primary public-exam-primary-action" href="{% url 'exam-application-public-register' %}">Đăng ký dự thi</a>
+</section>
 
-    <!-- Program cards (compact) -->
-    <div class="cce-program-grid">
-      <div class="cce-program-card">
-        <span class="cce-program-icon">💻</span>
-        <span>Tin học văn phòng & IC3 / MOS</span>
-      </div>
-      <div class="cce-program-card">
-        <span class="cce-program-icon">🤖</span>
-        <span>Lập trình & Trí tuệ nhân tạo</span>
-      </div>
-      <div class="cce-program-card">
-        <span class="cce-program-icon">🎨</span>
-        <span>Đồ họa & Thiết kế ứng dụng</span>
-      </div>
-      <div class="cce-program-card">
-        <span class="cce-program-icon">📜</span>
-        <span>Chứng chỉ số & Khảo thí</span>
-      </div>
-    </div>
+<section class="public-exam-section" aria-labelledby="candidate-services-title">
+  <h2 id="candidate-services-title">Dịch vụ dành cho thí sinh</h2>
+  <div class="public-action-list">
+    <a class="public-action-link" href="{% url 'exam-application-public-register' %}">
+      <span class="public-action-title">Đăng ký dự thi</span>
+      <span>Chọn loại chứng chỉ và đợt thi đang nhận hồ sơ.</span>
+    </a>
+    <a class="public-action-link" href="{% url 'exam-room-public-lookup' %}">
+      <span class="public-action-title">Xem phòng thi</span>
+      <span>Xác thực bằng email đã đăng ký để xem lịch thi của bạn.</span>
+    </a>
+    <a class="public-action-link" href="{% url 'exam-public-lookup' %}">
+      <span class="public-action-title">Tra cứu điểm và chứng chỉ</span>
+      <span>Xem kết quả thi và trạng thái chứng chỉ đã cấp.</span>
+    </a>
   </div>
+</section>
 
-  <!-- RIGHT: Action panel -->
-  <div class="cce-split-form-panel">
-    <div style="margin-bottom: var(--space-6);">
-      <div style="font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: 1px; color: var(--c-primary); margin-bottom: var(--space-2);">Hệ thống quản lý</div>
-      <h2 style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-extrabold); margin-bottom: var(--space-2); color: var(--c-text);">Đào tạo · Thi · Chứng chỉ</h2>
-      <p style="color: var(--c-text-muted); font-size: var(--font-size-sm); line-height: 1.6; margin: 0;">
-        Dành cho cán bộ quản lý, giảng viên và nhân sự khảo thí của Trung tâm.
-      </p>
-    </div>
+<section class="public-exam-section" aria-labelledby="registration-periods-title">
+  <h2 id="registration-periods-title">Đợt thi đang nhận đăng ký</h2>
+  {% if registration_periods %}
+    <ul class="public-period-list">
+      {% for period in registration_periods %}
+        <li class="public-period-row">
+          <div>
+            <h3>{{ period.name }}</h3>
+            <p>{{ period.cert_type.name }} · Ngày thi {{ period.exam_date|date:"d/m/Y" }}</p>
+          </div>
+          <a class="cce-btn cce-btn-outline public-period-action" href="{% url 'exam-application-public-register' %}?exam_period={{ period.pk }}">Chọn đợt thi</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {% include "training/partials/public_state.html" with state="empty" title="Chưa có đợt thi nhận đăng ký" message="Hiện chưa có đợt thi công khai đang trong thời hạn nhận hồ sơ." %}
+  {% endif %}
+</section>
 
-    <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-6);">
-      {% if user.is_authenticated %}
-        <a class="cce-btn cce-btn-primary cce-btn-lg" href="{% url 'dashboard' %}">
-          Vào Bảng điều khiển →
-        </a>
-      {% else %}
-        <a class="cce-btn cce-btn-primary cce-btn-lg" href="{% url 'login' %}">
-          Đăng nhập hệ thống →
-        </a>
-      {% endif %}
-    </div>
+<section class="public-exam-section public-exam-room-note" id="exam-room-lookup" aria-labelledby="exam-room-lookup-title">
+  <h2 id="exam-room-lookup-title">Thông tin phòng thi</h2>
+  <p>Thí sinh cần xác thực email đã đăng ký trước khi xem thông tin phòng thi cá nhân.</p>
+  <a class="cce-btn cce-btn-outline" href="{% url 'exam-room-public-lookup' %}">Xem phòng thi</a>
+</section>
 
-    <!-- Thí sinh lookup notice (compact) -->
-    <div class="cce-student-lookup-box">
-      <div class="cce-student-lookup-title">🔍 Thí sinh tra cứu kết quả</div>
-      <p>Chuẩn bị <strong>Số báo danh</strong> hoặc <strong>Mã định danh cá nhân</strong> rồi đăng nhập theo hướng dẫn của Trung tâm.</p>
-      <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'login' %}">Đăng nhập để tra cứu</a>
-    </div>
-  </div>
-</div>
+<section class="public-exam-section" aria-labelledby="contact-title">
+  <h2 id="contact-title">Thông tin Trung tâm</h2>
+  <p>Trung tâm Kỹ thuật Điện toán, Trường Đại học Bách Khoa — ĐHQG-HCM.</p>
+  <a class="public-exam-text-link" href="https://dientoanbachkhoa.vn" target="_blank" rel="noopener noreferrer">Xem trang thông tin chính thức</a>
+</section>
 {% endblock %}

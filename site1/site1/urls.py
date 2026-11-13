@@ -1,9 +1,13 @@
 from django.contrib.auth import views as auth_views
-from django.urls import path
+from django.urls import include, path
+from training import learner_views as learners
+from training import final_result_views as final_results
+from training import public_exam_views as public_exams
 from training import views as training
 from training.admin import role_admin_site
 
 urlpatterns = [
+    path('captcha/', include('captcha.urls')),
     path('admin/role-permissions/', training.role_permissions, name='role-permissions'),
     path('admin/audit-log/', training.audit_log_list, name='audit-log-list'),
     path(
@@ -22,7 +26,29 @@ urlpatterns = [
     path('403/', training.permission_denied, name='forbidden'),
     path('dashboard/', training.dashboard, name='dashboard'),
     path('profile/', training.profile, name='profile'),
+    path('learners/import/', learners.learner_import, name='learner-import'),
     path('my-classes/', training.my_class_list, name='my-class-list'),
+    path('classes/transfers/', training.class_transfer, name='class-transfer'),
+    path(
+        'classes/transfers/history/',
+        training.class_transfer_history,
+        name='class-transfer-history',
+    ),
+    path(
+        'classes/<int:class_id>/results/',
+        final_results.class_final_results,
+        name='class-results',
+    ),
+    path(
+        'classes/<int:class_id>/results/upload/',
+        final_results.class_final_result_upload,
+        name='class-results-upload',
+    ),
+    path(
+        'classes/<int:class_id>/results/upload/sample/',
+        final_results.class_final_result_upload_sample,
+        name='class-results-upload-sample',
+    ),
     path('classes/<int:class_id>/', training.class_detail, name='class-detail'),
     path('classes/<int:class_id>/close/', training.close_class, name='class-close'),
     path('classes/<int:class_id>/enroll/', training.enroll_learner, name='class-enroll'),
@@ -60,9 +86,17 @@ urlpatterns = [
     # Báo cáo giáo vụ (Pha 4)
     path('reports/', training.report_list, name='report-list'),
     path('reports/export/', training.report_export_excel, name='report-export-excel'),
-    # Chứng nhận (phạm vi khác — stub)
+    # Chứng nhận
     path('certificates/', training.certificate_list, name='certificate-list'),
+    path('certificates/<int:pk>/status/', training.certificate_status_change, name='certificate-status-change'),
+    path('certificates/<int:pk>/history/', training.certificate_history, name='certificate-history'),
     path('exam/certificates/', training.exam_certificate_list, name='exam-certificate-list'),
+    path('exam/certificates/<int:pk>/status/', training.exam_certificate_status_change, name='exam-certificate-status-change'),
+    path('exam/certificates/<int:pk>/history/', training.exam_certificate_history, name='exam-certificate-history'),
+    path('dang-ky-du-thi/', public_exams.exam_application_register, name='exam-application-public-register'),
+    path('dang-ky-du-thi/thanh-cong/', public_exams.exam_application_registration_success, name='exam-application-public-success'),
+    path('xem-phong-thi/', public_exams.exam_room_public_lookup, name='exam-room-public-lookup'),
+    path('tra-cuu/', public_exams.exam_public_lookup, name='exam-public-lookup'),
     path('ui-demo/', training.ui_demo, name='ui-demo'),
 ]
 

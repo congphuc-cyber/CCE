@@ -1,0 +1,12 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+    {{ block.super }}
+    {% if duplicate_learner %}
+        <div class="cce-alert cce-alert-warning" role="alert">
+            Số CCCD đã thuộc hồ sơ
+            <a href="{{ duplicate_learner_url }}">{{ duplicate_learner.full_name }}</a>.
+            <a href="{{ duplicate_learner_url }}">Dùng hồ sơ hiện có</a>.
+        </div>
+    {% endif %}
+{% endblock %}

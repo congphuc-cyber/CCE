@@ -1,0 +1,60 @@
+{% extends "training/base_public_exam.html" %}
+
+{% block title %}Xem phòng thi{% endblock %}
+
+{% block content %}
+<section class="public-exam-panel">
+  <h1>Xem phòng thi</h1>
+  <p class="public-exam-lead">Xác thực bằng email đã đăng ký để chỉ xem lịch thi và phòng thi của bạn.</p>
+
+  {% if state %}
+    {% include "training/partials/public_state.html" with state=state title=state_title message=state_message %}
+  {% endif %}
+
+  {% if step == "results" %}
+    {% if no_results %}
+      {% include "training/partials/public_state.html" with state="warning" title="Chưa có thông tin phòng thi" message="Không tìm thấy lịch xếp phòng phù hợp với thông tin đã xác thực. Vui lòng liên hệ Trung tâm nếu cần hỗ trợ." %}
+    {% else %}
+      <section class="public-lookup-results" aria-labelledby="room-results-title">
+        <h2 id="room-results-title">Lịch thi của bạn</h2>
+        <p><strong>Thí sinh:</strong> {{ candidate_name }}</p>
+        <p><strong>CCCD:</strong> {{ masked_id_number }}</p>
+        <ul class="public-lookup-result-list">
+          {% for assignment in results %}
+            <li class="public-lookup-result">
+              <h3>{{ assignment.exam_room.exam_period.name }}</h3>
+              <p>{{ assignment.exam_room.exam_period.cert_type.name }} · Ngày thi {{ assignment.exam_room.exam_period.exam_date|date:"d/m/Y" }}</p>
+              <dl class="public-room-details">
+                <div>
+                  <dt>Phòng thi</dt>
+                  <dd>{{ assignment.exam_room.name }}</dd>
+                </div>
+                <div>
+                  <dt>Ca thi</dt>
+                  <dd>{{ assignment.exam_room.session }}</dd>
+                </div>
+              </dl>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+      <div class="public-exam-actions">
+        <button class="cce-btn cce-btn-primary" type="button" data-print-page>In / Xuất thông tin</button>
+        <a class="cce-btn cce-btn-outline" href="{% url 'exam-room-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
+      </div>
+    {% endif %}
+  {% else %}
+    {% include "training/partials/public_lookup_auth_form.html" %}
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("click", function (event) {
+    if (event.target.closest("[data-print-page]")) {
+      window.print();
+    }
+  });
+</script>
+{% endblock %}

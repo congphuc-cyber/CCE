@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import wraps
 
 from django import forms
@@ -10,21 +11,39 @@ from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Count, F, Q
 from django.http import HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 from training.access import all_features, role_feature_states, user_has_feature
 from training.audit import audit_values_for_display, record_audit, snapshot_instance
 from training.forms import (
     ClassAssignmentForm,
     DashboardDateRangeForm,
     EnrollmentForm,
+    EnrollmentTransferForm,
+    EnrollmentTransferHistoryFilterForm,
     ProfilePasswordChangeForm,
     VietnameseAuthenticationForm,
 )
-from training.models import AuditLog, ClassAssignment, Enrollment, Learner, RoleFeaturePermission, Teacher, TrainingClass
+from training.models import (
+    AuditLog,
+    Certificate,
+    CertificateHistory,
+    ClassAssignment,
+    Enrollment,
+    EnrollmentTransferHistory,
+    ExamApplication,
+    ExamCertificate,
+    ExamPeriod,
+    FinalCourseResult,
+    Learner,
+    RoleFeaturePermission,
+    Teacher,
+    TrainingClass,
+)
 from training.navigation import ROLE_MENUS, group_menu_items, roles_for_user
 from training.pagination import PAGE_SIZE
 
@@ -81,12 +100,15 @@ AUDIT_OBJECT_TYPE_LABELS = {
     "training.ClassAssignment": "Phân công giáo viên",
     "training.Course": "Khóa học",
     "training.Enrollment": "Ghi danh học viên",
+    "training.EnrollmentTransferHistory": "Chuyển lớp",
+    "training.FinalCourseResult": "Kết quả cuối khóa",
     "training.Learner": "Học viên",
     "training.Teacher": "Giáo viên",
     "training.TrainingClass": "Lớp học",
     "home.ClassAssignment": "Phân công giáo viên",
     "home.Course": "Khóa học",
     "home.Enrollment": "Ghi danh học viên",
+    "home.EnrollmentTransferHistory": "Chuyển lớp",
     "home.Learner": "Học viên",
     "home.Teacher": "Giáo viên",
     "home.TrainingClass": "LỜp học",
@@ -95,6 +117,8 @@ AUDIT_OBJECT_TYPE_LABELS = {
     "training.ExamRoom": "Phòng thi",
     "training.ExamRoomAssignment": "Xếp phòng thi",
     "training.ExamScore": "Điểm thi",
+    "training.ExamCertificate": "Chứng chỉ khảo thí",
+    "training.ExamCertificateHistory": "Lịch sử chứng chỉ",
     "training.MyBKExportLog": "Nhật ký xuất MyBK",
 }
 
@@ -108,7 +132,23 @@ def get_home(request):
         if request.user.is_superuser:
             return redirect("admin:index")
         return redirect("profile")
-    return CCELoginView.as_view(template_name="training/login.html")(request)
+    registration_periods = (
+        ExamPeriod.objects.filter(
+            status=ExamPeriod.Status.PUBLISHED,
+            registration_deadline__gte=timezone.localdate(),
+        )
+        .annotate(candidate_count=Count("applications"))
+        .filter(candidate_count__lt=F("max_candidates"))
+        .select_related("cert_type")
+        .order_by("exam_date", "name")[:4]
+    )
+    return render(
+        request,
+        "training/home.html",
+        {
+            "registration_periods": registration_periods,
+        },
+    )
 
 
 def permission_denied(request, exception=None):
@@ -231,6 +271,542 @@ def profile(request):
     )
 
 
+def _generate_certificate_number():
+    year = timezone.now().year
+    prefix = f"CCE-{year}-"
+    latest = Certificate.objects.filter(certificate_number__startswith=prefix).order_by("-certificate_number").first()
+    if latest:
+        suffix = latest.certificate_number.rsplit("-", 1)[-1]
+        seq = int(suffix) + 1 if suffix.isdigit() else 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:05d}"
+
+
+class CertificateIssueForm(forms.Form):
+    training_class = forms.ModelChoiceField(
+        label="Lớp học",
+        queryset=TrainingClass.objects.none(),
+        empty_label="Chọn lớp",
+    )
+    learner = forms.ModelChoiceField(
+        label="Học viên",
+        queryset=Learner.objects.none(),
+        empty_label="Chọn học viên",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["training_class"].queryset = TrainingClass.objects.select_related("course").order_by("-name")
+        self.fields["learner"].queryset = Learner.objects.order_by("full_name")
+
+    def clean(self):
+        cleaned = super().clean()
+        training_class = cleaned.get("training_class")
+        learner = cleaned.get("learner")
+        if training_class and learner:
+            result = FinalCourseResult.objects.filter(training_class=training_class, learner=learner).first()
+            if result is None:
+                raise forms.ValidationError("Học viên chưa có kết quả cuối khóa trong lớp này.")
+            if result.score < training_class.course.pass_threshold:
+                raise forms.ValidationError("Học viên chưa đạt điều kiện cấp chứng nhận.")
+            if Certificate.objects.filter(training_class=training_class, learner=learner, status=Certificate.Status.ISSUED).exists():
+                raise forms.ValidationError("Học viên này đã có chứng nhận còn hiệu lực trong lớp.")
+        return cleaned
+
+
+class CertificateStatusForm(forms.Form):
+    status = forms.ChoiceField(label="Trạng thái mới", choices=Certificate.Status.choices)
+    reason = forms.CharField(label="Lý do", widget=forms.Textarea(attrs={"rows": 3, "class": "form-control"}), required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        reason = (cleaned.get("reason") or "").strip()
+        if not reason:
+            self.add_error("reason", "Vui lòng nhập lý do bắt buộc.")
+        return cleaned
+
+
+@login_required
+def certificate_list(request):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    issue_form = CertificateIssueForm(request.POST if request.method == "POST" and "issue_certificate" in request.POST else None)
+    if request.method == "POST" and "issue_certificate" in request.POST:
+        if issue_form.is_valid():
+            training_class = issue_form.cleaned_data["training_class"]
+            learner = issue_form.cleaned_data["learner"]
+            certificate = Certificate.objects.create(
+                training_class=training_class,
+                learner=learner,
+                certificate_number=_generate_certificate_number(),
+                status=Certificate.Status.ISSUED,
+                issued_by=request.user,
+                reason="Cấp chứng nhận theo kết quả cuối khóa.",
+            )
+            record_audit(
+                request.user,
+                AuditLog.Action.ISSUE,
+                certificate,
+                old_values={},
+                new_values={
+                    "training_class_id": training_class.pk,
+                    "learner_id": learner.pk,
+                    "certificate_number": certificate.certificate_number,
+                    "status": certificate.status,
+                },
+                reason="Cấp chứng nhận theo kết quả cuối khóa.",
+                object_label=f"{certificate.certificate_number} — {learner.full_name}",
+            )
+            CertificateHistory.objects.create(
+                certificate=certificate,
+                old_status=Certificate.Status.ISSUED,
+                new_status=Certificate.Status.ISSUED,
+                reason="Cấp chứng nhận theo kết quả cuối khóa.",
+                changed_by=request.user,
+            )
+            messages.success(request, f"Đã cấp chứng nhận {certificate.certificate_number} cho {learner.full_name}.")
+            return redirect("certificate-list")
+        messages.error(request, "Không thể cấp chứng nhận. Vui lòng kiểm tra lại thông tin và điều kiện.")
+
+    qs = Certificate.objects.select_related("training_class__course", "learner", "issued_by")
+    keyword = (request.GET.get("keyword") or "").strip()
+    class_id = request.GET.get("class_id")
+    learner_id = request.GET.get("learner_id")
+    status = request.GET.get("status")
+
+    if keyword:
+        qs = qs.filter(
+            Q(
+                learner__full_name__icontains=keyword
+            )
+            | Q(training_class__name__icontains=keyword)
+            | Q(certificate_number__icontains=keyword)
+        )
+    if class_id:
+        qs = qs.filter(training_class_id=class_id)
+    if learner_id:
+        qs = qs.filter(learner_id=learner_id)
+    if status:
+        qs = qs.filter(status=status)
+
+    page_obj = Paginator(qs.order_by("-issued_at", "-pk"), PAGE_SIZE).get_page(request.GET.get("page"))
+
+    classes = TrainingClass.objects.select_related("course").order_by("name")
+    learners = Learner.objects.order_by("full_name")
+
+    return render(
+        request,
+        "training/certificate_list.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Chứng nhận",
+            "page_description": "Quản lý cấp, thu hồi và thay thế chứng nhận cho học viên đủ điều kiện.",
+            "breadcrumbs": [{"label": "Chứng nhận"}],
+            "page_obj": page_obj,
+            "issue_form": issue_form,
+            "status_choices": Certificate.Status.choices,
+            "classes": classes,
+            "learners": learners,
+            "keyword": keyword,
+            "class_id": class_id,
+            "learner_id": learner_id,
+            "status": status,
+            "total_eligible": FinalCourseResult.objects.filter(score__gte=F("training_class__course__pass_threshold")).count(),
+            "total_issued": Certificate.objects.filter(status=Certificate.Status.ISSUED).count(),
+            "pending_paper": 0,
+            "graduation_rate": "0%",
+        },
+    )
+
+
+@login_required
+def certificate_status_change(request, pk):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    certificate = get_object_or_404(Certificate.objects.select_related("training_class__course", "learner"), pk=pk)
+    form = CertificateStatusForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        new_status = form.cleaned_data["status"]
+        reason = form.cleaned_data["reason"]
+        old_status = certificate.status
+        if new_status == old_status:
+            messages.error(request, "Trạng thái mới phải khác trạng thái hiện tại.")
+        else:
+            if new_status == Certificate.Status.REPLACED:
+                replacement = Certificate.objects.create(
+                    training_class=certificate.training_class,
+                    learner=certificate.learner,
+                    certificate_number=_generate_certificate_number(),
+                    status=Certificate.Status.ISSUED,
+                    issued_by=request.user,
+                    reason=f"Thay thế chứng nhận gốc {certificate.certificate_number}.",
+                )
+                certificate.status = Certificate.Status.REPLACED
+                certificate.reason = reason
+                certificate.replaced_by = replacement
+                certificate.replaced_at = timezone.now()
+                certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
+                CertificateHistory.objects.create(
+                    certificate=certificate,
+                    old_status=old_status,
+                    new_status=Certificate.Status.REPLACED,
+                    reason=reason,
+                    changed_by=request.user,
+                )
+                record_audit(
+                    request.user,
+                    AuditLog.Action.REPLACE,
+                    certificate,
+                    old_values={"status": old_status},
+                    new_values={"status": Certificate.Status.REPLACED, "replaced_by_id": replacement.pk},
+                    reason=reason,
+                    object_label=f"{certificate.certificate_number} — {certificate.learner.full_name}",
+                )
+                messages.success(request, f"Đã thay thế chứng nhận {certificate.certificate_number} bằng {replacement.certificate_number}.")
+            else:
+                certificate.status = new_status
+                certificate.reason = reason
+                certificate.save(update_fields=["status", "reason"])
+                CertificateHistory.objects.create(
+                    certificate=certificate,
+                    old_status=old_status,
+                    new_status=new_status,
+                    reason=reason,
+                    changed_by=request.user,
+                )
+                action = AuditLog.Action.REVOKE if new_status == Certificate.Status.REVOKED else AuditLog.Action.EDIT
+                record_audit(
+                    request.user,
+                    action,
+                    certificate,
+                    old_values={"status": old_status},
+                    new_values={"status": new_status},
+                    reason=reason,
+                    object_label=f"{certificate.certificate_number} — {certificate.learner.full_name}",
+                )
+                messages.success(request, f"Đã cập nhật trạng thái chứng nhận {certificate.certificate_number}.")
+            return redirect("certificate-list")
+
+    return render(
+        request,
+        "training/certificate_status_form.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Cập nhật trạng thái chứng nhận",
+            "breadcrumbs": [{"label": "Chứng nhận", "url": reverse("certificate-list")}, {"label": "Cập nhật trạng thái"}],
+            "certificate": certificate,
+            "form": form,
+        },
+    )
+
+
+@login_required
+def certificate_history(request, pk):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    certificate = get_object_or_404(Certificate.objects.select_related("training_class__course", "learner"), pk=pk)
+    history = certificate.history.select_related("changed_by").all()
+    return render(
+        request,
+        "training/certificate_history.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Lịch sử chứng nhận",
+            "breadcrumbs": [{"label": "Chứng nhận", "url": reverse("certificate-list")}, {"label": certificate.certificate_number}],
+            "certificate": certificate,
+            "history": history,
+        },
+    )
+
+
+def _generate_exam_certificate_number():
+    year = timezone.now().year
+    prefix = f"EXC-{year}-"
+    from training.models import ExamCertificate
+
+    latest = ExamCertificate.objects.filter(certificate_number__startswith=prefix).order_by("-certificate_number").first()
+    if latest:
+        suffix = latest.certificate_number.rsplit("-", 1)[-1]
+        seq = int(suffix) + 1 if suffix.isdigit() else 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:05d}"
+
+
+class ExamCertificateIssueForm(forms.Form):
+    exam_period = forms.ModelChoiceField(
+        label="Đợt thi",
+        queryset=None,
+        empty_label="Chọn đợt thi",
+    )
+    application = forms.ModelChoiceField(
+        label="Thí sinh",
+        queryset=None,
+        empty_label="Chọn thí sinh",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from training.models import ExamApplication, ExamPeriod
+
+        self.fields["exam_period"].queryset = ExamPeriod.objects.order_by("-exam_date")
+        self.fields["application"].queryset = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).order_by("full_name")
+
+    def clean(self):
+        cleaned = super().clean()
+        from training.models import ExamCertificate, ExamScore
+
+        period = cleaned.get("exam_period")
+        application = cleaned.get("application")
+        if period and application:
+            score = (
+                ExamScore.objects.filter(
+                    assignment__exam_room__exam_period=period,
+                    assignment__application=application,
+                )
+                .select_related("assignment__exam_room__exam_period", "assignment__application")
+                .first()
+            )
+            if score is None:
+                raise forms.ValidationError("Thí sinh chưa có điểm trong đợt thi này.")
+            if score.is_absent or score.score is None:
+                raise forms.ValidationError("Thí sinh chưa có điểm hợp lệ hoặc vắng thi.")
+            if score.score < 5:
+                raise forms.ValidationError("Thí sinh chưa đạt ngưỡng tối thiểu để cấp chứng chỉ.")
+            if not score.is_published:
+                raise forms.ValidationError("Điểm phải được công bố trước khi cấp chứng chỉ.")
+            if ExamCertificate.objects.filter(exam_period=period, application=application, status=ExamCertificate.Status.ISSUED).exists():
+                raise forms.ValidationError("Thí sinh này đã có chứng chỉ còn hiệu lực trong đợt thi.")
+        return cleaned
+
+
+class ExamCertificateStatusForm(forms.Form):
+    status = forms.ChoiceField(label="Trạng thái mới", choices=ExamCertificate.Status.choices)
+    reason = forms.CharField(label="Lý do", widget=forms.Textarea(attrs={"rows": 3, "class": "form-control"}), required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        reason = (cleaned.get("reason") or "").strip()
+        if not reason:
+            self.add_error("reason", "Vui lòng nhập lý do bắt buộc.")
+        return cleaned
+
+
+@login_required
+def exam_certificate_list(request):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamApplication, ExamCertificate, ExamCertificateHistory, ExamPeriod, ExamScore
+
+    issue_form = ExamCertificateIssueForm(
+        request.POST if request.method == "POST" and "issue_exam_certificate" in request.POST else None,
+    )
+    if request.method == "POST" and "issue_exam_certificate" in request.POST:
+        if issue_form.is_valid():
+            period = issue_form.cleaned_data["exam_period"]
+            application = issue_form.cleaned_data["application"]
+            certificate = ExamCertificate.objects.create(
+                exam_period=period,
+                application=application,
+                certificate_number=_generate_exam_certificate_number(),
+                status=ExamCertificate.Status.ISSUED,
+                issued_by=request.user,
+                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+            )
+            ExamCertificateHistory.objects.create(
+                certificate=certificate,
+                old_status=ExamCertificate.Status.ISSUED,
+                new_status=ExamCertificate.Status.ISSUED,
+                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+                changed_by=request.user,
+            )
+            record_audit(
+                request.user,
+                AuditLog.Action.ISSUE,
+                certificate,
+                old_values={},
+                new_values={
+                    "exam_period_id": period.pk,
+                    "application_id": application.pk,
+                    "certificate_number": certificate.certificate_number,
+                    "status": certificate.status,
+                },
+                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+                object_label=f"{certificate.certificate_number} — {application.full_name}",
+            )
+            messages.success(request, f"Đã cấp chứng chỉ {certificate.certificate_number} cho {application.full_name}.")
+            return redirect("exam-certificate-list")
+        messages.error(request, "Không thể cấp chứng chỉ. Vui lòng kiểm tra thông tin và điều kiện.")
+
+    qs = ExamCertificate.objects.select_related("exam_period", "application", "issued_by")
+    keyword = (request.GET.get("keyword") or "").strip()
+    period_id = request.GET.get("period_id")
+    application_id = request.GET.get("application_id")
+    status = request.GET.get("status")
+
+    if keyword:
+        qs = qs.filter(
+            Q(application__full_name__icontains=keyword)
+            | Q(application__id_number__icontains=keyword)
+            | Q(exam_period__name__icontains=keyword)
+            | Q(certificate_number__icontains=keyword)
+        )
+    if period_id:
+        qs = qs.filter(exam_period_id=period_id)
+    if application_id:
+        qs = qs.filter(application_id=application_id)
+    if status:
+        qs = qs.filter(status=status)
+
+    page_obj = Paginator(qs.order_by("-issued_at", "-pk"), PAGE_SIZE).get_page(request.GET.get("page"))
+
+    periods = ExamPeriod.objects.order_by("-exam_date")
+    applications = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).order_by("full_name")
+    published_scores = ExamScore.objects.filter(is_published=True, is_absent=False, score__isnull=False, score__gte=5)
+    total_eligible = published_scores.count()
+    total_issued = ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).count()
+    total_revoked = ExamCertificate.objects.filter(status=ExamCertificate.Status.REVOKED).count()
+    if published_scores.exists():
+        pass_rate = round((published_scores.filter(score__gte=Decimal("5.0")).count() / published_scores.count()) * 100, 1)
+    else:
+        pass_rate = 0
+
+    return render(
+        request,
+        "training/exam_certificate_list.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Chứng chỉ khảo thí",
+            "page_description": "Quản lý cấp, thu hồi và theo dõi chứng chỉ khảo thí theo từng đợt thi.",
+            "breadcrumbs": [{"label": "Chứng chỉ khảo thí"}],
+            "page_obj": page_obj,
+            "issue_form": issue_form,
+            "status_choices": ExamCertificate.Status.choices,
+            "periods": periods,
+            "applications": applications,
+            "keyword": keyword,
+            "period_id": period_id,
+            "application_id": application_id,
+            "status": status,
+            "total_eligible": total_eligible,
+            "total_issued": total_issued,
+            "total_revoked": total_revoked,
+            "pass_rate": pass_rate,
+        },
+    )
+
+
+@login_required
+def exam_certificate_status_change(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamCertificate
+
+    certificate = get_object_or_404(ExamCertificate.objects.select_related("exam_period", "application"), pk=pk)
+    form = ExamCertificateStatusForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        new_status = form.cleaned_data["status"]
+        reason = form.cleaned_data["reason"]
+        old_status = certificate.status
+        if new_status == old_status:
+            messages.error(request, "Trạng thái mới phải khác trạng thái hiện tại.")
+        else:
+            if new_status == ExamCertificate.Status.REPLACED:
+                replacement = ExamCertificate.objects.create(
+                    exam_period=certificate.exam_period,
+                    application=certificate.application,
+                    certificate_number=_generate_exam_certificate_number(),
+                    status=ExamCertificate.Status.ISSUED,
+                    issued_by=request.user,
+                    reason=f"Thay thế chứng chỉ gốc {certificate.certificate_number}.",
+                )
+                certificate.status = ExamCertificate.Status.REPLACED
+                certificate.reason = reason
+                certificate.replaced_by = replacement
+                certificate.replaced_at = timezone.now()
+                certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
+                ExamCertificateHistory.objects.create(
+                    certificate=certificate,
+                    old_status=old_status,
+                    new_status=ExamCertificate.Status.REPLACED,
+                    reason=reason,
+                    changed_by=request.user,
+                )
+                record_audit(
+                    request.user,
+                    AuditLog.Action.REPLACE,
+                    certificate,
+                    old_values={"status": old_status},
+                    new_values={"status": ExamCertificate.Status.REPLACED, "replaced_by_id": replacement.pk},
+                    reason=reason,
+                    object_label=f"{certificate.certificate_number} — {certificate.application.full_name}",
+                )
+                messages.success(request, f"Đã thay thế chứng chỉ {certificate.certificate_number} bằng {replacement.certificate_number}.")
+            else:
+                certificate.status = new_status
+                certificate.reason = reason
+                certificate.save(update_fields=["status", "reason"])
+                ExamCertificateHistory.objects.create(
+                    certificate=certificate,
+                    old_status=old_status,
+                    new_status=new_status,
+                    reason=reason,
+                    changed_by=request.user,
+                )
+                action = AuditLog.Action.REVOKE if new_status == ExamCertificate.Status.REVOKED else AuditLog.Action.EDIT
+                record_audit(
+                    request.user,
+                    action,
+                    certificate,
+                    old_values={"status": old_status},
+                    new_values={"status": new_status},
+                    reason=reason,
+                    object_label=f"{certificate.certificate_number} — {certificate.application.full_name}",
+                )
+                messages.success(request, f"Đã cập nhật trạng thái chứng chỉ {certificate.certificate_number}.")
+            return redirect("exam-certificate-list")
+
+    return render(
+        request,
+        "training/exam_certificate_status_form.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Cập nhật trạng thái chứng chỉ",
+            "breadcrumbs": [{"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")}, {"label": "Cập nhật trạng thái"}],
+            "certificate": certificate,
+            "form": form,
+        },
+    )
+
+
+@login_required
+def exam_certificate_history(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamCertificate
+
+    certificate = get_object_or_404(ExamCertificate.objects.select_related("exam_period", "application"), pk=pk)
+    history = certificate.history.select_related("changed_by").all()
+    return render(
+        request,
+        "training/exam_certificate_history.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Lịch sử chứng chỉ",
+            "breadcrumbs": [{"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")}, {"label": certificate.certificate_number}],
+            "certificate": certificate,
+            "history": history,
+        },
+    )
+
+
 @login_required
 def my_class_list(request):
     roles = roles_for_user(request.user)
@@ -263,6 +839,7 @@ def my_class_list(request):
             "schedule": item.schedule,
             "status": item.get_status_display(),
             "view_url": reverse("class-detail", args=(item.pk,)),
+            "results_url": reverse("class-results", args=(item.pk,)),
         }
         for item in page_obj
     ]
@@ -370,6 +947,10 @@ def class_detail(request, class_id):
             ),
             "assignment_url": reverse("class-assignments", args=(training_class.pk,)),
             "enrollment_url": reverse("class-enroll", args=(training_class.pk,)),
+            "transfer_url": f"{reverse('class-transfer')}?source_class={training_class.pk}",
+            "transfer_history_url": (
+                f"{reverse('class-transfer-history')}?training_class={training_class.pk}"
+            ),
             "close_url": reverse("class-close", args=(training_class.pk,)),
         },
     )
@@ -419,18 +1000,26 @@ def enroll_learner(request, class_id):
             )
             form = EnrollmentForm(request.POST, training_class=training_class)
             if form.is_valid():
-                enrollment = form.save()
-                record_audit(
-                    request.user,
-                    AuditLog.Action.CREATE,
-                    enrollment,
-                    new_values=snapshot_instance(enrollment),
+                learner = form.cleaned_data["learner"]
+                enrollment, created = Enrollment.objects.get_or_create(
+                    learner=learner,
+                    training_class=training_class,
                 )
-                messages.success(request, "Học viên đã được ghi danh vào lớp.")
-                return redirect("class-detail", class_id=class_id)
+                if created:
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.CREATE,
+                        enrollment,
+                        new_values=snapshot_instance(enrollment),
+                    )
+                    messages.success(request, "Học viên đã được ghi danh vào lớp.")
+                    return redirect("class-detail", class_id=class_id)
+                form.add_error("learner", "Học viên này đã được ghi danh vào lớp.")
     else:
         form = EnrollmentForm(training_class=training_class)
 
+    class_closed = training_class.status == TrainingClass.Status.CLOSED
+    class_full = training_class.enrolled_count >= training_class.max_students
     return render(
         request,
         "training/enrollment_form.html",
@@ -445,6 +1034,194 @@ def enroll_learner(request, class_id):
             "training_class": training_class,
             "form": form,
             "has_learners": Learner.objects.exists(),
+            "class_closed": class_closed,
+            "class_full": class_full,
+            "is_post": request.method == "POST",
+            "show_enrollment_form": request.method == "POST" or not class_closed and not class_full,
+            "class_detail_url": reverse("class-detail", args=(class_id,)),
+        },
+    )
+
+
+@education_required
+@require_http_methods(["GET", "POST"])
+def class_transfer(request):
+    initial = {}
+    if request.method == "GET" and request.GET.get("source_class"):
+        initial["source_class"] = request.GET["source_class"]
+    form = EnrollmentTransferForm(
+        request.POST if request.method == "POST" else None,
+        initial=initial,
+    )
+    if request.method == "POST" and form.is_valid():
+        learner = form.cleaned_data["learner"]
+        source_class = form.cleaned_data["source_class"]
+        destination_class = form.cleaned_data["destination_class"]
+        transfer_succeeded = False
+
+        with transaction.atomic():
+            locked_classes = {
+                item.pk: item
+                for item in TrainingClass.objects.select_for_update()
+                .filter(pk__in=(source_class.pk, destination_class.pk))
+                .order_by("pk")
+            }
+            source_class = locked_classes.get(source_class.pk)
+            destination_class = locked_classes.get(destination_class.pk)
+
+            if source_class is None:
+                form.add_error("source_class", "Không tìm thấy lớp hiện tại.")
+            elif destination_class is None:
+                form.add_error("destination_class", "Không tìm thấy lớp mới.")
+            else:
+                enrollment = Enrollment.objects.select_for_update().filter(
+                    learner=learner,
+                    training_class=source_class,
+                ).first()
+                if enrollment is None:
+                    form.add_error(
+                        "source_class",
+                        "Học viên không được ghi danh trong lớp hiện tại.",
+                    )
+                elif Enrollment.objects.filter(
+                    learner=learner,
+                    training_class=destination_class,
+                ).exists():
+                    form.add_error(
+                        "destination_class",
+                        "Học viên này đã có trong lớp mới.",
+                    )
+                elif destination_class.status != TrainingClass.Status.OPEN:
+                    form.add_error(
+                        "destination_class",
+                        "Lớp mới đã đóng, không thể nhận học viên.",
+                    )
+                elif destination_class.enrolled_count >= destination_class.max_students:
+                    form.add_error(
+                        "destination_class",
+                        "Lớp mới đã đạt sĩ số tối đa.",
+                    )
+                else:
+                    old_class_name = source_class.name
+                    new_class_name = destination_class.name
+                    enrollment.delete()
+                    Enrollment.objects.create(
+                        learner=learner,
+                        training_class=destination_class,
+                    )
+                    transfer = EnrollmentTransferHistory.objects.create(
+                        learner=learner,
+                        source_class=source_class,
+                        destination_class=destination_class,
+                        transferred_by=request.user,
+                    )
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.EDIT,
+                        transfer,
+                        old_values={
+                            "source_class": old_class_name,
+                            "destination_class": old_class_name,
+                        },
+                        new_values={
+                            "source_class": old_class_name,
+                            "destination_class": new_class_name,
+                        },
+                        reason="Chuyển lớp.",
+                    )
+                    transfer_succeeded = True
+
+        if transfer_succeeded:
+            messages.success(
+                request,
+                f"Đã chuyển học viên {learner.full_name} từ lớp "
+                f"{old_class_name} sang lớp {new_class_name}.",
+            )
+            return redirect("class-detail", class_id=destination_class.pk)
+
+    source_class = form.cleaned_data.get("source_class") if form.is_bound else None
+    return render(
+        request,
+        "training/class_transfer_form.html",
+        {
+            "active_menu": "classes",
+            "page_title": "Chuyển lớp",
+            "page_description": "Chuyển học viên từ lớp hiện tại sang một lớp đang mở còn chỗ.",
+            "breadcrumbs": [
+                {"label": "Lớp học", "url": reverse("admin:training_trainingclass_changelist")},
+                {"label": "Chuyển lớp"},
+            ],
+            "form": form,
+            "has_enrollments": Enrollment.objects.exists(),
+            "cancel_url": (
+                reverse("class-detail", args=(source_class.pk,))
+                if source_class
+                else reverse("admin:training_trainingclass_changelist")
+            ),
+            "history_url": reverse("class-transfer-history"),
+        },
+    )
+
+
+@education_required
+def class_transfer_history(request):
+    filter_form = EnrollmentTransferHistoryFilterForm(request.GET or None)
+    history = EnrollmentTransferHistory.objects.select_related(
+        "learner",
+        "source_class",
+        "destination_class",
+        "transferred_by",
+    )
+    if filter_form.is_valid():
+        learner = filter_form.cleaned_data.get("learner")
+        training_class = filter_form.cleaned_data.get("training_class")
+        if learner:
+            history = history.filter(learner=learner)
+        if training_class:
+            history = history.filter(
+                Q(source_class=training_class) | Q(destination_class=training_class)
+            )
+
+    page_obj = Paginator(history, PAGE_SIZE).get_page(request.GET.get("page"))
+    rows = [
+        {
+            "learner": item.learner.full_name,
+            "source_class": item.source_class.name,
+            "destination_class": item.destination_class.name,
+            "transferred_at": timezone.localtime(item.transferred_at).strftime(
+                "%d/%m/%Y %H:%M"
+            ),
+            "transferred_by": (
+                item.transferred_by.get_full_name()
+                or item.transferred_by.get_username()
+                if item.transferred_by
+                else "Tài khoản đã bị xóa"
+            ),
+        }
+        for item in page_obj
+    ]
+    return render(
+        request,
+        "training/class_transfer_history.html",
+        {
+            "active_menu": "classes",
+            "page_title": "Lịch sử chuyển lớp",
+            "page_description": "Theo dõi học viên, lớp chuyển đi, lớp tiếp nhận, thời điểm và người thực hiện.",
+            "breadcrumbs": [
+                {"label": "Lớp học", "url": reverse("admin:training_trainingclass_changelist")},
+                {"label": "Lịch sử chuyển lớp"},
+            ],
+            "filter_form": filter_form,
+            "page_obj": page_obj,
+            "rows": rows,
+            "columns": [
+                {"key": "learner", "label": "Học viên"},
+                {"key": "source_class", "label": "Lớp cũ"},
+                {"key": "destination_class", "label": "Lớp mới"},
+                {"key": "transferred_at", "label": "Thời điểm"},
+                {"key": "transferred_by", "label": "Người thực hiện"},
+            ],
+            "transfer_url": reverse("class-transfer"),
         },
     )
 
@@ -904,8 +1681,6 @@ from training.exam_stubs import (
     exam_statistics,
     report_list,
     report_export_excel,
-    certificate_list,
-    exam_certificate_list,
 )
 
 

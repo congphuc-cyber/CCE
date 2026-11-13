@@ -1,26 +1,45 @@
 import csv
+import re
 from decimal import Decimal
-from io import StringIO
+from datetime import date
+from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib import admin
 from django.contrib.auth.models import Group, Permission, User
+from django.core import mail
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.template.loader import render_to_string
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
+from captcha.models import CaptchaStore
 
 from training.access import all_features, default_features_for_role
 from training.admin import BaseModelAdmin
 from training.context_processors import ui_navigation
-from training.forms import CourseAdminForm, TrainingClassAdminForm
+from training.forms import CourseAdminForm, LearnerAdminForm, TrainingClassAdminForm
 from training.models import (
     AuditLog,
+    Certificate,
+    CertificateHistory,
     ClassAssignment,
     Course,
     Enrollment,
+    EnrollmentTransferHistory,
+    ExamCertificate,
+    ExamCertificateHistory,
+    ExamApplication,
+    ExamPeriod,
+    ExamRoom,
+    ExamRoomAssignment,
+    ExamScore,
+    FinalCourseResult,
     Learner,
     RoleFeaturePermission,
     Teacher,
@@ -172,7 +191,9 @@ class FoundationPageTests(TestCase):
         self.assertContains(response, "Đang mở")
         self.assertContains(response, "Đã thay thế")
         self.assertContains(response, "required")
-        self.assertContains(response, "Trang 1 / 2")
+        self.assertEqual(response.context["demo_page_obj"].number, 1)
+        self.assertEqual(response.context["demo_page_obj"].paginator.num_pages, 2)
+        self.assertContains(response, 'aria-label="Phân trang dữ liệu"')
         self.assertContains(response, "Xóa")
         self.assertContains(response, 'type="date"')
 
@@ -287,7 +308,7 @@ class PhaseThreeTests(TestCase):
         self.assertContains(response, '<details class="cce-nav-group">')
         self.assertContains(response, "material-symbols-outlined cce-nav-icon")
         self.assertContains(response, "dashboard</span>")
-        self.assertContains(response, "avatar-profile-gap-20261111")
+        self.assertContains(response, "training/css/cce-core.css")
         self.assertContains(response, "Quản lý đào tạo")
         self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
         self.assertContains(response, "cce-logout-button")
@@ -436,14 +457,14 @@ class PhaseFourTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, "Tổng cộng 11 bản ghi")
                 self.assertContains(response, "Trang")
-                self.assertContains(response, "p=1")
+                self.assertContains(response, "p=2")
                 self.assertContains(response, 'class="cce-page-link is-active">1</span>')
                 self.assertContains(response, "Sau")
 
-                second_page = self.client.get(reverse(route_name), {"p": 1})
+                second_page = self.client.get(reverse(route_name), {"p": 2})
                 self.assertEqual(second_page.status_code, 200)
                 self.assertContains(second_page, 'class="cce-page-link is-active">2</span>')
-                self.assertContains(second_page, "p=0")
+                self.assertContains(second_page, "p=1")
 
     def test_education_dashboard_sidebar_shows_only_education_groups(self):
         self.client.force_login(self.education_user)
@@ -622,6 +643,18 @@ class PhaseFourTests(TestCase):
         enrollment_url = reverse("class-enroll", args=(self.training_class.pk,))
 
         self.client.post(enrollment_url, {"learner": first.pk})
+        enrollment = Enrollment.objects.get(
+            learner=first,
+            training_class=self.training_class,
+        )
+        enrollment_audit = AuditLog.objects.get(
+            action=AuditLog.Action.CREATE,
+            object_type="training.Enrollment",
+            object_id=str(enrollment.pk),
+        )
+        self.assertEqual(enrollment_audit.actor, self.education_user)
+        self.assertEqual(enrollment_audit.old_values, {})
+        self.assertEqual(enrollment_audit.new_values["learner"], first.pk)
         duplicate_response = self.client.post(enrollment_url, {"learner": first.pk})
         self.assertContains(duplicate_response, "Học viên này đã được ghi danh vào lớp.")
 
@@ -656,6 +689,254 @@ class PhaseFourTests(TestCase):
             teacher=teacher,
         )
         self.assertTrue(reassignment.is_active)
+
+
+class ClassTransferTests(TestCase):
+    def setUp(self):
+        call_command("create_cce_roles")
+        education_group = Group.objects.get(name="Giáo vụ")
+        self.user = User.objects.create_user(username="class-transfer-manager")
+        self.user.groups.add(education_group)
+        self.course = Course.objects.create(name="Điện công nghiệp", pass_threshold=70)
+        self.source_class = TrainingClass.objects.create(
+            name="Dien-01",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Hai",
+            max_students=4,
+        )
+        self.destination_class = TrainingClass.objects.create(
+            name="Dien-02",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ Ba",
+            max_students=4,
+        )
+        self.client.force_login(self.user)
+
+    def create_learner(self, full_name, id_number):
+        return Learner.objects.create(full_name=full_name, id_number=id_number)
+
+    def submit_transfer(self, learner, destination_class=None):
+        return self.client.post(
+            reverse("class-transfer"),
+            {
+                "learner": learner.pk,
+                "source_class": self.source_class.pk,
+                "destination_class": (destination_class or self.destination_class).pk,
+            },
+        )
+
+    def test_enrollment_select_supports_name_and_cccd_search(self):
+        learner = self.create_learner("Nguyễn An", "012345678901")
+        response = self.client.get(reverse("class-enroll", args=(self.source_class.pk,)))
+
+        self.assertContains(response, "Tìm học viên theo họ tên hoặc số CCCD")
+        self.assertContains(response, f"{learner.full_name} — {learner.id_number}")
+        self.assertContains(response, 'aria-controls="id_learner"')
+        self.assertContains(response, "filterLearners")
+
+    def test_transfer_moves_enrollment_and_records_history_and_audit(self):
+        learner = self.create_learner("Trần Bình", "112345678901")
+        Enrollment.objects.create(learner=learner, training_class=self.source_class)
+        class_detail = self.client.get(reverse("class-detail", args=(self.source_class.pk,)))
+        self.assertContains(class_detail, "Chuyển lớp")
+        self.assertContains(class_detail, "Lịch sử chuyển lớp")
+        transfer_page = self.client.get(
+            reverse("class-transfer"),
+            {"source_class": self.source_class.pk},
+        )
+        self.assertContains(transfer_page, self.source_class.name)
+        self.assertContains(transfer_page, self.destination_class.name)
+        self.assertContains(transfer_page, "0/4")
+
+        response = self.submit_transfer(learner)
+
+        self.assertRedirects(
+            response,
+            reverse("class-detail", args=(self.destination_class.pk,)),
+        )
+        self.assertFalse(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=self.source_class,
+            ).exists()
+        )
+        self.assertTrue(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=self.destination_class,
+            ).exists()
+        )
+        transfer = EnrollmentTransferHistory.objects.get(learner=learner)
+        self.assertEqual(transfer.source_class, self.source_class)
+        self.assertEqual(transfer.destination_class, self.destination_class)
+        self.assertEqual(transfer.transferred_by, self.user)
+        audit = AuditLog.objects.get(
+            action=AuditLog.Action.EDIT,
+            object_type=EnrollmentTransferHistory._meta.label,
+            object_id=str(transfer.pk),
+        )
+        self.assertEqual(audit.actor, self.user)
+        self.assertEqual(audit.old_values["destination_class"], self.source_class.name)
+        self.assertEqual(
+            audit.new_values["destination_class"],
+            self.destination_class.name,
+        )
+        self.assertContains(
+            self.client.get(reverse("class-detail", args=(self.destination_class.pk,))),
+            learner.full_name,
+        )
+
+    def test_transfer_rejects_duplicate_destination_and_preserves_source(self):
+        learner = self.create_learner("Lê Hoa", "212345678901")
+        Enrollment.objects.create(learner=learner, training_class=self.source_class)
+        Enrollment.objects.create(learner=learner, training_class=self.destination_class)
+
+        response = self.submit_transfer(learner)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Học viên này đã có trong lớp mới.")
+        self.assertTrue(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=self.source_class,
+            ).exists()
+        )
+        self.assertFalse(EnrollmentTransferHistory.objects.exists())
+
+    def test_transfer_rejects_full_destination_and_preserves_source(self):
+        learner = self.create_learner("Phạm An", "312345678901")
+        occupant = self.create_learner("Học viên đã đủ chỗ", "412345678901")
+        Enrollment.objects.create(learner=learner, training_class=self.source_class)
+        full_class = TrainingClass.objects.create(
+            name="Dien-03",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ Tư",
+            max_students=1,
+        )
+        Enrollment.objects.create(learner=occupant, training_class=full_class)
+
+        response = self.submit_transfer(learner, full_class)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lớp mới đã đạt sĩ số tối đa.")
+        self.assertTrue(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=self.source_class,
+            ).exists()
+        )
+        self.assertFalse(EnrollmentTransferHistory.objects.exists())
+
+    def test_transfer_rejects_learner_not_in_selected_source(self):
+        learner = self.create_learner("Đặng Minh", "512345678901")
+        source_occupant = self.create_learner("Học viên trong lớp nguồn", "812345678901")
+        unrelated_class = TrainingClass.objects.create(
+            name="Dien-X",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Sáu",
+            max_students=4,
+        )
+        Enrollment.objects.create(learner=source_occupant, training_class=self.source_class)
+        Enrollment.objects.create(learner=learner, training_class=unrelated_class)
+
+        response = self.submit_transfer(learner)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Học viên không được ghi danh trong lớp hiện tại.")
+        self.assertTrue(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=unrelated_class,
+            ).exists()
+        )
+        self.assertFalse(EnrollmentTransferHistory.objects.exists())
+
+    def test_transfer_rejects_the_same_source_and_destination(self):
+        learner = self.create_learner("Ngô Thanh", "912345678901")
+        Enrollment.objects.create(learner=learner, training_class=self.source_class)
+
+        response = self.submit_transfer(learner, self.source_class)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lớp mới phải khác lớp hiện tại.")
+        self.assertTrue(
+            Enrollment.objects.filter(
+                learner=learner,
+                training_class=self.source_class,
+            ).exists()
+        )
+        self.assertFalse(EnrollmentTransferHistory.objects.exists())
+
+    def test_transfer_history_filters_by_learner_and_either_class(self):
+        learner = self.create_learner("Vũ Ngọc", "612345678901")
+        other_learner = self.create_learner("Hồ Quân", "712345678901")
+        other_class = TrainingClass.objects.create(
+            name="Dien-04",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Năm",
+            max_students=4,
+        )
+        EnrollmentTransferHistory.objects.create(
+            learner=learner,
+            source_class=self.source_class,
+            destination_class=self.destination_class,
+            transferred_by=self.user,
+        )
+        EnrollmentTransferHistory.objects.create(
+            learner=other_learner,
+            source_class=self.destination_class,
+            destination_class=other_class,
+            transferred_by=self.user,
+        )
+        url = reverse("class-transfer-history")
+
+        learner_response = self.client.get(url, {"learner": learner.pk})
+        class_response = self.client.get(url, {"training_class": self.source_class.pk})
+
+        self.assertEqual(learner_response.context["page_obj"].paginator.count, 1)
+        self.assertEqual(class_response.context["page_obj"].paginator.count, 1)
+        self.assertEqual(
+            [row["learner"] for row in learner_response.context["rows"]],
+            ["Vũ Ngọc"],
+        )
+        self.assertContains(class_response, self.destination_class.name)
+
+    def test_history_filter_accepts_learner_and_class_without_transfers(self):
+        learner = self.create_learner("Học viên chưa chuyển lớp", "812345678901")
+
+        response = self.client.get(
+            reverse("class-transfer-history"),
+            {
+                "learner": learner.pk,
+                "training_class": self.source_class.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.count, 0)
+        self.assertContains(response, "Không có dữ liệu")
+        self.assertNotContains(response, "Hãy chọn một lựa chọn hợp lệ.")
+
+    def test_teacher_cannot_access_class_transfer_routes(self):
+        teacher_group = Group.objects.get(name="Giáo viên")
+        teacher_user = User.objects.create_user(username="class-transfer-teacher")
+        teacher_user.groups.add(teacher_group)
+        self.client.force_login(teacher_user)
+
+        self.assertEqual(self.client.get(reverse("class-transfer")).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("class-transfer-history")).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(reverse("class-enroll", args=(self.source_class.pk,))).status_code,
+            403,
+        )
 
 
 class PhaseFiveTests(TestCase):
@@ -998,6 +1279,736 @@ class PhaseFiveTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("to_date", response.context["filter_form"].errors)
+
+
+class FinalCourseResultTests(TestCase):
+    def setUp(self):
+        call_command("create_cce_roles")
+        education_group = Group.objects.get(name="Giáo vụ")
+        self.manager = User.objects.create_user(
+            username="final-results-manager",
+            password="Final-results-pass-8153#",
+        )
+        self.manager.groups.add(education_group)
+        self.course = Course.objects.create(
+            name="An toàn điện",
+            pass_threshold=75,
+        )
+        self.training_class = TrainingClass.objects.create(
+            name="ATD-KQ-01",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Hai, 18:00",
+            max_students=5,
+        )
+        self.learners = []
+        for index, (name, id_number) in enumerate((
+            ("Nguyễn An", "012345678901"),
+            ("Trần Bình", "112345678901"),
+            ("Lê Chi", "212345678901"),
+        )):
+            learner = Learner.objects.create(full_name=name, id_number=id_number)
+            Enrollment.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+            )
+            self.learners.append(learner)
+        self.client.force_login(self.manager)
+
+    def score_file(self, rows, class_name=None):
+        buffer = StringIO(newline="")
+        writer = csv.writer(buffer)
+        writer.writerow(["Lớp", "Họ và tên", "Số CCCD", "Điểm cuối khóa"])
+        class_name = class_name or self.training_class.name
+        writer.writerows([[class_name, *row] for row in rows])
+        return SimpleUploadedFile(
+            "final-results.csv",
+            buffer.getvalue().encode("utf-8-sig"),
+            content_type="text/csv",
+        )
+
+    def create_assigned_teacher(self, username="final-results-teacher"):
+        teacher_user = User.objects.create_user(username=username)
+        teacher_user.groups.add(Group.objects.get(name="Giáo viên"))
+        teacher = Teacher.objects.create(
+            full_name="Giáo viên phụ trách",
+            user=teacher_user,
+        )
+        ClassAssignment.objects.create(
+            training_class=self.training_class,
+            teacher=teacher,
+        )
+        return teacher_user
+
+    def test_manual_scores_use_threshold_and_blank_values_do_not_change_saved_scores(self):
+        existing = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("80"),
+        )
+        response = self.client.post(
+            reverse("class-results", args=(self.training_class.pk,)),
+            {
+                "action": "save",
+                f"score_{self.learners[0].pk}": "",
+                f"score_{self.learners[1].pk}": "75",
+                f"score_{self.learners[2].pk}": "74.99",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        existing.refresh_from_db()
+        self.assertEqual(existing.score, Decimal("80"))
+        self.assertEqual(
+            FinalCourseResult.objects.get(learner=self.learners[1]).outcome,
+            "Đạt",
+        )
+        self.assertEqual(
+            FinalCourseResult.objects.get(learner=self.learners[2]).outcome,
+            "Không đạt",
+        )
+        created_result = FinalCourseResult.objects.get(learner=self.learners[1])
+        create_audit = AuditLog.objects.get(
+            action=AuditLog.Action.CREATE,
+            object_type="training.FinalCourseResult",
+            object_id=str(created_result.pk),
+        )
+        self.assertEqual(create_audit.actor, self.manager)
+        self.assertEqual(Decimal(create_audit.new_values["score"]), Decimal("75"))
+
+        self.client.post(
+            reverse("class-results", args=(self.training_class.pk,)),
+            {
+                "action": "save",
+                f"score_{self.learners[1].pk}": "76",
+            },
+        )
+        update_audit = AuditLog.objects.get(
+            action=AuditLog.Action.EDIT,
+            object_type="training.FinalCourseResult",
+            object_id=str(created_result.pk),
+        )
+        self.assertEqual(Decimal(update_audit.old_values["score"]), Decimal("75"))
+        self.assertEqual(Decimal(update_audit.new_values["score"]), Decimal("76"))
+
+    def test_manual_score_outside_range_is_rejected_without_saving(self):
+        response = self.client.post(
+            reverse("class-results", args=(self.training_class.pk,)),
+            {
+                "action": "save",
+                f"score_{self.learners[0].pk}": "100.01",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Điểm cuối khóa phải nằm trong khoảng 0 đến 100.")
+        self.assertFalse(
+            FinalCourseResult.objects.filter(learner=self.learners[0]).exists()
+        )
+
+    def test_class_cannot_be_finalized_with_missing_scores_and_finalization_is_audited(self):
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("70"),
+        )
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        response = self.client.post(results_url, {"action": "finalize"})
+        self.assertEqual(response.status_code, 302)
+        self.training_class.refresh_from_db()
+        self.assertFalse(self.training_class.final_results_locked)
+
+        for learner in self.learners[1:]:
+            FinalCourseResult.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+                score=Decimal("75"),
+            )
+        response = self.client.post(results_url, {"action": "finalize"})
+        self.assertEqual(response.status_code, 302)
+        self.training_class.refresh_from_db()
+        self.assertTrue(self.training_class.final_results_locked)
+        self.assertEqual(self.training_class.final_results_locked_by, self.manager)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_type="training.TrainingClass",
+                object_id=str(self.training_class.pk),
+                reason="Chốt kết quả cuối khóa.",
+            ).exists()
+        )
+
+    def test_locked_manual_edits_require_reason_and_record_audit(self):
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("65"),
+        )
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        response = self.client.post(
+            results_url,
+            {
+                "action": "save_locked",
+                f"score_{self.learners[0].pk}": "80",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Vui lòng nhập lý do sửa điểm sau khi chốt.")
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("65"))
+
+        response = self.client.post(
+            results_url,
+            {
+                "action": "save_locked",
+                "reason": "Sửa theo biên bản đối soát",
+                f"score_{self.learners[0].pk}": "80",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("80"))
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_type="training.FinalCourseResult",
+                object_id=str(result.pk),
+                reason="Sửa theo biên bản đối soát",
+            ).exists()
+        )
+
+    def test_upload_preview_and_invalid_file_never_save_any_rows(self):
+        rows = [
+            [self.learners[0].full_name, self.learners[0].id_number, "80"],
+            [self.learners[1].full_name, self.learners[1].id_number, "101"],
+        ]
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        preview = self.client.post(
+            upload_url,
+            {"file": self.score_file(rows), "preview": "1"},
+        )
+        self.assertEqual(preview.status_code, 200)
+        preview_data = preview.json()
+        self.assertEqual(preview_data["saved"], 0)
+        self.assertEqual(preview_data["errors"][0]["row"], 3)
+        self.assertEqual(preview_data["errors"][0]["column"], "Điểm cuối khóa")
+        self.assertFalse(
+            FinalCourseResult.objects.filter(training_class=self.training_class).exists()
+        )
+
+        saved = self.client.post(upload_url, {"file": self.score_file(rows)})
+        self.assertEqual(saved.status_code, 200)
+        self.assertFalse(saved.json()["ok"])
+        self.assertEqual(saved.json()["saved"], 0)
+        self.assertFalse(
+            FinalCourseResult.objects.filter(training_class=self.training_class).exists()
+        )
+
+    def test_upload_requires_a_matching_class_column(self):
+        row = [
+            self.learners[0].full_name,
+            self.learners[0].id_number,
+            "80",
+        ]
+        missing_class_buffer = StringIO(newline="")
+        writer = csv.writer(missing_class_buffer)
+        writer.writerow(["Họ và tên", "Số CCCD", "Điểm cuối khóa"])
+        writer.writerow(row)
+        missing_class_file = SimpleUploadedFile(
+            "final-results.csv",
+            missing_class_buffer.getvalue().encode("utf-8-sig"),
+            content_type="text/csv",
+        )
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+
+        missing_class = self.client.post(
+            upload_url,
+            {"file": missing_class_file, "preview": "1"},
+        ).json()
+        self.assertFalse(missing_class["ok"])
+        self.assertIn("Lớp", missing_class["errors"][0]["message"])
+
+        wrong_class = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([row], class_name="ATD-KQ-02"),
+                "preview": "1",
+            },
+        ).json()
+        self.assertFalse(wrong_class["ok"])
+        self.assertEqual(wrong_class["errors"][0]["column"], "Lớp")
+        self.assertIn("không khớp", wrong_class["errors"][0]["message"])
+        self.assertFalse(
+            FinalCourseResult.objects.filter(training_class=self.training_class).exists()
+        )
+
+    def test_locked_upload_requires_reason_and_audits_successful_changes(self):
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        rows = [[
+            self.learners[0].full_name,
+            self.learners[0].id_number,
+            "80",
+        ]]
+        missing_reason = self.client.post(
+            upload_url,
+            {"file": self.score_file(rows)},
+        )
+        self.assertFalse(missing_reason.json()["ok"])
+        self.assertFalse(
+            FinalCourseResult.objects.filter(learner=self.learners[0]).exists()
+        )
+
+        saved = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file(rows),
+                "reason": "Điều chỉnh theo biên bản",
+            },
+        )
+        self.assertTrue(saved.json()["ok"])
+        self.assertEqual(saved.json()["saved"], 1)
+        result = FinalCourseResult.objects.get(learner=self.learners[0])
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_type="training.FinalCourseResult",
+                object_id=str(result.pk),
+                reason="Điều chỉnh theo biên bản",
+            ).exists()
+        )
+
+    def test_results_and_upload_pages_render_and_respect_role_permissions(self):
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        self.assertEqual(self.client.get(results_url).status_code, 200)
+        upload_page = self.client.get(upload_url)
+        self.assertEqual(upload_page.status_code, 200)
+        self.assertContains(upload_page, "Số CCCD")
+        self.assertContains(upload_page, "Điểm cuối khóa")
+        class_detail = self.client.get(
+            reverse("class-detail", args=(self.training_class.pk,))
+        )
+        self.assertContains(
+            class_detail,
+            reverse("class-results", args=(self.training_class.pk,)),
+        )
+        sample = self.client.get(
+            reverse(
+                "class-results-upload-sample",
+                args=(self.training_class.pk,),
+            )
+        )
+        self.assertEqual(sample.status_code, 200)
+        sample_content = sample.content.decode("utf-8-sig")
+        self.assertIn(
+            "Lớp,Họ và tên,Số CCCD,Điểm cuối khóa",
+            sample_content,
+        )
+        self.assertIn(self.training_class.name, sample_content)
+        self.assertIn(self.learners[0].id_number, sample_content)
+
+        teacher = User.objects.create_user(username="final-results-teacher")
+        teacher.groups.add(Group.objects.get(name="Giáo viên"))
+        self.client.force_login(teacher)
+        self.assertEqual(self.client.get(results_url).status_code, 403)
+        self.assertEqual(self.client.get(upload_url).status_code, 403)
+
+    def test_assigned_teacher_can_enter_scores_and_upload_only_for_their_class(self):
+        teacher_user = self.create_assigned_teacher()
+        other_class = TrainingClass.objects.create(
+            name="ATD-KQ-02",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ Sáu, 18:00",
+            max_students=5,
+        )
+        self.client.force_login(teacher_user)
+
+        class_list = self.client.get(reverse("my-class-list"))
+        self.assertContains(class_list, "Ghi nhận kết quả")
+        self.assertContains(
+            class_list,
+            reverse("class-results", args=(self.training_class.pk,)),
+        )
+        self.assertContains(class_list, "ATD-KQ-01")
+        self.assertNotContains(class_list, "ATD-KQ-02")
+
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        results_page = self.client.get(results_url)
+        self.assertEqual(results_page.status_code, 200)
+        self.assertEqual(results_page.context["active_menu"], "my-classes")
+        self.assertContains(
+            results_page,
+            '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
+        )
+        self.assertFalse(results_page.context["can_finalize"])
+        self.assertNotContains(results_page, "Chốt kết quả")
+        self.assertContains(results_page, "Upload file điểm")
+        self.assertEqual(
+            self.client.post(results_url, {"action": "finalize"}).status_code,
+            403,
+        )
+
+        saved = self.client.post(
+            results_url,
+            {
+                "action": "save",
+                f"score_{self.learners[0].pk}": "80",
+            },
+        )
+        self.assertEqual(saved.status_code, 302)
+        self.assertEqual(
+            FinalCourseResult.objects.get(
+                training_class=self.training_class,
+                learner=self.learners[0],
+            ).score,
+            Decimal("80"),
+        )
+
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        upload_page = self.client.get(upload_url)
+        self.assertEqual(upload_page.status_code, 200)
+        self.assertContains(
+            upload_page,
+            '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
+        )
+        uploaded = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[1].full_name,
+                    self.learners[1].id_number,
+                    "75",
+                ]]),
+            },
+        )
+        self.assertTrue(uploaded.json()["ok"])
+        self.assertEqual(
+            self.client.get(
+                reverse("class-results", args=(other_class.pk,))
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("class-results-upload", args=(other_class.pk,))
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("class-results-upload-sample", args=(other_class.pk,))
+            ).status_code,
+            403,
+        )
+
+    def test_teacher_without_assignments_sees_the_empty_state(self):
+        teacher_user = User.objects.create_user(username="unassigned-final-results")
+        teacher_user.groups.add(Group.objects.get(name="Giáo viên"))
+        self.client.force_login(teacher_user)
+        response = self.client.get(reverse("my-class-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chưa được phân công lớp nào.")
+        self.assertNotContains(response, "Quản lý Lớp học")
+
+    def test_teacher_cannot_finalize_or_edit_results_after_lock(self):
+        teacher_user = self.create_assigned_teacher()
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("65"),
+        )
+        self.client.force_login(teacher_user)
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        response = self.client.get(results_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "readonly")
+        self.assertNotContains(response, "Chốt kết quả")
+        self.assertNotContains(response, "Lưu điểm")
+        self.assertNotContains(response, "Upload file điểm")
+
+        for action in ("finalize", "save", "save_locked"):
+            with self.subTest(action=action):
+                response = self.client.post(
+                    results_url,
+                    {
+                        "action": action,
+                        "reason": "Không được phép",
+                        f"score_{self.learners[0].pk}": "90",
+                    },
+                )
+                self.assertEqual(response.status_code, 403)
+
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        self.assertEqual(self.client.get(upload_url).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                upload_url,
+                {
+                    "file": self.score_file([[
+                        self.learners[0].full_name,
+                        self.learners[0].id_number,
+                        "90",
+                    ]]),
+                },
+            ).status_code,
+            403,
+        )
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("65"))
+
+
+class LearnerManagementTests(TestCase):
+    def setUp(self):
+        call_command("create_cce_roles")
+        group = Group.objects.get(name="Giáo vụ")
+        self.user = User.objects.create_user(
+            username="learner-manager",
+            password="Learner-pass-7853#",
+        )
+        self.user.groups.add(group)
+        self.course = Course.objects.create(name="An toàn điện", pass_threshold=75)
+        self.training_class = TrainingClass.objects.create(
+            name="ATD-01",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Hai, 18:00",
+            max_students=10,
+        )
+
+    @staticmethod
+    def learner_data(id_number="012345678901", full_name="Nguyễn An"):
+        return {
+            "full_name": full_name,
+            "date_of_birth": "2000-01-02",
+            "id_number": id_number,
+            "phone": "0901234567",
+            "email": "an@example.test",
+        }
+
+    @staticmethod
+    def csv_upload(rows):
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["Họ và tên", "Ngày sinh", "Số CCCD", "Số điện thoại", "Email"])
+        writer.writerows(rows)
+        return SimpleUploadedFile(
+            "learners.csv",
+            buffer.getvalue().encode("utf-8-sig"),
+            content_type="text/csv",
+        )
+
+    def test_learner_form_requires_profile_fields_and_rejects_duplicate_cccd(self):
+        self.assertEqual(
+            tuple(LearnerAdminForm.base_fields),
+            ("full_name", "date_of_birth", "id_number", "phone", "email"),
+        )
+        invalid = LearnerAdminForm({
+            **self.learner_data(),
+            "id_number": "12345678901",
+            "email": "",
+        })
+        self.assertFalse(invalid.is_valid())
+        self.assertIn("id_number", invalid.errors)
+        self.assertIn("email", invalid.errors)
+        missing = LearnerAdminForm({"full_name": "Thiếu dữ liệu"})
+        self.assertFalse(missing.is_valid())
+        self.assertTrue(
+            {"date_of_birth", "id_number", "phone", "email"}.issubset(missing.errors)
+        )
+
+        existing = Learner.objects.create(
+            full_name="Học viên hiện có",
+            id_number="012345678901",
+        )
+        duplicate = LearnerAdminForm(self.learner_data())
+        self.assertFalse(duplicate.is_valid())
+        self.assertEqual(duplicate.duplicate_learner.pk, existing.pk)
+
+    def test_enrolled_learner_cannot_be_deleted_and_class_is_list_only(self):
+        learner = Learner.objects.create(**{
+            **self.learner_data(),
+            "date_of_birth": "2000-01-02",
+        })
+        Enrollment.objects.create(learner=learner, training_class=self.training_class)
+        self.client.force_login(self.user)
+
+        list_response = self.client.get(reverse("admin:training_learner_changelist"))
+        self.assertContains(list_response, self.training_class.name)
+        self.assertNotContains(
+            list_response,
+            reverse("admin:training_learner_delete", args=(learner.pk,)),
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("admin:training_learner_delete", args=(learner.pk,))
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            tuple(LearnerAdminForm.base_fields),
+            ("full_name", "date_of_birth", "id_number", "phone", "email"),
+        )
+
+    def test_admin_duplicate_cccd_offers_existing_profile(self):
+        existing = Learner.objects.create(
+            full_name="Học viên hiện có",
+            id_number="012345678901",
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("admin:training_learner_add"),
+            self.learner_data(),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Dùng hồ sơ hiện có")
+        self.assertContains(
+            response,
+            reverse("admin:training_learner_change", args=(existing.pk,)),
+        )
+
+    def test_manual_learner_creation_and_edits_are_audited(self):
+        self.client.force_login(self.user)
+        add_url = reverse("admin:training_learner_add")
+        response = self.client.post(add_url, self.learner_data())
+        self.assertEqual(response.status_code, 302)
+
+        learner = Learner.objects.get(id_number="012345678901")
+        create_audit = AuditLog.objects.get(
+            action=AuditLog.Action.CREATE,
+            object_type="training.Learner",
+            object_id=str(learner.pk),
+        )
+        self.assertEqual(create_audit.actor, self.user)
+        self.assertEqual(create_audit.new_values["full_name"], "Nguyễn An")
+        self.assertEqual(create_audit.new_values["id_number"], "012345678901")
+
+        response = self.client.post(
+            reverse("admin:training_learner_change", args=(learner.pk,)),
+            self.learner_data(id_number="112345678901", full_name="Trần Bình"),
+        )
+        self.assertEqual(response.status_code, 302)
+
+        update_audit = AuditLog.objects.get(
+            action=AuditLog.Action.EDIT,
+            object_type="training.Learner",
+            object_id=str(learner.pk),
+        )
+        self.assertEqual(update_audit.old_values["full_name"], "Nguyễn An")
+        self.assertEqual(update_audit.old_values["id_number"], "012345678901")
+        self.assertEqual(update_audit.new_values["full_name"], "Trần Bình")
+        self.assertEqual(update_audit.new_values["id_number"], "112345678901")
+
+    def test_csv_import_skips_invalid_and_duplicate_rows_and_audits_saved_profiles(self):
+        Learner.objects.create(
+            full_name="Đã có hồ sơ",
+            id_number="987654321012",
+        )
+        upload_rows = [
+            ["Nguyễn Mới", "2001-02-03", "012345678901", "0901234567", "moi@example.test"],
+            ["Hồ Sẵn Có", "1999-02-03", "987654321012", "0907654321", "co@example.test"],
+            ["Dữ Liệu Lỗi", "2000-03-04", "123456789012", "0900000000", "not-an-email"],
+        ]
+        self.client.force_login(self.user)
+        url = reverse("learner-import")
+        list_response = self.client.get(reverse("admin:training_learner_changelist"))
+        self.assertContains(list_response, "Nhập từ file")
+        import_page = self.client.get(url)
+        self.assertContains(import_page, "CSV UTF-8 hoặc Excel (.xlsx)")
+        self.assertContains(import_page, "5.000 dòng")
+
+        preview = self.client.post(
+            url,
+            {"file": self.csv_upload(upload_rows), "preview": "1"},
+        ).json()
+        self.assertEqual(preview["valid_count"], 2, preview)
+        self.assertEqual(preview["duplicate_count"], 1)
+        self.assertEqual(len(preview["errors"]), 1)
+        self.assertTrue(
+            any(row.get("duplicate_url") for row in preview["preview_rows"])
+        )
+
+        result = self.client.post(
+            url,
+            {"file": self.csv_upload(upload_rows)},
+        ).json()
+        self.assertEqual(result["saved"], 1)
+        self.assertEqual(result["duplicate_count"], 1)
+        self.assertEqual(len(result["errors"]), 1)
+        imported = Learner.objects.get(id_number="012345678901")
+        audit = AuditLog.objects.get(
+            action=AuditLog.Action.CREATE,
+            object_id=str(imported.pk),
+        )
+        self.assertEqual(audit.actor, self.user)
+
+    def test_xlsx_import_reads_excel_date_cells(self):
+        import openpyxl
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(["full_name", "date_of_birth", "id_number", "phone", "email"])
+        sheet.append([
+            "Trần Bình",
+            date(2000, 5, 6),
+            "123456789012",
+            "0901112233",
+            "binh@example.test",
+        ])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        content = buffer.getvalue()
+        def upload():
+            return SimpleUploadedFile(
+                "learners.xlsx",
+                content,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("learner-import"),
+            {"file": upload(), "preview": "1"},
+        )
+        self.assertEqual(response.json()["valid_count"], 1)
+        result = self.client.post(reverse("learner-import"), {"file": upload()}).json()
+        self.assertEqual(result["saved"], 1)
+        imported = Learner.objects.get(id_number="123456789012")
+        self.assertEqual(imported.date_of_birth, date(2000, 5, 6))
+
+    def test_import_requires_the_learners_feature(self):
+        user = User.objects.create_user(username="no-learner-access")
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("learner-import")).status_code, 403)
 
 
 class DemoDataCommandTests(TestCase):
@@ -2192,6 +3203,9 @@ class ExamScoreTests(TestCase):
         self.assertContains(page, 'name="csrfmiddlewaretoken"')
         self.assertContains(page, "Kiểm tra điểm")
         self.assertContains(page, 'data-mode="strict"')
+        self.assertContains(page, "Xác nhận ghi đè điểm")
+        self.assertContains(page, "cceWizard.confirmOverwrite")
+        self.assertNotContains(page, "window.confirm")
         self.assertNotContains(page, "Tên và CCCD phải khớp")
         self.assertNotContains(page, "Tải mẫu hợp lệ")
         self.assertNotContains(page, "Tải mẫu kiểm tra lỗi")
@@ -2841,3 +3855,683 @@ class ExamPeriodClosedLockTests(TestCase):
         r = self.client.get(reverse("exam-period-list"))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Đã khóa")
+
+
+class CertificateWorkflowTests(TestCase):
+    def setUp(self):
+        self.user, self.pw = _make_giaoyu_user(username="cert-admin")
+        self.client.login(username=self.user.username, password=self.pw)
+        self.course = _make_course()
+        self.training_class = TrainingClass.objects.create(
+            name="Lớp chứng nhận 01",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ 2, 4, 6",
+            max_students=30,
+            status=TrainingClass.Status.CLOSED,
+        )
+        self.learner = Learner.objects.create(
+            full_name="Nguyễn Văn A",
+            date_of_birth="1999-01-01",
+            id_number="123456789012",
+            phone="0909123456",
+            email="a@example.com",
+        )
+        self.result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learner,
+            score=90,
+            modified_by=self.user,
+        )
+        self.certificate = Certificate.objects.create(
+            training_class=self.training_class,
+            learner=self.learner,
+            certificate_number="CCE-2026-0001",
+            status=Certificate.Status.ISSUED,
+            issued_by=self.user,
+            reason="Đạt kết quả cuối khóa.",
+        )
+
+    def test_certificate_issue_requires_pass_result(self):
+        learner = Learner.objects.create(
+            full_name="Trần Thị B",
+            date_of_birth="2001-02-02",
+            id_number="123456789013",
+            phone="0909123457",
+            email="b@example.com",
+        )
+        with self.assertRaises(ValidationError):
+            Certificate(
+                training_class=self.training_class,
+                learner=learner,
+                certificate_number="CCE-2026-0002",
+                status=Certificate.Status.ISSUED,
+            ).clean()
+
+    def test_certificate_status_change_requires_reason(self):
+        response = self.client.post(
+            reverse("certificate-status-change", args=[self.certificate.pk]),
+            {"status": Certificate.Status.REVOKED, "reason": ""},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Vui lòng nhập lý do bắt buộc.")
+
+    def test_replacement_marks_original_certificate_as_replaced(self):
+        reason = "Thay thế do sai thông tin."
+        response = self.client.post(
+            reverse("certificate-status-change", args=[self.certificate.pk]),
+            {"status": Certificate.Status.REPLACED, "reason": reason},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.certificate.refresh_from_db()
+        self.assertEqual(self.certificate.status, Certificate.Status.REPLACED)
+        self.assertIsNotNone(self.certificate.replaced_by)
+        self.assertEqual(self.certificate.replaced_by.status, Certificate.Status.ISSUED)
+        history = self.certificate.history.get()
+        self.assertEqual(history.old_status, Certificate.Status.ISSUED)
+        self.assertEqual(history.new_status, Certificate.Status.REPLACED)
+        self.assertEqual(history.reason, reason)
+        audit_entry = AuditLog.objects.get(
+            action=AuditLog.Action.REPLACE,
+            object_id=str(self.certificate.pk),
+        )
+        self.assertEqual(audit_entry.actor, self.user)
+        self.assertEqual(audit_entry.reason, reason)
+        self.assertEqual(audit_entry.old_values["status"], Certificate.Status.ISSUED)
+        self.assertEqual(audit_entry.new_values["status"], Certificate.Status.REPLACED)
+
+    def test_certificate_history_renders_system_actor_when_changed_by_is_null(self):
+        CertificateHistory.objects.create(
+            certificate=self.certificate,
+            old_status=Certificate.Status.ISSUED,
+            new_status=Certificate.Status.ISSUED,
+            reason="Dữ liệu nhập ban đầu.",
+        )
+
+        response = self.client.get(
+            reverse("certificate-history", args=(self.certificate.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Người thực hiện:")
+        self.assertContains(response, "Hệ thống")
+
+
+class ExamCertificateWorkflowTests(TestCase):
+    def setUp(self):
+        self.user, self.pw = _make_exam_user(role="Cán bộ thi", username="exam-cert-admin")
+        self.client.login(username=self.user.username, password=self.pw)
+        self.period = _make_exam_period(name="Đợt thi tháng 12/2026")
+        self.room = _make_exam_room(self.period, name="A201")
+        self.app = _make_application(self.period, full_name="Nguyễn Văn C", id_number="987654321012")
+        self.assignment = _make_assignment(self.room, self.app)
+        self.score = ExamScore.objects.create(assignment=self.assignment, score=Decimal("8.50"), is_published=True)
+
+    def test_exam_certificate_issue_requires_published_pass_score(self):
+        self.score.is_published = False
+        self.score.save(update_fields=["is_published"])
+        with self.assertRaises(ValidationError):
+            ExamCertificate(
+                exam_period=self.period,
+                application=self.app,
+                certificate_number="EXC-2026-0001",
+                status=ExamCertificate.Status.ISSUED,
+            ).clean()
+
+    def test_exam_certificate_status_change_requires_reason(self):
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-0001",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+        response = self.client.post(
+            reverse("exam-certificate-status-change", args=[certificate.pk]),
+            {"status": ExamCertificate.Status.REVOKED, "reason": ""},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Vui lòng nhập lý do bắt buộc.")
+
+    def test_exam_certificate_issue_creates_record_from_published_score(self):
+        response = self.client.post(
+            reverse("exam-certificate-list"),
+            {
+                "issue_exam_certificate": "1",
+                "exam_period": self.period.pk,
+                "application": self.app.pk,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        certificate = ExamCertificate.objects.get(
+            application=self.app,
+            exam_period=self.period,
+        )
+        self.assertContains(response, "Đã cấp chứng chỉ")
+        history = certificate.history.get()
+        self.assertEqual(history.old_status, ExamCertificate.Status.ISSUED)
+        self.assertEqual(history.new_status, ExamCertificate.Status.ISSUED)
+        self.assertEqual(history.changed_by, self.user)
+        audit_entry = AuditLog.objects.get(
+            action=AuditLog.Action.ISSUE,
+            object_id=str(certificate.pk),
+        )
+        self.assertEqual(audit_entry.actor, self.user)
+        self.assertEqual(audit_entry.new_values["status"], ExamCertificate.Status.ISSUED)
+
+    def test_certificate_menus_and_direct_views_follow_role_permissions(self):
+        response = self.client.get(reverse("exam-certificate-list"))
+        self.assertEqual(response.status_code, 200)
+        exam_menu_keys = [item["key"] for item in response.context["sidebar_items"]]
+        self.assertIn("exam-certificates", exam_menu_keys)
+        self.assertNotIn("certificates", exam_menu_keys)
+
+        education_user, _ = _make_giaoyu_user(username="education-cert-access")
+        self.client.force_login(education_user)
+        response = self.client.get(reverse("certificate-list"))
+        self.assertEqual(response.status_code, 200)
+        education_menu_keys = [item["key"] for item in response.context["sidebar_items"]]
+        self.assertIn("certificates", education_menu_keys)
+        self.assertNotIn("exam-certificates", education_menu_keys)
+        self.assertEqual(
+            self.client.get(reverse("exam-certificate-list")).status_code,
+            403,
+        )
+
+    def test_exam_certificate_history_renders_system_actor_when_changed_by_is_null(self):
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-SYSTEM-ACTOR",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+        certificate.history.create(
+            old_status=ExamCertificate.Status.ISSUED,
+            new_status=ExamCertificate.Status.ISSUED,
+            reason="Dữ liệu nhập ban đầu.",
+        )
+
+        response = self.client.get(
+            reverse("exam-certificate-history", args=(certificate.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Người thực hiện:")
+        self.assertContains(response, "Hệ thống")
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+class PublicExamLookupTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        mail.outbox.clear()
+        self.period = _make_exam_period(name="Đợt thi tháng 01/2027")
+        self.room = _make_exam_room(self.period, name="B202")
+        self.app = _make_application(self.period, full_name="Lê Văn D", id_number="112233445566")
+        self.assignment = _make_assignment(self.room, self.app)
+        self.app.email = "candidate@example.com"
+        self.app.save(update_fields=["email"])
+
+    def captcha_payload(self):
+        captcha_key = CaptchaStore.generate_key()
+        captcha = CaptchaStore.objects.get(hashkey=captcha_key)
+        return {"captcha_0": captcha_key, "captcha_1": captcha.response}
+
+    def request_code(self, client, route_name, id_number=None, email=None):
+        payload = {
+            "action": "request_code",
+            "id_number": id_number or self.app.id_number,
+            "email": email or self.app.email,
+            **self.captcha_payload(),
+        }
+        return client.post(reverse(route_name), payload)
+
+    def verify_code(self, client, route_name, code):
+        return client.post(
+            reverse(route_name),
+            {
+                "action": "verify_code",
+                "otp": code,
+                **self.captcha_payload(),
+            },
+        )
+
+    def code_from_last_email(self):
+        return re.search(r"\b[0-9]{6}\b", mail.outbox[-1].body).group(0)
+
+    def test_public_lookup_page_is_available_without_login(self):
+        response = self.client.get(reverse("exam-public-lookup"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tra cứu điểm và chứng chỉ")
+        self.assertContains(response, 'name="captcha_0"')
+        self.assertContains(response, 'name="id_number"')
+
+    def test_lookup_requires_matching_email_otp_and_masks_id_number(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("92.00"),
+            is_published=True,
+        )
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2027-0001",
+            status=ExamCertificate.Status.REVOKED,
+            issued_by=None,
+        )
+
+        unauthenticated = self.client.get(reverse("exam-public-lookup"))
+        self.assertNotContains(unauthenticated, self.app.full_name)
+        self.assertNotContains(unauthenticated, certificate.certificate_number)
+
+        response = self.request_code(self.client, "exam-public-lookup")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mã xác thực đã được gửi")
+        self.assertNotContains(response, self.app.id_number)
+        code = self.code_from_last_email()
+        self.assertNotEqual(
+            self.client.session["public_exam_lookup_pending"]["otp_digest"],
+            code,
+        )
+
+        response = self.verify_code(self.client, "exam-public-lookup", code)
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        response = self.client.get(reverse("exam-public-lookup"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.app.full_name)
+        self.assertContains(response, "112******566")
+        self.assertNotContains(response, self.app.id_number)
+        self.assertContains(response, "92,00")
+        self.assertContains(response, certificate.certificate_number)
+        self.assertContains(response, "Thu hồi")
+
+    def test_replaced_certificate_is_not_presented_as_active(self):
+        second_period = _make_exam_period(name="Đợt thi tháng 02/2027")
+        second_room = _make_exam_room(second_period, name="D404")
+        second_application = _make_application(
+            second_period,
+            full_name=self.app.full_name,
+            id_number=self.app.id_number,
+        )
+        second_application.email = self.app.email
+        second_application.save(update_fields=["email"])
+        second_assignment = _make_assignment(second_room, second_application)
+        ExamScore.objects.create(
+            assignment=second_assignment,
+            score=Decimal("85.00"),
+            is_published=True,
+        )
+        replaced_certificate = ExamCertificate.objects.create(
+            exam_period=second_period,
+            application=second_application,
+            certificate_number="EXC-2027-0002",
+            status=ExamCertificate.Status.REPLACED,
+            issued_by=None,
+        )
+        replacement_certificate = ExamCertificate.objects.create(
+            exam_period=second_period,
+            application=second_application,
+            certificate_number="EXC-2027-0003",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=None,
+        )
+        replaced_certificate.replaced_by = replacement_certificate
+        replaced_certificate.save(update_fields=["replaced_by"])
+
+        self.request_code(self.client, "exam-public-lookup")
+        response = self.verify_code(
+            self.client,
+            "exam-public-lookup",
+            self.code_from_last_email(),
+        )
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        response = self.client.get(reverse("exam-public-lookup"))
+
+        self.assertContains(response, "EXC-2027-0002")
+        self.assertContains(response, "Đã thay thế")
+        self.assertContains(response, "EXC-2027-0003")
+        self.assertContains(response, "Đã cấp")
+
+    def test_unpublished_and_missing_records_have_the_same_no_result_response(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("92.00"),
+            is_published=False,
+        )
+        self.request_code(self.client, "exam-public-lookup")
+        response = self.verify_code(
+            self.client,
+            "exam-public-lookup",
+            self.code_from_last_email(),
+        )
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        unpublished_response = self.client.get(reverse("exam-public-lookup"))
+
+        other_client = Client()
+        self.request_code(
+            other_client,
+            "exam-public-lookup",
+            id_number="998877665544",
+            email="other@example.com",
+        )
+        response = self.verify_code(
+            other_client,
+            "exam-public-lookup",
+            self.code_from_last_email(),
+        )
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        missing_response = other_client.get(reverse("exam-public-lookup"))
+
+        self.assertEqual(unpublished_response.status_code, 200)
+        self.assertContains(unpublished_response, "Không tìm thấy kết quả")
+        self.assertEqual(unpublished_response.content, missing_response.content)
+
+    def test_lookup_rejects_bad_captcha_without_sending_email(self):
+        response = self.client.post(
+            reverse("exam-public-lookup"),
+            {
+                "action": "request_code",
+                "id_number": self.app.id_number,
+                "email": self.app.email,
+                "captcha_0": "invalid",
+                "captcha_1": "wrong",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Mã xác thực không đúng", status_code=400)
+        self.assertEqual(mail.outbox, [])
+
+    def test_email_delivery_failure_is_reported_without_creating_a_success_state(self):
+        with patch(
+            "training.public_exam_views._send_lookup_code",
+            side_effect=OSError("mail service unavailable"),
+        ):
+            response = self.request_code(self.client, "exam-public-lookup")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(response, "Dịch vụ email đang tạm thời không khả dụng", status_code=503)
+        self.assertNotIn("public_exam_lookup_pending", self.client.session)
+
+    def test_public_room_lookup_only_shows_the_verified_candidates_rooms(self):
+        other_room = _make_exam_room(self.period, name="C303")
+        other_application = _make_application(
+            self.period,
+            full_name="Thí sinh khác",
+            id_number="998877665544",
+        )
+        other_application.email = "other@example.com"
+        other_application.save(update_fields=["email"])
+        _make_assignment(other_room, other_application)
+
+        response = self.request_code(self.client, "exam-room-public-lookup")
+        self.assertEqual(response.status_code, 200)
+        response = self.verify_code(
+            self.client,
+            "exam-room-public-lookup",
+            self.code_from_last_email(),
+        )
+        self.assertRedirects(response, reverse("exam-room-public-lookup"))
+        response = self.client.get(reverse("exam-room-public-lookup"))
+
+        self.assertContains(response, "B202")
+        self.assertContains(response, "112******566")
+        self.assertNotContains(response, "C303")
+        self.assertNotContains(response, other_application.full_name)
+        self.assertContains(response, "In / Xuất thông tin")
+
+    def test_lookup_is_throttled_and_limits_otp_attempts(self):
+        with patch("training.public_exam_views.LOOKUP_IP_LIMIT", 0):
+            limited = self.request_code(self.client, "exam-public-lookup")
+        self.assertEqual(limited.status_code, 429)
+        self.assertEqual(limited["Retry-After"], "900")
+        self.assertContains(limited, "Đã vượt giới hạn tra cứu", status_code=429)
+
+        cache.clear()
+        request = self.request_code(self.client, "exam-public-lookup")
+        self.assertEqual(request.status_code, 200)
+        actual_code = self.code_from_last_email()
+        wrong_code = "000000" if actual_code != "000000" else "000001"
+        for attempt in range(5):
+            response = self.verify_code(
+                self.client,
+                "exam-public-lookup",
+                wrong_code,
+            )
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, "Đã vượt giới hạn tra cứu", status_code=429)
+
+    def test_expired_lookup_code_cannot_unlock_results(self):
+        self.request_code(self.client, "exam-public-lookup")
+        session = self.client.session
+        pending = session["public_exam_lookup_pending"]
+        pending["expires_at"] = timezone.now().timestamp() - 1
+        session["public_exam_lookup_pending"] = pending
+        session.save()
+
+        response = self.verify_code(
+            self.client,
+            "exam-public-lookup",
+            self.code_from_last_email(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mã xác thực đã hết hạn")
+        self.assertNotIn("public_exam_lookup_verified", self.client.session)
+
+class PublicExamRegistrationTests(TestCase):
+    def setUp(self):
+        self.course = _make_course()
+        self.period = _make_exam_period(
+            course=self.course,
+            name="Đợt thi đăng ký trực tuyến",
+        )
+
+    def valid_payload(self):
+        return {
+            "cert_type": str(self.course.pk),
+            "exam_period": str(self.period.pk),
+            "full_name": "  Nguyễn Văn Đăng Ký  ",
+            "date_of_birth": "2000-01-02",
+            "id_number": "123456789012",
+            "phone": "0901234567",
+            "email": "candidate@example.com",
+        }
+
+    def test_public_home_is_available_without_login_and_has_candidate_paths(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Đăng ký dự thi")
+        self.assertContains(response, "Xem phòng thi")
+        self.assertContains(response, "Tra cứu điểm và chứng chỉ")
+        self.assertContains(response, self.period.name)
+
+    def test_registration_form_is_public_and_posts_online_application(self):
+        response = self.client.get(reverse("exam-application-public-register"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Địa chỉ email")
+        self.assertContains(response, "Ngày sinh")
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            self.valid_payload(),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            reverse("exam-application-public-success"),
+        )
+
+        application = ExamApplication.objects.get(id_number="123456789012")
+        self.assertEqual(application.full_name, "Nguyễn Văn Đăng Ký")
+        self.assertEqual(application.date_of_birth.isoformat(), "2000-01-02")
+        self.assertEqual(application.email, "candidate@example.com")
+        self.assertEqual(application.source, ExamApplication.Source.ONLINE)
+        self.assertEqual(application.status, ExamApplication.Status.NEW)
+
+        response = self.client.get(reverse("exam-application-public-success"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Đã nhận hồ sơ đăng ký")
+        self.assertContains(response, self.course.name)
+
+    def test_invalid_registration_shows_field_errors_without_saving(self):
+        payload = self.valid_payload()
+        payload["id_number"] = "1234"
+        payload["email"] = "not-an-email"
+        payload["date_of_birth"] = "2999-01-01"
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            payload,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Số CCCD phải gồm đúng 12 chữ số.", status_code=400)
+        self.assertContains(response, "email", status_code=400)
+        self.assertContains(response, "Ngày sinh không thể ở tương lai.", status_code=400)
+        self.assertFalse(ExamApplication.objects.exists())
+
+    def test_missing_required_registration_fields_do_not_save(self):
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            {},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Loại chứng chỉ", status_code=400)
+        self.assertContains(response, "Đợt thi", status_code=400)
+        self.assertContains(response, "Họ và tên", status_code=400)
+        self.assertFalse(ExamApplication.objects.exists())
+
+    def test_registration_is_rejected_for_closed_or_expired_periods(self):
+        closed_period = _make_exam_period(
+            course=self.course,
+            status=ExamPeriod.Status.CLOSED,
+            name="Đợt thi đã đóng",
+        )
+        expired_period = _make_exam_period(
+            course=self.course,
+            name="Đợt thi đã hết hạn",
+        )
+        expired_period.registration_deadline = "2020-01-01"
+        expired_period.save(update_fields=("registration_deadline",))
+
+        for period, expected_text in (
+            (closed_period, "Đợt thi đã đóng đăng ký"),
+            (expired_period, "Đợt thi đã hết hạn đăng ký"),
+        ):
+            payload = self.valid_payload()
+            payload["exam_period"] = str(period.pk)
+            response = self.client.post(
+                reverse("exam-application-public-register"),
+                payload,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, expected_text)
+
+        self.assertFalse(ExamApplication.objects.exists())
+
+    def test_registration_is_rejected_when_period_is_full(self):
+        self.period.max_candidates = 1
+        self.period.save(update_fields=("max_candidates",))
+        existing = _make_application(self.period, id_number="123456789010")
+        existing.date_of_birth = "2000-01-01"
+        existing.email = "existing@example.com"
+        existing.save(update_fields=("date_of_birth", "email"))
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            self.valid_payload(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Đợt thi đã đủ số lượng")
+        self.assertEqual(ExamApplication.objects.count(), 1)
+
+
+class WorkflowTestDataSeedTests(TestCase):
+    def test_seed_workflow_test_data_populates_empty_workflows_idempotently(self):
+        with override_settings(DEBUG=True):
+            call_command("seed_workflow_test_data", stdout=StringIO())
+            first_audit_count = AuditLog.objects.filter(
+                reason="Dữ liệu kiểm thử nội bộ, được tạo cục bộ."
+            ).count()
+            call_command("seed_workflow_test_data", stdout=StringIO())
+
+        result_class = TrainingClass.objects.get(name="CCE-LAPTR-901")
+        self.assertEqual(
+            FinalCourseResult.objects.filter(training_class=result_class).count(),
+            5,
+        )
+        self.assertTrue(result_class.final_results_locked)
+        self.assertEqual(
+            Certificate.objects.filter(training_class=result_class).count(),
+            5,
+        )
+        self.assertEqual(
+            CertificateHistory.objects.filter(certificate__training_class=result_class).count(),
+            7,
+        )
+        self.assertEqual(EnrollmentTransferHistory.objects.count(), 1)
+        self.assertEqual(
+            ExamApplication.objects.filter(
+                exam_period__name=(
+                    "Đợt thi CCE tháng 10/2026 — Lập trình Python ứng dụng "
+                    "(đợt bổ sung)"
+                )
+            ).count(),
+            6,
+        )
+        self.assertEqual(
+            ExamScore.objects.filter(
+                assignment__exam_room__exam_period__name=(
+                    "Đợt thi CCE tháng 10/2026 — Lập trình Python ứng dụng "
+                    "(đợt bổ sung)"
+                ),
+                is_published=True,
+            ).count(),
+            6,
+        )
+        self.assertEqual(
+            ExamCertificate.objects.filter(
+                exam_period__name=(
+                    "Đợt thi CCE tháng 10/2026 — Lập trình Python ứng dụng "
+                    "(đợt bổ sung)"
+                )
+            ).count(),
+            5,
+        )
+        self.assertEqual(
+            ExamCertificateHistory.objects.filter(
+                certificate__exam_period__name=(
+                    "Đợt thi CCE tháng 10/2026 — Lập trình Python ứng dụng "
+                    "(đợt bổ sung)"
+                )
+            ).count(),
+            7,
+        )
+        self.assertEqual(
+            ExamPeriod.objects.filter(
+                name="Đợt thi CCE tháng 03/2027 — Lập trình Python ứng dụng",
+                status=ExamPeriod.Status.PUBLISHED,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            AuditLog.objects.filter(
+                reason="Dữ liệu kiểm thử nội bộ, được tạo cục bộ."
+            ).count(),
+            first_audit_count,
+        )
+
+    def test_seed_workflow_test_data_is_disabled_outside_debug(self):
+        with override_settings(DEBUG=False):
+            with self.assertRaises(CommandError):
+                call_command("seed_workflow_test_data", stdout=StringIO())
