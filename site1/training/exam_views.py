@@ -11,7 +11,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import JsonResponse
+from django.db.models import Exists, OuterRef
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -343,74 +344,63 @@ def exam_application_import(request):
     exam_periods = ExamPeriod.objects.filter(
         status=ExamPeriod.Status.PUBLISHED
     ).order_by("-exam_date")
-
-    if request.method == "POST" and request.FILES.get("file"):
-        period_id = request.POST.get("exam_period")
+    selected_period = None
+    selected_period_id = request.GET.get("period")
+    if selected_period_id:
         try:
-            period = ExamPeriod.objects.get(pk=period_id, status=ExamPeriod.Status.PUBLISHED)
-        except ExamPeriod.DoesNotExist:
-            return JsonResponse({"ok": False, "saved": 0, "errors": [
-                {"row": 0, "msg": "Đợt thi không hợp lệ hoặc chưa công bố."}
-            ]})
+            selected_period = exam_periods.filter(pk=selected_period_id).first()
+        except (TypeError, ValueError):
+            selected_period = None
 
-        uploaded = request.FILES["file"]
-        try:
-            text = uploaded.read().decode("utf-8-sig")
-        except UnicodeDecodeError:
-            return JsonResponse({"ok": False, "saved": 0, "errors": [
-                {"row": 0, "msg": "File không đúng định dạng UTF-8. Vui lòng lưu lại dưới định dạng CSV UTF-8."}
-            ]})
-
-        reader = csv.DictReader(io.StringIO(text))
-        rows = list(reader)
-        errors = []
-        to_create = []
-
-        REQUIRED = {"Họ và tên", "Số CCCD/CMND"}
-        actual_fields = set(reader.fieldnames or [])
-        missing = REQUIRED - actual_fields
-        if missing:
-            return JsonResponse({"ok": False, "saved": 0, "errors": [
-                {"row": 0, "msg": f"File thiếu cột: {', '.join(missing)}. Cần: STT, Họ và tên, Số điện thoại, Số CCCD/CMND"}
-            ]})
-
-        for i, row in enumerate(rows, start=2):
-            full_name = (row.get("Họ và tên") or "").strip()
-            id_number = (row.get("Số CCCD/CMND") or "").strip()
-            phone = (row.get("Số điện thoại") or "").strip()
-
-            if not full_name:
-                errors.append({"row": i, "msg": "Thiếu họ và tên."})
-                continue
-            if not id_number:
-                errors.append({"row": i, "msg": "Thiếu số CCCD/CMND."})
-                continue
-            if len(id_number) not in (9, 12):
-                errors.append({"row": i, "msg": f"Số CCCD/CMND '{id_number}' không hợp lệ (9 hoặc 12 số)."})
-                continue
-
-            to_create.append(ExamApplication(
-                exam_period=period,
-                full_name=full_name,
-                phone=phone,
-                id_number=id_number,
-                source=ExamApplication.Source.GOOGLE_FORM,
-                status=ExamApplication.Status.NEW,
-            ))
-
-        # mode=strict: nếu có bất kỳ lỗi nào, không lưu gì
-        if errors:
-            return JsonResponse({"ok": False, "saved": 0, "errors": errors})
-
-        current_apps = period.applications.count()
-        if period.max_candidates and current_apps + len(to_create) > period.max_candidates:
+    if request.method == "POST":
+        uploaded = request.FILES.get("file")
+        if not uploaded:
             return JsonResponse({
                 "ok": False,
                 "saved": 0,
-                "errors": [{
-                    "row": 0,
-                    "msg": f"Số lượng hồ sơ nhập ({len(to_create)}) cộng với số hiện có ({current_apps}) vượt quá chỉ tiêu tối đa của đợt thi ({period.max_candidates})."
-                }]
+                "valid_count": 0,
+                "duplicate_count": 0,
+                "preview_rows": [],
+                "errors": [{"row": 0, "msg": "Vui lòng chọn file CSV."}],
+            })
+
+        period_id = request.POST.get("exam_period")
+        try:
+            period = ExamPeriod.objects.get(pk=period_id, status=ExamPeriod.Status.PUBLISHED)
+        except (ExamPeriod.DoesNotExist, TypeError, ValueError):
+            errors = [{"row": 0, "msg": "Đợt thi không hợp lệ hoặc chưa công bố."}]
+            return JsonResponse({
+                "ok": False,
+                "saved": 0,
+                "valid_count": 0,
+                "duplicate_count": 0,
+                "preview_rows": [],
+                "errors": errors,
+            })
+
+        to_create, errors, preview_rows = _parse_exam_application_csv(uploaded, period)
+        duplicate_count = sum(
+            application.status == ExamApplication.Status.DUPLICATE
+            for application in to_create
+        )
+        if request.POST.get("preview") == "1":
+            return JsonResponse({
+                "ok": not errors,
+                "saved": 0,
+                "valid_count": len(to_create),
+                "duplicate_count": duplicate_count,
+                "preview_rows": preview_rows,
+                "errors": errors,
+            })
+
+        if errors:
+            return JsonResponse({
+                "ok": False,
+                "saved": 0,
+                "valid_count": len(to_create),
+                "duplicate_count": duplicate_count,
+                "preview_rows": preview_rows,
+                "errors": errors,
             })
 
         with transaction.atomic():
@@ -420,11 +410,20 @@ def exam_application_import(request):
                 request.user,
                 AuditLog.Action.CREATE,
                 period,
-                new_values={"imported_count": len(to_create), "source": "Google Form"},
+                new_values={
+                    "imported_count": len(to_create),
+                    "duplicate_count": duplicate_count,
+                    "source": "Google Form",
+                },
                 object_label=f"Nhập {len(to_create)} hồ sơ vào đợt thi {period.name}",
             )
 
-        return JsonResponse({"ok": True, "saved": len(to_create), "errors": []})
+        return JsonResponse({
+            "ok": True,
+            "saved": len(to_create),
+            "duplicate_count": duplicate_count,
+            "errors": [],
+        })
 
     return render(request, "training/exam_application_import.html", {
         "active_menu": "exam-applications",
@@ -434,8 +433,136 @@ def exam_application_import(request):
             {"label": "Nhập từ Google Form"},
         ],
         "exam_periods": exam_periods,
+        "selected_period": selected_period,
         "import_url": reverse("exam-application-import"),
     })
+
+
+def _csv_download(rows, filename):
+    output = io.StringIO(newline="")
+    csv.writer(output).writerows(rows)
+    response = HttpResponse(
+        output.getvalue().encode("utf-8-sig"),
+        content_type="text/csv; charset=utf-8",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _parse_exam_application_csv(uploaded, period):
+    try:
+        text = uploaded.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return [], [{
+            "row": 0,
+            "msg": "File không đúng định dạng UTF-8. Vui lòng lưu lại dưới định dạng CSV UTF-8.",
+        }], []
+
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames:
+        reader.fieldnames = [
+            field.strip() if field else ""
+            for field in reader.fieldnames
+        ]
+    required_fields = {"Họ và tên", "Số CCCD/CMND"}
+    missing = required_fields - set(reader.fieldnames or [])
+    if missing:
+        return [], [{
+            "row": 0,
+            "msg": (
+                f"File thiếu cột: {', '.join(sorted(missing))}. "
+                "Cần có Họ và tên, Số CCCD/CMND; Số điện thoại có thể để trống."
+            ),
+        }], []
+
+    try:
+        rows = list(reader)
+    except csv.Error:
+        return [], [{"row": 0, "msg": "File CSV bị lỗi định dạng."}], []
+    if not rows:
+        return [], [{"row": 0, "msg": "File CSV không có dòng dữ liệu."}], []
+
+    errors = []
+    to_create = []
+    preview_rows = []
+    existing_application_keys = set(
+        period.applications.values_list("id_number", "full_name", "phone")
+    )
+    seen_application_keys = set()
+    for row_number, row in enumerate(rows, start=2):
+        row_period_name = (row.get("Tên đợt thi") or "").strip()
+        full_name = (row.get("Họ và tên") or "").strip()
+        id_number = (row.get("Số CCCD/CMND") or "").strip()
+        phone = (row.get("Số điện thoại") or "").strip()
+
+        if row_period_name and row_period_name != period.name:
+            errors.append({
+                "row": row_number,
+                "msg": f"Tên đợt thi trong file không khớp với đợt đã chọn ({period.name}).",
+            })
+            continue
+        if not full_name:
+            errors.append({"row": row_number, "msg": "Thiếu họ và tên."})
+            continue
+        if not id_number:
+            errors.append({"row": row_number, "msg": "Thiếu số CCCD/CMND."})
+            continue
+        if not id_number.isdigit() or len(id_number) not in (9, 12):
+            errors.append({
+                "row": row_number,
+                "msg": f"Số CCCD/CMND '{id_number}' không hợp lệ (phải gồm 9 hoặc 12 chữ số).",
+            })
+            continue
+
+        application_key = (id_number, full_name, phone)
+        is_duplicate = (
+            application_key in existing_application_keys
+            or application_key in seen_application_keys
+        )
+        seen_application_keys.add(application_key)
+        to_create.append(ExamApplication(
+            exam_period=period,
+            full_name=full_name,
+            phone=phone,
+            id_number=id_number,
+            source=ExamApplication.Source.GOOGLE_FORM,
+            status=(
+                ExamApplication.Status.DUPLICATE
+                if is_duplicate
+                else ExamApplication.Status.VALID
+            ),
+        ))
+        preview_rows.append({
+            "row": row_number,
+            "full_name": full_name,
+            "id_number": id_number,
+            "status": (
+                ExamApplication.Status.DUPLICATE
+                if is_duplicate
+                else ExamApplication.Status.VALID
+            ),
+        })
+
+    if not errors:
+        current_application_count = len(existing_application_keys)
+        new_application_count = sum(
+            application.status == ExamApplication.Status.VALID
+            for application in to_create
+        )
+        if (
+            period.max_candidates
+            and current_application_count + new_application_count > period.max_candidates
+        ):
+            errors.append({
+                "row": 0,
+                "msg": (
+                    f"Số hồ sơ mới nhập ({new_application_count}) cộng với số hiện có "
+                    f"({current_application_count}) vượt quá chỉ tiêu tối đa của đợt thi "
+                    f"({period.max_candidates})."
+                ),
+            })
+
+    return to_create, errors, preview_rows
 
 
 @login_required
@@ -613,7 +740,7 @@ def exam_application_deduplicate(request):
 # EXAM VIEWS — Pha 2: Phòng thi
 # =============================================================================
 
-from training.models import ExamRoom, ExamRoomAssignment
+from training.models import ExamRoom, ExamRoomAssignment, ExamScore
 
 
 SESSION_CHOICES = [
@@ -916,19 +1043,46 @@ def exam_room_assign(request, pk):
 
     # --- Xử lý bỏ thí sinh khỏi phòng ---
     if request.method == "POST" and "remove_candidate" in request.POST and room:
-        assignment_id = request.POST.get("assignment_id")
-        assignment = get_object_or_404(ExamRoomAssignment, pk=assignment_id, exam_room=room)
-        old_snap = snapshot_instance(assignment)
-        candidate_name = assignment.application.full_name
-        assignment.delete()
-        record_audit(
-            request.user,
-            AuditLog.Action.DELETE,
-            room,
-            object_label=f"Bỏ {candidate_name} khỏi {room.name}",
-            old_values=old_snap,
-        )
-        messages.success(request, f"Đã bỏ \"{candidate_name}\" khỏi phòng \"{room.name}\".")
+        removal_error = None
+        candidate_name = ""
+        with transaction.atomic():
+            locked_period = ExamPeriod.objects.select_for_update().get(pk=exam_period.pk)
+            if locked_period.status == ExamPeriod.Status.CLOSED:
+                removal_error = "Đợt thi đã đóng, không thể bỏ thí sinh khỏi phòng."
+            elif locked_period.status != ExamPeriod.Status.PUBLISHED:
+                removal_error = "Đợt thi chưa công bố, không thể bỏ thí sinh khỏi phòng."
+            else:
+                assignment = get_object_or_404(
+                    ExamRoomAssignment.objects.select_for_update().select_related("application"),
+                    pk=request.POST.get("assignment_id"),
+                    exam_room=room,
+                )
+                score = ExamScore.objects.select_for_update().filter(
+                    assignment=assignment
+                ).first()
+                if score and score.blocks_room_removal:
+                    removal_error = (
+                        "Thí sinh đã có điểm, được ghi nhận vắng thi hoặc kết quả đã công bố; "
+                        "không thể bỏ khỏi phòng."
+                    )
+                else:
+                    candidate_name = assignment.application.full_name
+                    assignment_snapshot = snapshot_instance(assignment)
+                    if score:
+                        score.delete()
+                    assignment.delete()
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.DELETE,
+                        room,
+                        object_label=f"Bỏ {candidate_name} khỏi {room.name}",
+                        old_values=assignment_snapshot,
+                    )
+
+        if removal_error:
+            messages.error(request, removal_error)
+        else:
+            messages.success(request, f"Đã bỏ \"{candidate_name}\" khỏi phòng \"{room.name}\".")
         return redirect(
             reverse("exam-room-assign", args=[exam_period.pk])
             + f"?room_id={room.pk}"
@@ -937,9 +1091,9 @@ def exam_room_assign(request, pk):
     # Thí sinh hiện tại trong phòng
     assignments_in_room = []
     if room:
-        assignments_in_room = room.room_assignments.select_related("application").order_by(
-            "application__full_name"
-        )
+        assignments_in_room = room.room_assignments.select_related(
+            "application", "score"
+        ).order_by("application__full_name")
     rooms_page_obj = Paginator(rooms_in_period, PAGE_SIZE).get_page(
         request.GET.get("rooms_page")
     )
@@ -1039,7 +1193,7 @@ def exam_score_list(request):
             score_obj.entered_at = timezone.now()
             score_obj.save()
             action_label = f"Đánh dấu vắng thi cho thí sinh '{asgn.application.full_name}'"
-        elif raw_score:
+        elif not is_absent:
             try:
                 val = Decimal(raw_score.replace(",", "."))
                 if val < 0 or val > score_scale:
@@ -1349,17 +1503,35 @@ def exam_score_upload(request):
     selected_room = None
     rooms_for_period = []
     room_assignments_page_obj = None
+    sample_available = False
     if selected_period_id:
-        selected_period = get_object_or_404(ExamPeriod, pk=selected_period_id)
-        rooms_for_period = ExamRoom.objects.filter(exam_period=selected_period)
+        selected_period = get_object_or_404(periods, pk=selected_period_id)
+        rooms_for_period = _score_upload_rooms().filter(exam_period=selected_period)
     if selected_room_id:
-        selected_room = get_object_or_404(ExamRoom, pk=selected_room_id)
+        selected_room = get_object_or_404(
+            _score_upload_rooms().select_related("exam_period"), pk=selected_room_id
+        )
+        if selected_period and selected_room.exam_period_id != selected_period.pk:
+            selected_room = None
+        elif not selected_period:
+            selected_period = selected_room.exam_period
+            rooms_for_period = _score_upload_rooms().filter(exam_period=selected_period)
+
+    selected_room_blocked = bool(
+        selected_room
+        and selected_room.has_published_scores
+        and not (request.method == "POST" and request.FILES.get("file"))
+    )
+    if selected_room_blocked:
+        selected_room = None
+    if selected_room:
         room_assignments = selected_room.room_assignments.select_related(
             "application", "score"
         ).order_by("application__full_name")
         room_assignments_page_obj = Paginator(
             room_assignments, PAGE_SIZE
         ).get_page(request.GET.get("roster_page"))
+        sample_available = selected_room.room_assignments.filter(score__isnull=True).exists()
 
     # Handle AJAX upload (step 1 — validate/preview)
     # Wizard JS sends preview=1 as a POST field (no custom header)
@@ -1376,13 +1548,20 @@ def exam_score_upload(request):
 
     upload_url = (
         reverse("exam-score-upload")
-        + (f"?period={selected_period_id}&room={selected_room_id}" if selected_room_id else "")
+        + (
+            f"?period={selected_period.pk}&room={selected_room.pk}"
+            if selected_period and selected_room
+            else ""
+        )
     )
 
     return render(request, "training/exam_score_upload.html", {
         "active_menu": "exam-scores",
         "page_title": "Nhập điểm từ file",
-        "page_description": "Upload file CSV gồm cột: so_cccd, diem (và tuỳ chọn: vang_thi).",
+        "page_description": (
+            "Tải CSV đủ thông tin thí sinh, đợt thi, phòng, ca thi và điểm; "
+            "hệ thống sẽ đối chiếu trước khi nhập."
+        ),
         "breadcrumbs": [
             {"label": "Điểm thi", "url": reverse("exam-score-list")},
             {"label": "Nhập từ file"},
@@ -1391,151 +1570,405 @@ def exam_score_upload(request):
         "selected_period": selected_period,
         "rooms_for_period": rooms_for_period,
         "selected_room": selected_room,
+        "selected_room_blocked": selected_room_blocked,
         "room_assignments_page_obj": room_assignments_page_obj,
+        "sample_available": sample_available,
         "upload_url": upload_url,
     })
+
+
+def _score_upload_rooms():
+    published_scores = ExamScore.objects.filter(
+        assignment__exam_room_id=OuterRef("pk"),
+        is_published=True,
+    )
+    return ExamRoom.objects.annotate(
+        has_published_scores=Exists(published_scores)
+    )
+
+
+@login_required
+def exam_score_upload_sample(request):
+    if not user_has_feature(request.user, "exam-scores"):
+        raise PermissionDenied
+
+    try:
+        room = ExamRoom.objects.select_related("exam_period").get(
+            pk=request.GET.get("room")
+        )
+    except (ExamRoom.DoesNotExist, TypeError, ValueError):
+        return JsonResponse({"error": "Phòng thi không hợp lệ."}, status=404)
+    rows = _score_upload_sample_rows(room, request.GET.get("kind"))
+    if rows is None:
+        return JsonResponse(
+            {"error": "Phòng thi không có thí sinh chưa nhập điểm để tạo file mẫu an toàn."},
+            status=400,
+        )
+
+    return _csv_download(
+        rows,
+        f"diem-phong-{room.pk}-{'co-loi' if request.GET.get('kind') == 'invalid' else 'hop-le'}.csv",
+    )
+
+
+def _score_upload_sample_rows(room, kind=None):
+    assignments = list(
+        ExamRoomAssignment.objects
+        .filter(exam_room=room, score__isnull=True)
+        .select_related("application")
+        .order_by("pk")
+    )
+    if not assignments:
+        return None
+
+    score_scale = room.exam_period.score_scale
+    score_rows = [
+        ["Thí sinh", "CCCD", "Tên đợt thi", "Phòng thi", "Ca thi", "Điểm số"]
+    ]
+    for index, assignment in enumerate(assignments):
+        score = (
+            score_scale + Decimal("1")
+            if kind == "invalid" and index == 0
+            else (
+                score_scale * Decimal(index + 1) / Decimal(len(assignments) + 1)
+            ).quantize(Decimal("0.01"))
+        )
+        score_rows.append([
+            assignment.application.full_name,
+            assignment.application.id_number,
+            room.exam_period.name,
+            room.name,
+            room.session,
+            score,
+        ])
+    return score_rows
 
 
 def _score_upload_validate(request, room):
     """Validate uploaded CSV, return JSON preview."""
     if not room:
-        return JsonResponse({"ok": False, "error": "Chưa chọn phòng thi."})
+        return JsonResponse({
+            "ok": False,
+            "error": "Chưa chọn phòng thi.",
+            "valid_count": 0,
+            "preview_rows": [],
+            "errors": [{"row": 0, "msg": "Chưa chọn phòng thi."}],
+        })
+    if _room_has_published_scores(room.pk):
+        message = "Phòng thi đã có điểm công bố; không thể nhập điểm từ file."
+        return JsonResponse({
+            "ok": False,
+            "valid_count": 0,
+            "overwrite_count": 0,
+            "preview_rows": [],
+            "errors": [{"row": 0, "msg": message}],
+            "has_error": True,
+            "summary": message,
+        })
 
     file = request.FILES.get("file")
     if not file:
-        return JsonResponse({"ok": False, "error": "Không tìm thấy file."})
-
-    score_scale = room.exam_period.score_scale
-    # Build lookup: id_number → assignment
-    lookup = {
-        asgn.application.id_number: asgn
-        for asgn in room.room_assignments.select_related("application")
-    }
-
-    try:
-        content = file.read().decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(content))
-        rows_preview = []
-        has_error = False
-        for i, row in enumerate(reader, 1):
-            id_number = (row.get("so_cccd") or row.get("CCCD") or "").strip()
-            raw_score = (row.get("diem") or row.get("score") or "").strip()
-            vang = (row.get("vang_thi") or "").strip().lower() in ("1", "true", "x", "có", "co")
-
-            cell = id_number or f"(dòng {i})"
-            if not id_number:
-                rows_preview.append({"row": i, "cell": cell, "ok": False, "msg": "Thiếu số CCCD."})
-                has_error = True
-                continue
-
-            if id_number not in lookup:
-                rows_preview.append({"row": i, "cell": cell, "ok": False,
-                                     "msg": f"CCCD {id_number} không có trong phòng thi."})
-                has_error = True
-                continue
-
-            if vang:
-                rows_preview.append({"row": i, "cell": f"{id_number}", "ok": True,
-                                     "msg": "Vắng thi"})
-                continue
-
-            try:
-                val = Decimal(raw_score.replace(",", "."))
-                if val < 0 or val > score_scale:
-                    rows_preview.append({"row": i, "cell": cell, "ok": False,
-                                         "msg": f"Điểm {val} ngoài thang điểm 0–{score_scale}."})
-                    has_error = True
-                else:
-                    rows_preview.append({"row": i, "cell": f"{id_number}: {val}", "ok": True,
-                                         "msg": "Hợp lệ"})
-            except (InvalidOperation, ValueError):
-                rows_preview.append({"row": i, "cell": cell, "ok": False,
-                                     "msg": f"Điểm \"{raw_score}\" không hợp lệ."})
-                has_error = True
-
         return JsonResponse({
-            "ok": True,
-            "has_error": has_error,
-            "rows": rows_preview,
-            "summary": f"{len(rows_preview)} dòng, {sum(1 for r in rows_preview if r['ok'])} hợp lệ, "
-                       f"{sum(1 for r in rows_preview if not r['ok'])} lỗi.",
+            "ok": False,
+            "error": "Không tìm thấy file.",
+            "valid_count": 0,
+            "preview_rows": [],
+            "errors": [{"row": 0, "msg": "Không tìm thấy file."}],
         })
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": f"Lỗi đọc file: {e}"})
+
+    entries, errors, preview_rows, rows_preview = _parse_score_upload(file, room)
+    overwrite_count = _score_upload_overwrite_count(entries)
+    return JsonResponse({
+        "ok": not errors,
+        "valid_count": len(entries),
+        "overwrite_count": overwrite_count,
+        "preview_rows": preview_rows,
+        "errors": errors,
+        "has_error": bool(errors),
+        "rows": rows_preview,
+        "summary": (
+            f"{len(rows_preview)} dòng, {len(entries)} hợp lệ, "
+            f"{len(errors)} lỗi."
+            + (
+                f" {overwrite_count} điểm chưa công bố sẽ bị ghi đè."
+                if overwrite_count else ""
+            )
+        ),
+    })
+
+
+def _score_upload_overwrite_count(entries):
+    count = 0
+    for entry in entries:
+        score = getattr(entry["assignment"], "score", None)
+        if score and score.score is not None:
+            count += 1
+    return count
+
+
+def _room_has_published_scores(room_id):
+    return ExamScore.objects.filter(
+        assignment__exam_room_id=room_id,
+        is_published=True,
+    ).exists()
 
 
 def _score_upload_confirm(request, room):
     """Save validated CSV data."""
     if not room:
-        return JsonResponse({"ok": False, "error": "Chưa chọn phòng thi."})
+        return JsonResponse({
+            "ok": False,
+            "error": "Chưa chọn phòng thi.",
+            "saved": 0,
+            "errors": [{"row": 0, "msg": "Chưa chọn phòng thi."}],
+        })
+    if _room_has_published_scores(room.pk):
+        message = "Phòng thi đã có điểm công bố; không thể nhập điểm từ file."
+        return JsonResponse({
+            "ok": False,
+            "saved": 0,
+            "overwrite_count": 0,
+            "errors": [{"row": 0, "msg": message}],
+            "message": message,
+        })
 
     file = request.FILES.get("file")
     if not file:
-        return JsonResponse({"ok": False, "error": "Không tìm thấy file."})
+        return JsonResponse({
+            "ok": False,
+            "error": "Không tìm thấy file.",
+            "saved": 0,
+            "errors": [{"row": 0, "msg": "Không tìm thấy file."}],
+        })
 
-    score_scale = room.exam_period.score_scale
-    lookup = {
-        asgn.application.id_number: asgn
-        for asgn in room.room_assignments.select_related("application")
+    saved = 0
+    overwrite_count = 0
+    with transaction.atomic():
+        file.seek(0)
+        entries, errors, _, _ = _parse_score_upload(file, room)
+        if errors:
+            return JsonResponse({
+                "ok": False,
+                "saved": 0,
+                "overwrite_count": 0,
+                "errors": errors,
+                "message": "File có lỗi; chưa có điểm nào được lưu. Sửa file rồi tải lên lại.",
+            })
+
+        overwrite_count = _score_upload_overwrite_count(entries)
+        confirmed_overwrite_count = request.POST.get("confirm_overwrite_count")
+        if overwrite_count and confirmed_overwrite_count != str(overwrite_count):
+            return JsonResponse({
+                "ok": False,
+                "saved": 0,
+                "overwrite_count": overwrite_count,
+                "requires_overwrite_confirmation": True,
+                "errors": [],
+                "message": (
+                    f"File sẽ ghi đè {overwrite_count} điểm chưa công bố. "
+                    "Cần xác nhận trước khi tiếp tục."
+                ),
+            })
+
+        for entry in entries:
+            score_obj, _ = ExamScore.objects.get_or_create(
+                assignment=entry["assignment"]
+            )
+            old_snap = snapshot_instance(score_obj)
+            score_obj.score = entry["score"]
+            score_obj.is_absent = entry["is_absent"]
+            score_obj.entered_at = timezone.now()
+            score_obj.save()
+            saved += 1
+
+            new_snap = snapshot_instance(score_obj)
+            record_audit(
+                request.user,
+                AuditLog.Action.EDIT,
+                score_obj,
+                object_label=f"Upload điểm {entry['id_number']} — {room.name}",
+                old_values=old_snap,
+                new_values=new_snap,
+            )
+
+    return JsonResponse({
+        "ok": saved > 0,
+        "saved": saved,
+        "overwrite_count": overwrite_count,
+        "errors": errors,
+        "message": (
+            f"Đã nhập {saved} điểm"
+            + (
+                f", ghi đè {overwrite_count} điểm chưa công bố"
+                if overwrite_count else ""
+            )
+            + f" vào phòng \"{room.name}\"."
+        ),
+    })
+
+
+def _parse_score_upload(uploaded, room):
+    try:
+        content = uploaded.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        error = {"row": 0, "msg": "File không đúng định dạng UTF-8. Hãy lưu dưới dạng CSV UTF-8."}
+        return [], [error], [], []
+
+    reader = csv.DictReader(io.StringIO(content), strict=True)
+    headers = [header.strip() if header else "" for header in (reader.fieldnames or [])]
+    normalized_headers = [header.casefold() for header in headers]
+    if len(set(normalized_headers)) != len(normalized_headers):
+        error = {
+            "row": 0,
+            "msg": "File có tên cột bị lặp; hãy giữ mỗi cột đúng một lần.",
+        }
+        return [], [error], [], []
+    reader.fieldnames = headers
+
+    required_headers = (
+        "Thí sinh",
+        "CCCD",
+        "Tên đợt thi",
+        "Phòng thi",
+        "Ca thi",
+        "Điểm số",
+    )
+    header_map = {
+        header.casefold(): header
+        for header in headers
     }
+    missing_headers = [
+        header
+        for header in required_headers
+        if header.casefold() not in header_map
+    ]
+    if missing_headers:
+        error = {
+            "row": 0,
+            "msg": f"File thiếu cột bắt buộc: {', '.join(missing_headers)}.",
+        }
+        return [], [error], [], []
 
     try:
-        content = file.read().decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(content))
-        saved = 0
-        errors = []
-        with transaction.atomic():
-            for i, row in enumerate(reader, 1):
-                id_number = (row.get("so_cccd") or row.get("CCCD") or "").strip()
-                raw_score = (row.get("diem") or row.get("score") or "").strip()
-                vang = (row.get("vang_thi") or "").strip().lower() in ("1", "true", "x", "có", "co")
+        rows = list(reader)
+    except csv.Error:
+        error = {"row": 0, "msg": "File CSV bị lỗi định dạng."}
+        return [], [error], [], []
+    if not rows:
+        error = {"row": 0, "msg": "File CSV không có dòng dữ liệu."}
+        return [], [error], [], []
 
-                if not id_number or id_number not in lookup:
-                    continue
+    lookup = {
+        assignment.application.id_number: assignment
+        for assignment in room.room_assignments.select_related("application", "score")
+    }
+    entries = []
+    errors = []
+    preview_rows = []
+    rows_preview = []
+    seen_id_numbers = set()
+    score_scale = room.exam_period.score_scale
+    absent_field = header_map.get("vắng thi") or header_map.get("vang_thi")
 
-                asgn = lookup[id_number]
-                score_obj, _ = ExamScore.objects.get_or_create(assignment=asgn)
-                old_snap = snapshot_instance(score_obj)
+    def value_for(row, header):
+        return (row.get(header_map[header.casefold()]) or "").strip()
 
-                if vang:
-                    score_obj.score = None
-                    score_obj.is_absent = True
-                    score_obj.entered_at = timezone.now()
-                    score_obj.save()
-                    saved += 1
-                else:
-                    try:
-                        val = Decimal(raw_score.replace(",", "."))
-                        if val < 0 or val > score_scale:
-                            errors.append(f"Dòng {i}: điểm ngoài thang.")
-                            continue
-                        score_obj.score = val
-                        score_obj.is_absent = False
-                        score_obj.entered_at = timezone.now()
-                        score_obj.save()
-                        saved += 1
-                    except (InvalidOperation, ValueError):
-                        errors.append(f"Dòng {i}: điểm không hợp lệ.")
-                        continue
+    for row_number, row in enumerate(rows, start=2):
+        full_name = value_for(row, "Thí sinh")
+        id_number = value_for(row, "CCCD")
+        row_period_name = value_for(row, "Tên đợt thi")
+        row_room_name = value_for(row, "Phòng thi")
+        row_session = value_for(row, "Ca thi")
+        raw_score = value_for(row, "Điểm số")
+        absent_value = (row.get(absent_field) or "").strip().lower() if absent_field else ""
+        is_absent = absent_value in ("1", "true", "x", "có", "co")
+        message = None
+        score = None
+        assignment = lookup.get(id_number)
+        existing_score = getattr(assignment, "score", None) if assignment else None
+        is_absent = is_absent or bool(existing_score and existing_score.is_absent)
 
-                new_snap = snapshot_instance(score_obj)
-                record_audit(
-                    request.user,
-                    AuditLog.Action.EDIT,
-                    score_obj,
-                    object_label=f"Upload điểm {id_number} — {room.name}",
-                    old_values=old_snap,
-                    new_values=new_snap,
-                )
+        if None in row:
+            message = "Dòng có nhiều giá trị hơn số cột trong tiêu đề."
+        elif not full_name:
+            message = "Thiếu tên thí sinh."
+        elif not id_number:
+            message = "Thiếu CCCD."
+        elif not row_period_name:
+            message = "Thiếu tên đợt thi."
+        elif not row_room_name:
+            message = "Thiếu phòng thi."
+        elif not row_session:
+            message = "Thiếu ca thi."
+        elif not raw_score and not is_absent:
+            message = "Thiếu điểm số."
+        elif row_period_name != room.exam_period.name:
+            message = (
+                "Tên đợt thi trong file không khớp với đợt của phòng đã chọn "
+                f"({room.exam_period.name})."
+            )
+        elif row_room_name and row_room_name != room.name:
+            message = f"Phòng thi trong file không khớp với phòng đã chọn ({room.name})."
+        elif row_session != room.session:
+            message = f"Ca thi trong file không khớp với phòng đã chọn ({room.session})."
+        elif not assignment:
+            message = f"CCCD {id_number} không có trong phòng thi."
+        elif " ".join(full_name.split()).casefold() != " ".join(
+            assignment.application.full_name.split()
+        ).casefold():
+            message = "Tên thí sinh trong file không khớp với CCCD đã xếp trong phòng."
+        elif id_number in seen_id_numbers:
+            message = f"CCCD {id_number} xuất hiện nhiều lần trong file."
+        elif existing_score and existing_score.is_published:
+            message = "Điểm đã công bố; không thể ghi đè bằng file CSV."
+        elif not is_absent:
+            try:
+                score = Decimal(raw_score.replace(",", "."))
+                if not score.is_finite():
+                    message = "Điểm số phải là một số hữu hạn."
+                elif max(-score.as_tuple().exponent, 0) > 2:
+                    message = "Điểm số không được có quá 2 chữ số thập phân."
+                elif len(score.as_tuple().digits) + max(score.as_tuple().exponent, 0) > 5:
+                    message = "Điểm số vượt quá độ chính xác cho phép."
+                elif score < 0 or score > score_scale:
+                    message = f"Điểm {score} ngoài thang điểm 0–{score_scale}."
+            except (InvalidOperation, ValueError):
+                message = f"Điểm \"{raw_score}\" không hợp lệ."
 
-        return JsonResponse({
-            "ok": True,
-            "saved": saved,
-            "errors": errors,
-            "message": f"Đã nhập {saved} điểm vào phòng \"{room.name}\".",
+        if message:
+            error = {"row": row_number, "msg": message}
+            errors.append(error)
+            rows_preview.append({
+                "row": row_number,
+                "cell": id_number or f"(dòng {row_number})",
+                "ok": False,
+                "msg": message,
+            })
+            continue
+
+        seen_id_numbers.add(id_number)
+        score_label = "Vắng thi" if is_absent else f"{score} điểm"
+        entries.append({
+            "assignment": assignment,
+            "id_number": id_number,
+            "score": score,
+            "is_absent": is_absent,
         })
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": f"Lỗi lưu dữ liệu: {e}"})
+        preview_rows.append({
+            "row": row_number,
+            "preview_text": (
+                f"{full_name} · CCCD {id_number} · {row_period_name} · "
+                f"{row_room_name} · {row_session} · {score_label}"
+            ),
+        })
+        rows_preview.append({
+            "row": row_number,
+            "cell": f"{full_name} — CCCD {id_number}",
+            "ok": True,
+            "msg": "Vắng thi" if is_absent else "Hợp lệ",
+        })
+
+    return entries, errors, preview_rows, rows_preview
 
 
 # ── Công bố / Thu hồi điểm ───────────────────────────────────────────────────
@@ -1893,8 +2326,8 @@ def exam_statistics(request):
                 "passed": room_passed,
                 "failed": room_failed,
                 "percent_pass": (
-                    round(room_passed * 100 / room_has_score, 1)
-                    if room_has_score else 0
+                    round(room_passed * 100 / room_total, 1)
+                    if room_total else 0
                 ),
             })
 

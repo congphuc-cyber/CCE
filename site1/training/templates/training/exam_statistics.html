@@ -116,7 +116,7 @@
   </div>
 
   <div class="cce-table-wrap">
-    <table class="cce-table" role="table">
+    <table class="cce-table cce-table-centered" role="table">
       <thead>
         <tr>
           <th scope="col" style="min-width:110px;">Phòng thi</th>
@@ -166,10 +166,10 @@
             </td>
             <td>
               <div style="display:flex; align-items:center; gap:var(--space-2);">
-                <div style="flex:1; background:var(--c-border-subtle); border-radius:var(--radius-pill); height:6px; overflow:hidden;">
+                <div style="flex:0 1 70px; background:var(--c-border-subtle); border-radius:var(--radius-pill); height:6px; overflow:hidden;">
                   <div style="height:100%; background:{% if rs.percent_pass >= 70 %}var(--c-success){% elif rs.percent_pass >= 50 %}var(--c-primary){% else %}var(--c-danger){% endif %}; width:{{ rs.percent_pass }}%; border-radius:var(--radius-pill);"></div>
                 </div>
-                <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); min-width:45px; text-align:right;">
+                <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); min-width:45px; text-align:center;">
                   {{ rs.percent_pass }}%
                 </span>
               </div>

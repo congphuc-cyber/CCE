@@ -244,6 +244,13 @@ body.change-list #result_list tbody td {
   border-right: 1px solid var(--c-border-subtle) !important;
 }
 
+body.change-list.model-learner #result_list tbody th.field-full_name,
+body.change-list.model-user #result_list tbody th {
+  text-align: center !important;
+  vertical-align: middle;
+  border-right: 1px solid var(--c-border-subtle) !important;
+}
+
 body.change-list #result_list thead th > div {
   justify-content: center !important;
 }

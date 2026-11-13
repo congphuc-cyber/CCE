@@ -110,7 +110,7 @@
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table" role="table">
+      <table class="cce-table cce-table-centered cce-table-first-column-left" role="table">
         <thead>
           <tr>
             <th scope="col" style="min-width:220px;">Thí sinh & Liên hệ</th>
@@ -129,7 +129,7 @@
                   <div style="width:36px; height:36px; border-radius:var(--radius-pill); background:var(--c-primary-soft); color:var(--c-primary); display:flex; align-items:center; justify-content:center; font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); flex-shrink:0;">
                     {{ app.full_name|slice:":1"|upper }}
                   </div>
-                  <div style="display:flex; flex-direction:column; gap:2px;">
+                  <div class="cce-table-cell-stack" style="display:flex; flex-direction:column; gap:2px;">
                     <strong style="font-size:var(--font-size-base); color:var(--c-text);">{{ app.full_name }}</strong>
                     <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs); color:var(--c-text-muted);">
                       <span class="material-symbols-outlined" style="font-size:0.9rem;" aria-hidden="true">call</span>

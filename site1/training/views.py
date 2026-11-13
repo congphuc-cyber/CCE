@@ -889,6 +889,7 @@ from training.exam_views import (
     exam_application_list,
     exam_application_import,
     exam_application_deduplicate,
+    exam_score_upload_sample,
 )
 
 # Exam stubs (Pha 2-4) — imported from exam_stubs.py

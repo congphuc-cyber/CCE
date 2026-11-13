@@ -1,7 +1,7 @@
 {% load ui_components %}
 
 <div class="cce-table-wrap">
-  <table class="cce-table" role="table">
+  <table class="cce-table{% if center_columns %} cce-table-centered{% endif %}" role="table">
     <thead>
       <tr>
         {% for col in columns %}

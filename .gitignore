@@ -21,6 +21,8 @@ env/
 *.sqlite3-journal
 media/
 staticfiles/
+/site1/training/local_test_data/exam_applications/
+/site1/training/local_test_data/exam_scores/
 
 # IDE and OS
 .vscode/

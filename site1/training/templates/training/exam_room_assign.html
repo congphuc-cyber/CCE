@@ -142,14 +142,13 @@
               <td><code>{{ asgn.application.id_number }}</code></td>
               <td>{{ asgn.application.phone|default:"—" }}</td>
               <td style="text-align:right;">
-                <form method="post" style="display:inline;"
-                      onsubmit="return confirm('Bỏ {{ asgn.application.full_name }} khỏi phòng?');">
-                  {% csrf_token %}
-                  <input type="hidden" name="remove_candidate" value="1">
-                  <input type="hidden" name="room_id" value="{{ room.pk }}">
-                  <input type="hidden" name="assignment_id" value="{{ asgn.pk }}">
-                  <button type="submit" class="cce-table-btn table-action-delete">Bỏ</button>
-                </form>
+                <button type="button"
+                        class="cce-table-btn table-action-delete"
+                        data-assignment-id="{{ asgn.pk }}"
+                        data-candidate-name="{{ asgn.application.full_name }}"
+                        data-room-name="{{ room.name }}"
+                        data-removal-blocked="{% if asgn.score.blocks_room_removal %}true{% else %}false{% endif %}"
+                        onclick="openRemoveCandidateDialog(this)">Bỏ</button>
               </td>
             </tr>
           {% endfor %}
@@ -163,6 +162,58 @@
     </div>
   {% endif %}
 </section>
+
+<div class="cce-modal-backdrop" id="cceRemoveCandidateModal" role="dialog" aria-modal="true" aria-labelledby="cceRemoveCandidateTitle" style="display:none;">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceRemoveCandidateTitle">Xác nhận bỏ thí sinh khỏi phòng</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" data-modal-close aria-label="Đóng">&times;</button>
+    </div>
+    <form method="post" action="{% url 'exam-room-assign' exam_period.pk %}?room_id={{ room.pk }}">
+      {% csrf_token %}
+      <input type="hidden" name="remove_candidate" value="1">
+      <input type="hidden" name="room_id" value="{{ room.pk }}">
+      <input type="hidden" name="assignment_id" id="cceRemoveAssignmentId">
+      <div class="cce-modal-body">
+        <p id="cceRemoveCandidateMessage" style="margin:0; color:var(--c-text);"></p>
+      </div>
+      <div class="cce-modal-footer">
+        <button type="button" class="cce-btn cce-btn-secondary" data-modal-close>Hủy bỏ</button>
+        <button type="submit" class="cce-btn cce-btn-danger">Xác nhận bỏ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="cce-modal-backdrop" id="cceClosedPeriodModal" role="dialog" aria-modal="true" aria-labelledby="cceClosedPeriodTitle" style="display:none;">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceClosedPeriodTitle">Đợt thi đã đóng</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" data-modal-close aria-label="Đóng">&times;</button>
+    </div>
+    <div class="cce-modal-body">
+      <p style="margin:0; color:var(--c-text);">Đợt thi này đã đóng, không thể bỏ thí sinh ra khỏi phòng thi.</p>
+    </div>
+    <div class="cce-modal-footer">
+      <button type="button" class="cce-btn cce-btn-secondary" data-modal-close>Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div class="cce-modal-backdrop" id="cceProtectedScoreModal" role="dialog" aria-modal="true" aria-labelledby="cceProtectedScoreTitle" style="display:none;">
+  <div class="cce-modal-dialog">
+    <div class="cce-modal-header">
+      <h3 class="cce-modal-title" id="cceProtectedScoreTitle">Không thể bỏ thí sinh</h3>
+      <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm" data-modal-close aria-label="Đóng">&times;</button>
+    </div>
+    <div class="cce-modal-body">
+      <p style="margin:0; color:var(--c-text);">Thí sinh đã có điểm, được ghi nhận vắng thi hoặc kết quả đã công bố nên không thể bỏ khỏi phòng.</p>
+    </div>
+    <div class="cce-modal-footer">
+      <button type="button" class="cce-btn cce-btn-secondary" data-modal-close>Đóng</button>
+    </div>
+  </div>
+</div>
 
 {# ── Danh sách thí sinh chưa xếp ─────────────────────────────────────── #}
 {% if room.assigned_count < room.capacity %}
@@ -321,5 +372,57 @@
 {% endif %}
 
 {% endif %}{# end if room #}
+
+<script>
+  const examPeriodStatus = "{{ exam_period.status|escapejs }}";
+  const removeCandidateModal = document.getElementById('cceRemoveCandidateModal');
+
+  function showRoomActionModal(modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('is-open');
+    const closeButton = modal.querySelector('[data-modal-close]');
+    if (closeButton) closeButton.focus();
+  }
+
+  function closeRoomActionModal(modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('is-open');
+  }
+
+  function openRemoveCandidateDialog(button) {
+    if (examPeriodStatus === 'closed') {
+      showRoomActionModal(document.getElementById('cceClosedPeriodModal'));
+      return;
+    }
+
+    if (button.dataset.removalBlocked === 'true') {
+      showRoomActionModal(document.getElementById('cceProtectedScoreModal'));
+      return;
+    }
+
+    document.getElementById('cceRemoveAssignmentId').value = button.dataset.assignmentId;
+    document.getElementById('cceRemoveCandidateMessage').textContent =
+      'Bạn có chắc muốn bỏ "' + button.dataset.candidateName + '" khỏi phòng "' + button.dataset.roomName + '"?';
+    showRoomActionModal(removeCandidateModal);
+  }
+
+  document.querySelectorAll('.cce-modal-backdrop').forEach(function(modal) {
+    modal.querySelectorAll('[data-modal-close]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        closeRoomActionModal(modal);
+      });
+    });
+
+    modal.addEventListener('click', function(event) {
+      if (event.target === modal) closeRoomActionModal(modal);
+    });
+  });
+
+  window.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      document.querySelectorAll('.cce-modal-backdrop.is-open').forEach(closeRoomActionModal);
+    }
+  });
+</script>
 
 {% endblock %}

@@ -1871,6 +1871,42 @@ select.form-control:focus, textarea.form-control:focus {
   vertical-align: middle;
 }
 
+.cce-table-centered th,
+.cce-table-centered td {
+  text-align: center !important;
+  border-right: 1px solid var(--c-border-subtle) !important;
+}
+.cce-table-centered th {
+  vertical-align: middle;
+}
+.cce-table-centered th:last-child,
+.cce-table-centered td:last-child {
+  border-right: 0 !important;
+}
+.cce-table-centered td > div {
+  align-items: center !important;
+  justify-content: center !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cce-table-centered td > div > div {
+  align-items: center !important;
+}
+.cce-table-centered td > div > .cce-table-cell-stack-left {
+  align-items: flex-start !important;
+}
+.cce-table-first-column-left tbody td:first-child {
+  text-align: left !important;
+}
+.cce-table-first-column-left tbody td:first-child > div {
+  justify-content: flex-start !important;
+  margin-left: 0;
+  margin-right: 0;
+}
+.cce-table-first-column-left tbody td:first-child .cce-table-cell-stack {
+  align-items: flex-start !important;
+}
+
 .cce-table tbody tr {
   transition: background-color var(--transition-fast);
 }

@@ -12,24 +12,27 @@
     <h3 style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); color:var(--c-primary); margin-bottom:var(--space-3);">📋 Hướng dẫn</h3>
     <ol style="margin:0; padding-left:var(--space-5); display:flex; flex-direction:column; gap:var(--space-2); font-size:var(--font-size-sm); color:var(--c-text-muted);">
       <li>Xuất file CSV từ Google Form (Phản hồi → Xuất sang Sheets → Tải về dạng CSV).</li>
-      <li>Đảm bảo file có các cột: <strong>Họ và tên</strong>, <strong>Số CCCD/CMND</strong>, <strong>Số điện thoại</strong>.</li>
+      <li>File cần có các cột: <strong>Tên đợt thi</strong>, <strong>Họ và tên</strong>, <strong>Số CCCD/CMND</strong>; cột <strong>Số điện thoại</strong> không bắt buộc.</li>
       <li>Chọn đợt thi tương ứng rồi kéo thả file để tải lên.</li>
       <li>Hệ thống sẽ kiểm tra từng dòng. Nếu có lỗi, <strong>không dòng nào được lưu</strong> — sửa file và tải lại.</li>
     </ol>
   </section>
 
   <section class="cce-card" style="padding:var(--space-6);">
-    <div class="cce-form-group" style="margin-bottom:var(--space-5);">
+    <form method="get" class="cce-form-group" style="margin-bottom:var(--space-5);">
       <label class="cce-label" for="select-exam-period">Đợt thi <span class="cce-required" aria-hidden="true">*</span></label>
-      <select class="cce-select" id="select-exam-period" name="exam_period_ui" style="max-width:400px;">
+      <select class="cce-select" id="select-exam-period" name="period" style="max-width:400px;"
+              onchange="this.form.submit()">
         <option value="">— Chọn đợt thi —</option>
         {% for period in exam_periods %}
-          <option value="{{ period.pk }}">{{ period.name }} ({{ period.exam_date|date:"d/m/Y" }})</option>
+          <option value="{{ period.pk }}" {% if selected_period and selected_period.pk == period.pk %}selected{% endif %}>
+            {{ period.name }} ({{ period.exam_date|date:"d/m/Y" }})
+          </option>
         {% empty %}
           <option value="" disabled>Chưa có đợt thi đang công bố</option>
         {% endfor %}
       </select>
-    </div>
+    </form>
 
     {% include "training/partials/upload_wizard.html" with wizard_id="gform-wizard" upload_url=import_url mode="strict" %}
 

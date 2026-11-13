@@ -47,17 +47,12 @@
     <h2 class="cce-card-title">Lớp học gần đây</h2>
     <div class="cce-card-actions" style="display:flex; gap:var(--space-2); align-items:center;">
       <a class="cce-btn cce-btn-secondary cce-btn-sm"
-         href="{% url 'report-export-excel' %}">
-        <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">download</span>
-        <span>Xuất Excel</span>
-      </a>
-      <a class="cce-btn cce-btn-secondary cce-btn-sm"
          href="/admin/training/trainingclass/">Xem tất cả</a>
     </div>
   </div>
   {% if class_stats %}
     <div class="cce-table-wrap">
-      <table class="cce-table" role="table">
+      <table class="cce-table cce-table-centered" role="table">
         <thead>
           <tr>
             <th>Lớp học</th>

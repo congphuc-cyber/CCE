@@ -1,3 +1,4 @@
+import csv
 from decimal import Decimal
 from io import StringIO
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.template.loader import render_to_string
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from training.access import all_features, default_features_for_role
@@ -1179,6 +1180,8 @@ class ExamModuleUrlTests(TestCase):
         response = self.client.get(reverse("exam-application-import"))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "{% include")
+        self.assertNotContains(response, "File mẫu được tạo")
+        self.assertNotContains(response, "Tải CSV hợp lệ")
         self.assertContains(response, "cce-upload-wizard")
 
     def test_exam_application_deduplicate_get_200(self):
@@ -1321,6 +1324,190 @@ class ExamApplicationTests(TestCase):
         self.user, self.pw = _make_exam_user(username="canbothi-app-7731")
         self.client.login(username=self.user.username, password=self.pw)
         self.period = _make_exam_period()
+
+    def _application_csv(self, content):
+        uploaded = _io_module.BytesIO(content.encode("utf-8"))
+        uploaded.name = "applications.csv"
+        return uploaded
+
+    def test_application_import_preview_does_not_save_and_confirm_saves_once(self):
+        url = reverse("exam-application-import")
+        csv_content = (
+            "Tên đợt thi,Họ và tên,Số CCCD/CMND,Số điện thoại\n"
+            f"{self.period.name},Thí sinh kiểm thử,098765432101,0901234567\n"
+        )
+
+        page = self.client.get(url)
+        self.assertContains(page, 'name="csrfmiddlewaretoken"')
+
+        preview = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+        self.assertEqual(preview.status_code, 200)
+        preview_data = preview.json()
+        self.assertTrue(preview_data["ok"])
+        self.assertEqual(preview_data["valid_count"], 1)
+        self.assertEqual(len(preview_data["preview_rows"]), 1)
+        self.assertEqual(self.period.applications.count(), 0)
+
+        confirmed = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": self.period.pk,
+        })
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertTrue(confirmed.json()["ok"])
+        self.assertEqual(confirmed.json()["saved"], 1)
+        self.assertEqual(self.period.applications.count(), 1)
+        imported = self.period.applications.get()
+        self.assertEqual(imported.status, ExamApplication.Status.VALID)
+        self.assertEqual(imported.source, ExamApplication.Source.GOOGLE_FORM)
+
+    def test_reimport_marks_existing_applications_as_duplicates(self):
+        url = reverse("exam-application-import")
+        csv_content = "Họ và tên,Số CCCD/CMND,Số điện thoại\nThí sinh lặp,098765432108,0901234568\n"
+        self.period.max_candidates = 1
+        self.period.save(update_fields=["max_candidates"])
+
+        first_import = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": self.period.pk,
+        })
+        self.assertTrue(first_import.json()["ok"])
+        self.assertEqual(first_import.json()["duplicate_count"], 0)
+
+        other_period = _make_exam_period(name="Đợt thi CCNA")
+        other_period_import = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": other_period.pk,
+        })
+        self.assertTrue(other_period_import.json()["ok"])
+        self.assertEqual(other_period_import.json()["duplicate_count"], 0)
+        self.assertEqual(
+            other_period.applications.get().status,
+            ExamApplication.Status.VALID,
+        )
+
+        preview = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+        self.assertEqual(preview.status_code, 200)
+        preview_data = preview.json()
+        self.assertTrue(preview_data["ok"])
+        self.assertEqual(preview_data["duplicate_count"], 1)
+        self.assertEqual(preview_data["preview_rows"][0]["status"], ExamApplication.Status.DUPLICATE)
+        self.assertEqual(self.period.applications.count(), 1)
+
+        second_import = self.client.post(url, {
+            "file": self._application_csv(csv_content),
+            "exam_period": self.period.pk,
+        })
+        self.assertTrue(second_import.json()["ok"])
+        self.assertEqual(second_import.json()["duplicate_count"], 1)
+        self.assertEqual(
+            set(self.period.applications.values_list("status", flat=True)),
+            {ExamApplication.Status.VALID, ExamApplication.Status.DUPLICATE},
+        )
+
+        list_page = self.client.get(reverse("exam-application-list"))
+        self.assertContains(list_page, "Phát hiện 1 hồ sơ trùng lặp")
+        self.assertContains(list_page, "Trùng lặp")
+
+    def test_duplicate_rows_in_one_file_are_marked(self):
+        preview = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Họ và tên,Số CCCD/CMND,Số điện thoại\n"
+                "Thí sinh lặp,098765432109,0901234569\n"
+                "Thí sinh lặp,098765432109,0901234569\n"
+            ),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+
+        self.assertEqual(preview.status_code, 200)
+        preview_data = preview.json()
+        self.assertEqual(preview_data["duplicate_count"], 1)
+        self.assertEqual(
+            [row["status"] for row in preview_data["preview_rows"]],
+            [ExamApplication.Status.VALID, ExamApplication.Status.DUPLICATE],
+        )
+
+    def test_application_import_invalid_batch_does_not_save(self):
+        response = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Họ và tên,Số CCCD/CMND\n"
+                "Thí sinh hợp lệ,098765432102\n"
+                "Thiếu CCCD,\n"
+            ),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["valid_count"], 1)
+        self.assertEqual(len(data["errors"]), 1)
+        self.assertEqual(self.period.applications.count(), 0)
+
+    def test_application_import_uses_csrf_token_from_upload_page(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        url = reverse("exam-application-import")
+        page = client.get(url)
+        csrf_cookie = page.cookies.get("csrftoken")
+        self.assertIsNotNone(csrf_cookie)
+
+        def payload():
+            return {
+                "file": self._application_csv(
+                    "Họ và tên,Số CCCD/CMND\nThí sinh CSRF,098765432103\n"
+                ),
+                "exam_period": self.period.pk,
+                "preview": "1",
+            }
+
+        rejected = client.post(url, payload())
+        self.assertEqual(rejected.status_code, 403)
+
+        accepted_payload = payload()
+        accepted_payload["csrfmiddlewaretoken"] = csrf_cookie.value
+        accepted = client.post(url, accepted_payload)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertTrue(accepted.json()["ok"], accepted.json())
+
+    def test_application_import_rejects_rows_for_another_period(self):
+        response = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Tên đợt thi,Họ và tên,Số CCCD/CMND\n"
+                "Đợt không khớp,Thí sinh,098765432105\n"
+            ),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["valid_count"], 0)
+        self.assertIn("không khớp", response.json()["errors"][0]["msg"])
+
+    def test_application_import_allows_blank_period_values(self):
+        response = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Tên đợt thi,Họ và tên,Số CCCD/CMND\n"
+                ",Thí sinh,098765432106\n"
+            ),
+            "exam_period": self.period.pk,
+            "preview": "1",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["valid_count"], 1)
+        self.assertEqual(data["errors"], [])
+        self.assertEqual(self.period.applications.count(), 0)
 
     def test_application_list_shows_period_filter(self):
         r = self.client.get(reverse("exam-application-list"))
@@ -1537,6 +1724,157 @@ class ExamRoomTests(TestCase):
         self.assertTrue(
             ExamRoomAssignment.objects.filter(exam_room=room, application=self.app).exists()
         )
+
+    def test_remove_candidate_from_published_period(self):
+        room = _make_exam_room(self.period)
+        assignment = _make_assignment(room, self.app)
+        assign_url = reverse("exam-room-assign", args=[self.period.pk])
+
+        page = self.client.get(assign_url, {"room_id": room.pk})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="cceRemoveCandidateModal"')
+        self.assertContains(page, 'data-removal-blocked="false"')
+        self.assertContains(page, "openRemoveCandidateDialog")
+        self.assertNotContains(page, "confirm(")
+
+        response = self.client.post(
+            assign_url + f"?room_id={room.pk}",
+            {
+                "remove_candidate": "1",
+                "assignment_id": assignment.pk,
+                "room_id": room.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ExamRoomAssignment.objects.filter(pk=assignment.pk).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.DELETE,
+                object_label=f"Bỏ {self.app.full_name} khỏi {room.name}",
+            ).exists()
+        )
+
+    def test_remove_candidate_with_empty_score_placeholder(self):
+        room = _make_exam_room(self.period)
+        assignment = _make_assignment(room, self.app)
+
+        score_entry_response = self.client.get(reverse("exam-score-entry", args=[room.pk]))
+        self.assertEqual(score_entry_response.status_code, 200)
+        empty_score = ExamScore.objects.get(assignment=assignment)
+        self.assertIsNone(empty_score.score)
+        self.assertFalse(empty_score.is_absent)
+
+        page = self.client.get(
+            reverse("exam-room-assign", args=[self.period.pk]),
+            {"room_id": room.pk},
+        )
+        self.assertContains(page, 'data-removal-blocked="false"')
+
+        response = self.client.post(
+            reverse("exam-room-assign", args=[self.period.pk]) + f"?room_id={room.pk}",
+            {
+                "remove_candidate": "1",
+                "assignment_id": assignment.pk,
+                "room_id": room.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ExamRoomAssignment.objects.filter(pk=assignment.pk).exists())
+        self.assertFalse(ExamScore.objects.filter(pk=empty_score.pk).exists())
+
+    def test_candidate_with_any_score_cannot_be_removed(self):
+        room = _make_exam_room(self.period)
+        score_states = (
+            {"score": Decimal("75.00")},
+            {"score": Decimal("0.00")},
+            {"is_absent": True},
+            {"is_published": True},
+        )
+        for index, score_state in enumerate(score_states):
+            with self.subTest(score_state=score_state):
+                app = self.app if index == 0 else _make_application(
+                    self.period,
+                    id_number=f"0792010789{index:02}",
+                    full_name=f"Ứng viên {index}",
+                )
+                assignment = _make_assignment(room, app)
+                ExamScore.objects.create(assignment=assignment, **score_state)
+
+                page = self.client.get(
+                    reverse("exam-room-assign", args=[self.period.pk]),
+                    {"room_id": room.pk},
+                )
+                self.assertContains(page, 'data-removal-blocked="true"')
+                self.assertContains(
+                    page,
+                    "Thí sinh đã có điểm, được ghi nhận vắng thi hoặc kết quả đã công bố",
+                )
+
+                response = self.client.post(
+                    reverse("exam-room-assign", args=[self.period.pk]) + f"?room_id={room.pk}",
+                    {
+                        "remove_candidate": "1",
+                        "assignment_id": assignment.pk,
+                        "room_id": room.pk,
+                    },
+                    follow=True,
+                )
+
+                self.assertTrue(ExamRoomAssignment.objects.filter(pk=assignment.pk).exists())
+                self.assertTrue(ExamScore.objects.filter(assignment=assignment).exists())
+                self.assertContains(
+                    response,
+                    "Thí sinh đã có điểm, được ghi nhận vắng thi hoặc kết quả đã công bố",
+                )
+
+    def test_cannot_remove_candidate_from_closed_period(self):
+        room = _make_exam_room(self.period)
+        assignment = _make_assignment(room, self.app)
+        self.period.status = ExamPeriod.Status.CLOSED
+        self.period.save(update_fields=["status"])
+
+        page = self.client.get(
+            reverse("exam-room-assign", args=[self.period.pk]),
+            {"room_id": room.pk},
+        )
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="cceClosedPeriodModal"')
+        self.assertContains(page, "Đợt thi này đã đóng, không thể bỏ thí sinh ra khỏi phòng thi.")
+        self.assertNotContains(page, "confirm(")
+
+        response = self.client.post(
+            reverse("exam-room-assign", args=[self.period.pk]) + f"?room_id={room.pk}",
+            {
+                "remove_candidate": "1",
+                "assignment_id": assignment.pk,
+                "room_id": room.pk,
+            },
+            follow=True,
+        )
+
+        self.assertTrue(ExamRoomAssignment.objects.filter(pk=assignment.pk).exists())
+        self.assertContains(response, "Đợt thi đã đóng, không thể bỏ thí sinh khỏi phòng.")
+
+    def test_cannot_remove_candidate_from_draft_period(self):
+        room = _make_exam_room(self.period)
+        assignment = _make_assignment(room, self.app)
+        self.period.status = ExamPeriod.Status.DRAFT
+        self.period.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("exam-room-assign", args=[self.period.pk]),
+            {
+                "remove_candidate": "1",
+                "assignment_id": assignment.pk,
+                "room_id": room.pk,
+            },
+            follow=True,
+        )
+
+        self.assertTrue(ExamRoomAssignment.objects.filter(pk=assignment.pk).exists())
+        self.assertContains(response, "Đợt thi chưa công bố không thể quản lý hoặc tạo phòng thi.")
 
     def test_assigned_count_property(self):
         room = _make_exam_room(self.period, capacity=30)
@@ -1757,27 +2095,471 @@ class ExamScoreTests(TestCase):
     def test_score_upload_get_200(self):
         self.assertEqual(self.client.get(reverse("exam-score-upload")).status_code, 200)
 
-    def test_score_upload_csv_preview_json(self):
-        """Upload CSV điểm với preview=1 → JSON response."""
-        csv_content = "so_cccd,diem\n001234567890,85.5\n"
-        csv_file = _io_module.BytesIO(csv_content.encode("utf-8"))
-        csv_file.name = "scores.csv"
+    def test_score_upload_blocks_published_room_but_allows_other_room_in_period(self):
+        published_score = ExamScore.objects.create(
+            assignment=self.asgn,
+            score=Decimal("70.00"),
+            is_published=True,
+        )
+        other_room = _make_exam_room(self.period, name="Phòng chưa công bố")
+        other_app = _make_application(
+            self.period,
+            full_name="Thí sinh phòng chưa công bố",
+            id_number="001234567894",
+        )
+        _make_assignment(other_room, other_app)
+        period_url = (
+            reverse("exam-score-upload")
+            + f"?period={self.period.pk}"
+        )
+
+        page = self.client.get(period_url)
+        self.assertEqual(page.context["selected_period"], self.period)
+        self.assertIsNone(page.context["selected_room"])
+        rooms = {room.pk: room for room in page.context["rooms_for_period"]}
+        self.assertTrue(rooms[self.room.pk].has_published_scores)
+        self.assertFalse(rooms[other_room.pk].has_published_scores)
+        self.assertContains(page, f'<option value="{self.room.pk}" disabled')
+        self.assertContains(page, f'<option value="{other_room.pk}"')
+
+        published_room_url = period_url + f"&room={self.room.pk}"
+        blocked_page = self.client.get(published_room_url)
+        self.assertTrue(blocked_page.context["selected_room_blocked"])
+        self.assertIsNone(blocked_page.context["selected_room"])
+        self.assertContains(blocked_page, "Phòng thi đã có điểm công bố")
+
+        preview = self.client.post(published_room_url, {
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('85.5')}\n"
+            ),
+            "preview": "1",
+        })
+        self.assertFalse(preview.json()["ok"])
+        self.assertIn("Phòng thi đã có điểm công bố", preview.json()["errors"][0]["msg"])
+
+        confirm = self.client.post(published_room_url, {
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('85.5')}\n"
+            ),
+        })
+        self.assertFalse(confirm.json()["ok"])
+        self.assertEqual(confirm.json()["saved"], 0)
+        published_score.refresh_from_db()
+        self.assertEqual(published_score.score, Decimal("70.00"))
+
+        other_room_url = period_url + f"&room={other_room.pk}"
+        other_csv = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('86', **{'Thí sinh': other_app.full_name, 'CCCD': other_app.id_number, 'Phòng thi': other_room.name, 'Ca thi': other_room.session})}\n"
+        )
+        other_preview = self.client.post(other_room_url, {
+            "file": self._score_csv(other_csv),
+            "preview": "1",
+        })
+        self.assertTrue(other_preview.json()["ok"])
+        other_confirm = self.client.post(other_room_url, {
+            "file": self._score_csv(other_csv),
+        })
+        self.assertTrue(other_confirm.json()["ok"])
+
+    def _score_csv(self, content):
+        uploaded = _io_module.BytesIO(content.encode("utf-8"))
+        uploaded.name = "scores.csv"
+        return uploaded
+
+    def _score_csv_row(self, score, **overrides):
+        values = {
+            "Thí sinh": self.app.full_name,
+            "CCCD": self.app.id_number,
+            "Tên đợt thi": self.period.name,
+            "Phòng thi": self.room.name,
+            "Ca thi": self.room.session,
+            "Điểm số": str(score),
+        }
+        values.update(overrides)
+        return ",".join(values[column] for column in (
+            "Thí sinh", "CCCD", "Tên đợt thi", "Phòng thi", "Ca thi", "Điểm số"
+        ))
+
+    def test_score_upload_preview_does_not_save_and_confirm_saves_once(self):
         url = (
             reverse("exam-score-upload")
             + f"?period={self.period.pk}&room={self.room.pk}"
         )
+        page = self.client.get(url)
+        self.assertContains(page, 'name="csrfmiddlewaretoken"')
+        self.assertContains(page, "Kiểm tra điểm")
+        self.assertContains(page, 'data-mode="strict"')
+        self.assertNotContains(page, "Tên và CCCD phải khớp")
+        self.assertNotContains(page, "Tải mẫu hợp lệ")
+        self.assertNotContains(page, "Tải mẫu kiểm tra lỗi")
+        self.assertTrue(page.context["sample_available"])
+
         r = self.client.post(url, {
-            "file": csv_file,
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('85.5')}\n"
+            ),
             "preview": "1",
         })
-        # Trả về JSON với ok field
-        self.assertIn(r.status_code, (200, 400))
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                self.assertIn("ok", data)
-            except Exception:
-                pass  # Nếu không phải JSON, test vẫn pass
+        self.assertEqual(r.status_code, 200)
+        preview_data = r.json()
+        self.assertEqual(preview_data["valid_count"], 1)
+        self.assertEqual(preview_data["errors"], [])
+        self.assertIn(self.app.full_name, preview_data["preview_rows"][0]["preview_text"])
+        self.assertIn(self.room.session, preview_data["preview_rows"][0]["preview_text"])
+        self.assertFalse(ExamScore.objects.filter(assignment=self.asgn).exists())
+
+        confirmed = self.client.post(url, {
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('85.5')}\n"
+            ),
+        })
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertTrue(confirmed.json()["ok"])
+        self.assertEqual(confirmed.json()["saved"], 1)
+        self.assertEqual(
+            ExamScore.objects.get(assignment=self.asgn).score,
+            Decimal("85.5"),
+        )
+
+    def test_score_upload_preview_reports_invalid_score_without_saving(self):
+        url = (
+            reverse("exam-score-upload")
+            + f"?period={self.period.pk}&room={self.room.pk}"
+        )
+        response = self.client.post(url, {
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('101')}\n"
+            ),
+            "preview": "1",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["valid_count"], 0)
+        self.assertEqual(len(data["errors"]), 1)
+        self.assertIn("ngoài thang điểm", data["errors"][0]["msg"])
+        self.assertFalse(ExamScore.objects.filter(assignment=self.asgn).exists())
+
+    def test_score_upload_requires_all_six_columns(self):
+        response = self.client.post(
+            reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}",
+            {
+                "file": self._score_csv(
+                    "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Điểm số\n"
+                    f"{self._score_csv_row('80')}\n"
+                ),
+                "preview": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["valid_count"], 0)
+        self.assertIn("Ca thi", response.json()["errors"][0]["msg"])
+
+    def test_score_upload_checks_candidate_and_exam_context(self):
+        url = (
+            reverse("exam-score-upload")
+            + f"?period={self.period.pk}&room={self.room.pk}"
+        )
+        csv_content = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('80', **{'Thí sinh': 'Tên không khớp'})}\n"
+            f"{self._score_csv_row('80', **{'Tên đợt thi': 'Đợt khác'})}\n"
+            f"{self._score_csv_row('80', **{'Phòng thi': 'Phòng khác'})}\n"
+            f"{self._score_csv_row('80', **{'Ca thi': 'Chiều'})}\n"
+        )
+        response = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "preview": "1",
+        })
+
+        self.assertEqual(response.json()["valid_count"], 0)
+        messages = [error["msg"] for error in response.json()["errors"]]
+        self.assertTrue(any("Tên thí sinh" in message for message in messages))
+        self.assertTrue(any("Tên đợt thi" in message for message in messages))
+        self.assertTrue(any("Phòng thi" in message for message in messages))
+        self.assertTrue(any("Ca thi" in message for message in messages))
+        self.assertFalse(ExamScore.objects.filter(assignment=self.asgn).exists())
+
+    def test_score_upload_rejects_repeated_candidate_rows(self):
+        header = "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+        response = self.client.post(
+            reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}",
+            {
+                "file": self._score_csv(
+                    header + f"{self._score_csv_row('80')}\n{self._score_csv_row('90')}\n"
+                ),
+                "preview": "1",
+            },
+        )
+
+        self.assertEqual(response.json()["valid_count"], 1)
+        self.assertEqual(len(response.json()["errors"]), 1)
+        self.assertIn("xuất hiện nhiều lần", response.json()["errors"][0]["msg"])
+        self.assertFalse(ExamScore.objects.filter(assignment=self.asgn).exists())
+
+    def test_score_upload_overwrites_locked_unpublished_score_with_confirmation(self):
+        existing_score = ExamScore.objects.create(
+            assignment=self.asgn,
+            score=Decimal("70.00"),
+            is_locked=True,
+        )
+        url = reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}"
+        csv_content = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('80')}\n"
+        )
+
+        preview = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "preview": "1",
+        })
+        self.assertTrue(preview.json()["ok"])
+        self.assertEqual(preview.json()["overwrite_count"], 1)
+
+        unconfirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+        })
+        self.assertTrue(unconfirmed.json()["requires_overwrite_confirmation"])
+        self.assertEqual(unconfirmed.json()["saved"], 0)
+
+        confirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "confirm_overwrite_count": "1",
+        })
+        self.assertTrue(confirmed.json()["ok"])
+        existing_score.refresh_from_db()
+        self.assertEqual(existing_score.score, Decimal("80"))
+        self.assertTrue(existing_score.is_locked)
+
+    def test_score_upload_overwrites_unpublished_score_only_after_confirmation(self):
+        existing_score = ExamScore.objects.create(
+            assignment=self.asgn,
+            score=Decimal("70.00"),
+        )
+        url = reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}"
+        csv_content = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('85.5')}\n"
+        )
+
+        preview = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "preview": "1",
+        })
+        self.assertTrue(preview.json()["ok"])
+        self.assertEqual(preview.json()["overwrite_count"], 1)
+        existing_score.refresh_from_db()
+        self.assertEqual(existing_score.score, Decimal("70.00"))
+
+        unconfirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+        })
+        self.assertTrue(unconfirmed.json()["requires_overwrite_confirmation"])
+        self.assertEqual(unconfirmed.json()["saved"], 0)
+        existing_score.refresh_from_db()
+        self.assertEqual(existing_score.score, Decimal("70.00"))
+
+        existing_score.is_published = True
+        existing_score.save(update_fields=["is_published"])
+        stale_preview = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "confirm_overwrite_count": "1",
+        })
+        self.assertFalse(stale_preview.json()["ok"])
+        self.assertEqual(stale_preview.json()["saved"], 0)
+        self.assertIn("đã có điểm công bố", stale_preview.json()["errors"][0]["msg"])
+        existing_score.refresh_from_db()
+        self.assertEqual(existing_score.score, Decimal("70.00"))
+
+        existing_score.is_published = False
+        existing_score.save(update_fields=["is_published"])
+        confirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "confirm_overwrite_count": "1",
+        })
+        self.assertTrue(confirmed.json()["ok"])
+        self.assertEqual(confirmed.json()["saved"], 1)
+        self.assertEqual(confirmed.json()["overwrite_count"], 1)
+        existing_score.refresh_from_db()
+        self.assertEqual(existing_score.score, Decimal("85.5"))
+
+    def test_score_upload_preserves_absence_and_no_score_value(self):
+        absent_app = _make_application(
+            self.period,
+            full_name="Thí sinh vắng",
+            id_number="001234567893",
+        )
+        absent_assignment = _make_assignment(self.room, absent_app)
+        absent_score = ExamScore.objects.create(
+            assignment=absent_assignment,
+            score=Decimal("65.00"),
+            is_absent=True,
+        )
+        url = reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}"
+        csv_content = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('85.5')}\n"
+            f"{self._score_csv_row('80', **{'Thí sinh': absent_app.full_name, 'CCCD': absent_app.id_number})}\n"
+        )
+
+        preview = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "preview": "1",
+        })
+        self.assertTrue(preview.json()["ok"])
+        self.assertEqual(preview.json()["overwrite_count"], 1)
+
+        unconfirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+        })
+        self.assertTrue(unconfirmed.json()["requires_overwrite_confirmation"])
+        self.assertEqual(unconfirmed.json()["saved"], 0)
+
+        confirmed = self.client.post(url, {
+            "file": self._score_csv(csv_content),
+            "confirm_overwrite_count": "1",
+        })
+        self.assertTrue(confirmed.json()["ok"])
+        self.assertEqual(confirmed.json()["saved"], 2)
+        absent_score.refresh_from_db()
+        self.assertTrue(absent_score.is_absent)
+        self.assertIsNone(absent_score.score)
+        self.assertTrue(ExamScore.objects.filter(assignment=self.asgn).exists())
+        page = self.client.get(url)
+        self.assertContains(page, absent_app.full_name)
+        self.assertContains(page, "Vắng")
+
+    def test_score_upload_confirm_does_not_save_valid_rows_when_file_has_errors(self):
+        second_app = _make_application(
+            self.period,
+            full_name="Thí sinh thứ hai",
+            id_number="001234567891",
+        )
+        _make_assignment(self.room, second_app)
+        csv_content = (
+            "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+            f"{self._score_csv_row('80')}\n"
+            f"{self._score_csv_row('101', **{'Thí sinh': second_app.full_name, 'CCCD': second_app.id_number})}\n"
+        )
+        response = self.client.post(
+            reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}",
+            {"file": self._score_csv(csv_content)},
+        )
+
+        self.assertFalse(response.json()["ok"])
+        self.assertEqual(response.json()["saved"], 0)
+        self.assertEqual(len(response.json()["errors"]), 1)
+        self.assertFalse(ExamScore.objects.filter(assignment__exam_room=self.room).exists())
+
+    def test_score_upload_rejects_excess_precision_and_non_finite_scores(self):
+        header = "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+        response = self.client.post(
+            reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}",
+            {
+                "file": self._score_csv(
+                    header
+                    + f"{self._score_csv_row('85.123')}\n"
+                    + f"{self._score_csv_row('NaN')}\n"
+                ),
+                "preview": "1",
+            },
+        )
+
+        self.assertEqual(response.json()["valid_count"], 0)
+        messages = [error["msg"] for error in response.json()["errors"]]
+        self.assertTrue(any("2 chữ số thập phân" in message for message in messages))
+        self.assertTrue(any("hữu hạn" in message for message in messages))
+
+    def test_score_upload_hides_sample_links_when_room_has_no_unscored_candidate(self):
+        ExamScore.objects.create(assignment=self.asgn, score=Decimal("80.00"))
+        url = reverse("exam-score-upload") + f"?period={self.period.pk}&room={self.room.pk}"
+
+        response = self.client.get(url)
+
+        self.assertFalse(response.context["sample_available"])
+        self.assertNotContains(response, "Tải mẫu hợp lệ")
+        self.assertNotContains(response, "không còn thí sinh chưa có điểm")
+
+    def test_score_upload_samples_match_selected_room_and_preview(self):
+        second_app = _make_application(
+            self.period,
+            full_name="Thí sinh mẫu thứ hai",
+            id_number="001234567892",
+        )
+        _make_assignment(self.room, second_app)
+        valid_sample = self.client.get(
+            reverse("exam-score-upload-sample"),
+            {"room": self.room.pk, "kind": "valid"},
+        )
+        self.assertEqual(valid_sample.status_code, 200)
+        valid_rows = list(csv.reader(
+            _io_module.StringIO(valid_sample.content.decode("utf-8-sig"))
+        ))
+        self.assertEqual(valid_rows[0], [
+            "Thí sinh", "CCCD", "Tên đợt thi", "Phòng thi", "Ca thi", "Điểm số"
+        ])
+        self.assertEqual(valid_rows[1][:5], [
+            self.app.full_name,
+            self.app.id_number,
+            self.period.name,
+            self.room.name,
+            self.room.session,
+        ])
+        self.assertEqual(len(valid_rows), 3)
+
+        upload_url = (
+            reverse("exam-score-upload")
+            + f"?period={self.period.pk}&room={self.room.pk}"
+        )
+        preview = self.client.post(upload_url, {
+            "file": _io_module.BytesIO(valid_sample.content),
+            "preview": "1",
+        })
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()["errors"], [])
+        self.assertEqual(preview.json()["valid_count"], 2)
+
+        invalid_sample = self.client.get(
+            reverse("exam-score-upload-sample"),
+            {"room": self.room.pk, "kind": "invalid"},
+        )
+        invalid_preview = self.client.post(upload_url, {
+            "file": _io_module.BytesIO(invalid_sample.content),
+            "preview": "1",
+        })
+        self.assertEqual(invalid_preview.status_code, 200)
+        self.assertFalse(invalid_preview.json()["ok"])
+        self.assertEqual(invalid_preview.json()["valid_count"], 1)
+        self.assertEqual(len(invalid_preview.json()["errors"]), 1)
+
+        wrong_room = self.client.post(upload_url, {
+            "file": self._score_csv(
+                "Thí sinh,CCCD,Tên đợt thi,Phòng thi,Ca thi,Điểm số\n"
+                f"{self._score_csv_row('80', **{'Phòng thi': 'Phòng khác'})}\n"
+            ),
+            "preview": "1",
+        })
+        self.assertEqual(wrong_room.json()["valid_count"], 0)
+        self.assertIn("Phòng thi", wrong_room.json()["errors"][0]["msg"])
+
+    def test_score_upload_page_rejects_room_from_another_period(self):
+        other_period = _make_exam_period(name="Đợt thi khác")
+        other_room = _make_exam_room(other_period)
+
+        response = self.client.get(reverse("exam-score-upload"), {
+            "period": self.period.pk,
+            "room": other_room.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["selected_room"])
 
 
 # ---------------------------------------------------------------------------
@@ -1856,6 +2638,37 @@ class ExamStatisticsTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, period.name)
 
+    def test_room_pass_rate_uses_room_size_including_absent_candidates(self):
+        period = _make_exam_period()
+        room = _make_exam_room(period, name="P101", capacity=20)
+
+        for index in range(20):
+            app = _make_application(
+                period,
+                id_number=f"0792011234{index:02}",
+                full_name=f"Ứng viên {index:02}",
+            )
+            assignment = _make_assignment(room, app)
+            if index < 15:
+                ExamScore.objects.create(assignment=assignment, score=Decimal("80.00"))
+            elif index < 18:
+                ExamScore.objects.create(assignment=assignment, score=Decimal("20.00"))
+            else:
+                ExamScore.objects.create(assignment=assignment, is_absent=True)
+
+        response = self.client.get(
+            reverse("exam-statistics"),
+            {"period": period.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        room_stats = response.context["room_stats"][0]
+        self.assertEqual(room_stats["total"], 20)
+        self.assertEqual(room_stats["has_score"], 18)
+        self.assertEqual(room_stats["absent"], 2)
+        self.assertEqual(room_stats["passed"], 15)
+        self.assertEqual(room_stats["percent_pass"], 75.0)
+
 
 # ---------------------------------------------------------------------------
 # 9. Report List Tests (Giáo vụ)
@@ -1888,6 +2701,7 @@ class ReportListTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Xuất Báo cáo file Excel")
         self.assertContains(r, reverse("report-export-excel"))
+        self.assertNotContains(r, "Xuất Excel")
 
     def test_report_export_excel_200_and_valid_workbook(self):
         import openpyxl

@@ -48,6 +48,11 @@ urlpatterns = [
     path('exam/scores/', training.exam_score_list, name='exam-score-list'),
     path('exam/scores/<int:room_id>/entry/', training.exam_score_entry, name='exam-score-entry'),
     path('exam/scores/upload/', training.exam_score_upload, name='exam-score-upload'),
+    path(
+        'exam/scores/upload/sample/',
+        training.exam_score_upload_sample,
+        name='exam-score-upload-sample',
+    ),
     path('exam/scores/publish/', training.exam_score_publish, name='exam-score-publish'),
     # Exam — MyBK + Thống kê (Pha 4)
     path('exam/mybk-export/', training.mybk_export, name='mybk-export'),

@@ -50,7 +50,7 @@
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table" role="table">
+      <table class="cce-table cce-table-centered cce-table-first-column-left" role="table">
         <thead>
           <tr>
             <th scope="col" style="min-width:260px;">Tên đợt thi & Chứng chỉ</th>
@@ -66,7 +66,7 @@
               <td>
                 <div style="display:flex; align-items:flex-start; gap:var(--space-2);">
                   <span class="material-symbols-outlined" style="font-size:1.25rem; color:var(--c-primary-mid); margin-top:2px;" aria-hidden="true">event</span>
-                  <div style="display:flex; flex-direction:column; gap:3px;">
+                  <div class="cce-table-cell-stack cce-table-cell-stack-left" style="display:flex; flex-direction:column; gap:3px;">
                     <strong style="font-size:var(--font-size-base); color:var(--c-text);">{{ period.name }}</strong>
                     <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs); color:var(--c-text-muted);">
                       <span class="material-symbols-outlined" style="font-size:0.95rem;" aria-hidden="true">workspace_premium</span>
@@ -92,7 +92,6 @@
                   <div style="display:flex; flex-direction:column; gap:4px; max-width:190px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold);">
                       <span style="color:var(--c-text-muted);">0 / {{ period.max_candidates }} hồ sơ</span>
-                      <span class="cce-badge cce-badge-neutral" style="font-size:0.7rem; padding:1px 6px;">Chưa mở ĐK</span>
                     </div>
                     <div style="width:100%; height:6px; background:var(--c-border-subtle); border-radius:var(--radius-pill); overflow:hidden;">
                       <div style="height:100%; width:0%; background:var(--c-border); border-radius:var(--radius-pill);"></div>
@@ -102,7 +101,6 @@
                   <div style="display:flex; flex-direction:column; gap:4px; max-width:190px;">
                     <div style="display:flex; justify-content:space-between; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold);">
                       <span>{{ period.application_count }} / {{ period.max_candidates }} hồ sơ</span>
-                      <span style="color:var(--c-text-muted);">{{ period.app_pct }}%</span>
                     </div>
                     <div style="width:100%; height:6px; background:var(--c-border-subtle); border-radius:var(--radius-pill); overflow:hidden;">
                       <div style="height:100%; width:{{ period.app_pct }}%; background:{% if period.is_full %}var(--c-badge-duplicate-text){% elif period.status == 'closed' %}var(--c-badge-closed-text){% else %}var(--c-accent){% endif %}; border-radius:var(--radius-pill); transition:width var(--transition-normal);"></div>

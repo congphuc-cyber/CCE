@@ -43,7 +43,7 @@
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table" role="table">
+      <table class="cce-table cce-table-centered" role="table">
         <thead>
           <tr>
             <th scope="col" style="min-width:200px;">Học viên / Thí sinh</th>
@@ -52,7 +52,7 @@
             <th scope="col" style="min-width:140px;">Số hiệu chứng chỉ</th>
             <th scope="col" style="min-width:90px; text-align:center;">Điểm thi</th>
             <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
-            <th scope="col" style="min-width:110px; text-align:right;">Thao tác</th>
+            <th scope="col" style="min-width:110px;">Thao tác</th>
           </tr>
         </thead>
         <tbody>
@@ -88,7 +88,7 @@
               <td style="text-align:center;">
                 <span class="cce-badge cce-badge-published">Đã cấp số</span>
               </td>
-              <td style="text-align:right; white-space:nowrap;">
+              <td style="white-space:nowrap;">
                 <button type="button" class="cce-table-btn cce-table-btn-outline" onclick="window.print()" title="In chứng nhận">
                   <span class="material-symbols-outlined" style="font-size:0.95rem; vertical-align:middle;" aria-hidden="true">print</span>
                   <span>In bản sao</span>

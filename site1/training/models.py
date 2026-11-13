@@ -471,6 +471,14 @@ class ExamScore(models.Model):
         verbose_name = "Điểm thi"
         verbose_name_plural = "Điểm thi"
 
+    @property
+    def has_result(self):
+        return self.score is not None or self.is_absent
+
+    @property
+    def blocks_room_removal(self):
+        return self.has_result or self.is_published
+
     def __str__(self):
         return f"Điểm {self.assignment}"
 
