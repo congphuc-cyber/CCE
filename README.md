@@ -4,56 +4,133 @@
 
 ---
 
-## ⚡ Chạy nhanh (3 bước)
+## ⚡ Cài đặt và chạy dự án
 
-Chỉ cần thực hiện đúng 3 bước là hệ thống hoạt động ngay lập tức, không cần cấu hình thủ công:
+### Yêu cầu trước khi cài đặt
 
-### Cách 1: Chạy trực tiếp (Local)
+- Git.
+- Python `>= 3.10`; khuyến nghị Python 3.12.
+- Kết nối Internet trong lần cài đầu tiên để tải các thư viện Python.
+- Nếu chạy bằng Docker: Docker Desktop (Windows/macOS) hoặc Docker Engine và Docker Compose plugin (Linux).
 
-1. **Clone mã nguồn:**
-   ```bash
-   git clone <URL_REPOSITORY>
-   cd <PROJECT_DIR>
-   ```
+Kiểm tra Python và Git đã có trên `PATH`:
 
-2. **Chạy lệnh cài đặt tự động (setup):**
-   - **Trên Windows (PowerShell):**
-     ```powershell
-     .\scripts\setup.ps1
-     ```
-   - **Trên Linux / macOS:**
-     ```bash
-     chmod +x scripts/*.sh && ./scripts/setup.sh
-     ```
-   *(Script sẽ tự động tạo `.venv`, cài đặt thư viện, tạo file `.env` và chạy khởi tạo hệ thống).*
+```bash
+python --version
+git --version
+```
 
-3. **Khởi chạy ứng dụng (run):**
-   - **Trên Windows (PowerShell):**
-     ```powershell
-     .\scripts\run.ps1
-     ```
-   - **Trên Linux / macOS:**
-     ```bash
-     ./scripts/run.sh
-     ```
+Trên Linux/macOS, dùng `python3 --version` nếu lệnh `python` không có.
 
----
+### Cách 1: Chạy trực tiếp trên máy
 
-### Cách 2: Chạy bằng Docker (Khuyến nghị cho triển khai)
+#### Windows (PowerShell)
 
-1. **Clone mã nguồn:**
-   ```bash
-   git clone <URL_REPOSITORY>
-   cd <PROJECT_DIR>
-   ```
+Mở PowerShell, chạy lần lượt:
 
-2. **Khởi động với một lệnh duy nhất:**
-   ```bash
-   docker compose up --build
-   ```
-   *(Docker container sẽ tự động áp dụng migration, khởi tạo 4 nhóm quyền và nạp dữ liệu mẫu).*
+```powershell
+git clone https://github.com/congphuc-cyber/LMS-.git
+cd LMS-
+.\scripts\setup.ps1 -Demo
+.\scripts\run.ps1
+```
 
-3. **Mở trình duyệt và truy cập hệ thống ngay lập tức.**
+Nếu PowerShell chặn chạy script, chỉ mở quyền cho cửa sổ hiện tại rồi chạy lại lệnh cài đặt:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\setup.ps1 -Demo
+```
+
+#### Linux / macOS
+
+```bash
+git clone https://github.com/congphuc-cyber/LMS-.git
+cd LMS-
+chmod +x scripts/setup.sh scripts/run.sh
+./scripts/setup.sh --demo
+./scripts/run.sh
+```
+
+Trên Ubuntu/Debian, nếu máy chưa có Python hoặc hỗ trợ `venv`, có thể cài trước bằng:
+
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip
+```
+
+Lệnh `setup` tạo môi trường ảo `.venv`, cài thư viện từ `requirements/base.txt`, tạo `.env` nếu chưa có, chạy migration, tạo các nhóm quyền và tài khoản quản trị. Tham số `-Demo` / `--demo` nạp thêm dữ liệu mẫu để thử các màn hình nghiệp vụ. Bỏ tham số này nếu chỉ muốn khởi tạo hệ thống trống.
+
+Sau khi khởi tạo, terminal hiển thị thông tin tài khoản quản trị; nếu có nạp dữ liệu demo, mật khẩu demo được tạo ngẫu nhiên cũng hiển thị tại đó. Lưu thông tin này ở nơi an toàn và không chia sẻ log terminal.
+
+Lệnh `run` khởi động máy chủ phát triển trên `127.0.0.1:8001`. Giữ cửa sổ terminal đang chạy; nhấn `Ctrl+C` để dừng. Có thể chọn cổng khác, ví dụ:
+
+```powershell
+.\scripts\run.ps1 8002
+```
+
+```bash
+./scripts/run.sh 8002
+```
+
+#### Tự cấu hình tài khoản quản trị khi cài local
+
+Muốn chọn tên đăng nhập hoặc mật khẩu quản trị trước lần khởi tạo đầu tiên, đặt biến môi trường trong chính cửa sổ terminal rồi chạy `setup`. Ví dụ PowerShell:
+
+```powershell
+$env:BOOTSTRAP_SUPERUSER_USERNAME = "cce_admin"
+$env:BOOTSTRAP_SUPERUSER_PASSWORD = "thay-bang-mat-khau-rieng"
+.\scripts\setup.ps1 -Demo
+```
+
+Trên Linux/macOS:
+
+```bash
+export BOOTSTRAP_SUPERUSER_USERNAME="cce_admin"
+export BOOTSTRAP_SUPERUSER_PASSWORD="thay-bang-mat-khau-rieng"
+./scripts/setup.sh --demo
+```
+
+File `.env` được tạo làm mẫu cấu hình cục bộ và bị Git bỏ qua. Docker Compose tự đọc file này; ứng dụng chạy local không tự nạp `.env`, vì vậy cần đặt biến trong terminal như ví dụ trên nếu muốn thay đổi cấu hình lúc bootstrap. Không commit mật khẩu hoặc khóa bí mật lên Git. Để đổi mật khẩu quản trị sau khi đã cài đặt, chạy từ thư mục gốc:
+
+```powershell
+.\.venv\Scripts\python.exe .\site1\manage.py changepassword cce_admin
+```
+
+Trên Linux/macOS:
+
+```bash
+./.venv/bin/python site1/manage.py changepassword cce_admin
+```
+
+Lưu ý: chạy lại `bootstrap` sẽ đặt lại mật khẩu tài khoản quản trị theo biến môi trường hiện tại hoặc giá trị mặc định của ứng dụng.
+
+### Cách 2: Chạy bằng Docker Compose
+
+Cài và mở Docker trước, sau đó clone dự án:
+
+```bash
+git clone https://github.com/congphuc-cyber/LMS-.git
+cd LMS-
+```
+
+Nếu muốn cấu hình tài khoản hoặc biến môi trường, sao chép `.env.example` thành `.env` và sửa giá trị cục bộ **trước khi** chạy Compose. Có thể bỏ qua bước này để chạy bằng cấu hình mặc định. Không commit `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+```bash
+cp .env.example .env
+```
+
+Khởi động dịch vụ tại thư mục gốc:
+
+```bash
+docker compose up --build
+```
+
+Compose sẽ build image, áp dụng migration, khởi tạo nhóm quyền và nạp dữ liệu demo theo cấu hình mặc định. Cơ sở dữ liệu và media được lưu trong Docker named volumes nên vẫn còn sau khi container dừng. Mở `http://127.0.0.1:8001/`; dùng `Ctrl+C` để dừng. Để chạy nền, dùng `docker compose up --build -d`; dừng và gỡ container bằng `docker compose down` (lệnh này giữ dữ liệu trong volumes).
 
 ---
 
@@ -147,12 +224,12 @@ lmssss/
 
 | Tên biến | Mặc định (Dev) | Mô tả |
 |----------|----------------|-------|
-| `DJANGO_SECRET_KEY` | *(Tự sinh an toàn cho dev)* | Khóa bí mật Django. **Bắt buộc đặt giá trị bí mật trên Production**. |
+| `DJANGO_SECRET_KEY` | *(Khóa dùng cho phát triển local)* | Khóa bí mật Django. **Bắt buộc đặt giá trị bí mật trên Production**. |
 | `DJANGO_ENV` | `development` | Môi trường chạy (`development` hoặc `production`). |
 | `ALLOWED_HOSTS` | `127.0.0.1,localhost` | Danh sách hostname được phép truy cập (cách nhau bởi dấu phẩy). |
 | `PORT` | `8001` | Cổng mạng máy chủ web lắng nghe. |
 | `BOOTSTRAP_SUPERUSER_USERNAME` | `cce_admin` | Tên tài khoản Superuser tự tạo khi chạy bootstrap. |
-| `BOOTSTRAP_SUPERUSER_PASSWORD` | `CCEtest@2026!` | Mật khẩu cho Superuser. |
+| `BOOTSTRAP_SUPERUSER_PASSWORD` | *(cấu hình riêng ở môi trường local)* | Mật khẩu cho Superuser. Không dùng hoặc commit mật khẩu thật trong repository. |
 | `BOOTSTRAP_SUPERUSER_EMAIL` | `admin@cce.edu.vn` | Email liên hệ cho Superuser. |
 | `DEMO_TEST_PASSWORD` | *(tạo ngẫu nhiên nếu bỏ trống)* | Mật khẩu cho các tài khoản vai trò mẫu được tạo mới bằng `seed_demo_data`. |
 
