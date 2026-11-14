@@ -1,0 +1,56 @@
+<div class="public-date-picker" data-public-date-picker>
+  <div class="public-date-control">
+    {% include "django/forms/widgets/input.html" %}
+    <button
+      class="public-date-toggle"
+      type="button"
+      aria-label="Mở lịch chọn ngày sinh"
+      aria-haspopup="dialog"
+      aria-expanded="false"
+      aria-controls="{{ widget.attrs.id }}_calendar"
+      data-date-toggle>
+      <svg class="public-date-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="5" width="17" height="16" rx="2"></rect>
+        <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01"></path>
+      </svg>
+    </button>
+  </div>
+  <div
+    class="public-date-calendar"
+    id="{{ widget.attrs.id }}_calendar"
+    role="dialog"
+    aria-label="Chọn ngày sinh"
+    hidden>
+    <div class="public-date-calendar-header">
+      <button class="public-date-nav" type="button" aria-label="Tháng trước" data-date-previous>
+        <svg class="public-date-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m14.5 5-7 7 7 7"></path>
+        </svg>
+      </button>
+      <select
+        class="public-date-header-select public-date-month-select"
+        aria-label="Tháng"
+        data-date-month></select>
+      <select
+        class="public-date-header-select public-date-year-select"
+        aria-label="Năm"
+        data-date-year></select>
+      <button class="public-date-nav" type="button" aria-label="Tháng sau" data-date-next>
+        <svg class="public-date-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9.5 5 7 7-7 7"></path>
+        </svg>
+      </button>
+      <span class="public-date-sr-only" aria-live="polite" data-date-title></span>
+    </div>
+    <div class="public-date-weekdays" aria-hidden="true">
+      <span>CN</span>
+      <span>T2</span>
+      <span>T3</span>
+      <span>T4</span>
+      <span>T5</span>
+      <span>T6</span>
+      <span>T7</span>
+    </div>
+    <div class="public-date-days" data-date-days></div>
+  </div>
+</div>

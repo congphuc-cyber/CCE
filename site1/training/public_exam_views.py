@@ -1,19 +1,28 @@
-import logging
-import secrets
 from datetime import timedelta
-from smtplib import SMTPException
+from functools import lru_cache
+from io import BytesIO
+import os
+from pathlib import Path
+from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import transaction
 from django.db.models import Count, F, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.utils.crypto import constant_time_compare, salted_hmac
+from django.utils.crypto import salted_hmac
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from training.models import (
     ExamApplication,
@@ -23,23 +32,22 @@ from training.models import (
     ExamScore,
 )
 from training.public_exam_forms import (
-    PublicExamLookupOTPForm,
     PublicExamLookupRequestForm,
     PublicExamRegistrationForm,
 )
 
 
 REGISTRATION_SUCCESS_SESSION_KEY = "public_exam_registration_id"
-LOOKUP_PENDING_SESSION_KEY = "public_exam_lookup_pending"
-LOOKUP_VERIFIED_SESSION_KEY = "public_exam_lookup_verified"
-LOOKUP_CODE_TTL = timedelta(minutes=10)
+LOOKUP_RESULT_SESSION_KEY = "public_exam_lookup_result"
 LOOKUP_SESSION_TTL = timedelta(minutes=10)
 LOOKUP_RATE_WINDOW = 15 * 60
 LOOKUP_IP_LIMIT = 12
 LOOKUP_IDENTITY_LIMIT = 5
-LOOKUP_OTP_ATTEMPT_LIMIT = 5
-
-logger = logging.getLogger(__name__)
+_PUBLIC_PDF_REQUIRED_GLYPHS = (
+    0x00C2, 0x00E2, 0x00CA, 0x00EA, 0x00D4, 0x00F4,
+    0x0102, 0x0103, 0x0110, 0x0111, 0x01A0, 0x01A1,
+    0x01AF, 0x01B0,
+) + tuple(range(0x1EA0, 0x1EFA))
 
 
 def available_exam_periods():
@@ -226,7 +234,6 @@ def _render_lookup_page(
     purpose,
     step="request",
     request_form=None,
-    otp_form=None,
     state=None,
     state_title=None,
     state_message=None,
@@ -247,7 +254,6 @@ def _render_lookup_page(
             "step": step,
             "page_title": "Xem phòng thi" if is_room_lookup else "Tra cứu điểm và chứng chỉ",
             "request_form": request_form,
-            "otp_form": otp_form,
             "state": state,
             "state_title": state_title,
             "state_message": state_message,
@@ -295,40 +301,14 @@ def _lookup_rate_limit_response(request, purpose):
     )
 
 
-def _otp_digest(pending, code):
-    value = ":".join(
-        (pending["nonce"], pending["id_number"], pending["email"], code)
-    )
-    return salted_hmac(
-        "training.public_exam_lookup.otp",
-        value,
-        secret=settings.SECRET_KEY,
-        algorithm="sha256",
-    ).hexdigest()
-
-
-def _send_lookup_code(email, code):
-    return send_mail(
-        subject="Mã xác thực tra cứu thông tin dự thi",
-        message=(
-            f"Mã xác thực của bạn là {code}. "
-            "Mã có hiệu lực trong 10 phút. Nếu bạn không yêu cầu mã này, "
-            "hãy bỏ qua email."
-        ),
-        from_email=None,
-        recipient_list=[email],
-        fail_silently=False,
-    )
-
-
-def _verified_identity(request):
-    verified = request.session.get(LOOKUP_VERIFIED_SESSION_KEY)
-    if not verified:
+def _lookup_identity(request):
+    identity = request.session.get(LOOKUP_RESULT_SESSION_KEY)
+    if not identity:
         return None
-    if verified.get("expires_at", 0) <= timezone.now().timestamp():
-        request.session.pop(LOOKUP_VERIFIED_SESSION_KEY, None)
+    if identity.get("expires_at", 0) <= timezone.now().timestamp():
+        request.session.pop(LOOKUP_RESULT_SESSION_KEY, None)
         return None
-    return verified
+    return identity
 
 
 def _masked_id_number(id_number):
@@ -390,6 +370,217 @@ def _published_exam_results(id_number, email):
     return results
 
 
+def _public_room_assignments(id_number, email):
+    return list(
+        ExamRoomAssignment.objects.filter(
+            application__id_number=id_number,
+            application__email__iexact=email,
+            application__status=ExamApplication.Status.VALID,
+        )
+        .select_related(
+            "application",
+            "exam_room__exam_period__cert_type",
+        )
+        .order_by(
+            "exam_room__exam_period__exam_date",
+            "exam_room__name",
+            "exam_room__session",
+        )
+    )
+
+
+@lru_cache(maxsize=1)
+def _register_public_pdf_font():
+    windows_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+    font_candidates = (
+        (windows_fonts / "arial.ttf", windows_fonts / "arialbd.ttf"),
+        (
+            Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
+            Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ),
+        (
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ),
+        (
+            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"),
+        ),
+        (
+            Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
+        )
+    )
+    for regular_path, bold_path in font_candidates:
+        if not regular_path.is_file() or not bold_path.is_file():
+            continue
+        regular_font = TTFont("PublicExamSans", str(regular_path))
+        bold_font = TTFont("PublicExamSans-Bold", str(bold_path))
+        if any(
+            regular_font.face.charToGlyph.get(codepoint, 0) == 0
+            or bold_font.face.charToGlyph.get(codepoint, 0) == 0
+            for codepoint in _PUBLIC_PDF_REQUIRED_GLYPHS
+        ):
+            continue
+        pdfmetrics.registerFont(regular_font)
+        pdfmetrics.registerFont(bold_font)
+        pdfmetrics.registerFontFamily(
+            "PublicExamSans",
+            normal="PublicExamSans",
+            bold="PublicExamSans-Bold",
+            italic="PublicExamSans",
+            boldItalic="PublicExamSans-Bold",
+        )
+        return "PublicExamSans"
+
+    raise ImproperlyConfigured(
+        "PDF export requires a regular and bold font with Vietnamese glyph support."
+    )
+
+
+def _public_lookup_pdf_response(title, candidate, masked_id_number, purpose, rows):
+    font_name = _register_public_pdf_font()
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "PublicExamTitle",
+        parent=styles["Title"],
+        fontName="PublicExamSans-Bold",
+        fontSize=17,
+        leading=22,
+        textColor=colors.HexColor("#173b57"),
+        alignment=0,
+        spaceAfter=8 * mm,
+    )
+    section_style = ParagraphStyle(
+        "PublicExamSection",
+        parent=styles["Heading2"],
+        fontName="PublicExamSans-Bold",
+        fontSize=12,
+        leading=17,
+        textColor=colors.HexColor("#173b57"),
+        spaceBefore=4 * mm,
+        spaceAfter=2 * mm,
+    )
+    body_style = ParagraphStyle(
+        "PublicExamBody",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=15,
+        textColor=colors.HexColor("#19344a"),
+        spaceAfter=2 * mm,
+    )
+
+    story = [
+        Paragraph(escape(title), title_style),
+        Paragraph(f"Thí sinh: {escape(candidate.full_name)}", body_style),
+        Paragraph(f"CCCD: {escape(masked_id_number)}", body_style),
+        Spacer(1, 3 * mm),
+    ]
+    for row in rows:
+        story.append(Paragraph(escape(row["title"]), section_style))
+        for detail in row["details"]:
+            story.append(Paragraph(escape(detail), body_style))
+        story.append(Spacer(1, 2 * mm))
+
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        title=title,
+        author="Trung tâm Kỹ thuật Điện toán",
+    )
+    document.build(story)
+
+    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+    filename = (
+        "lich-phong-thi.pdf"
+        if purpose == "rooms"
+        else "ket-qua-diem-chung-chi.pdf"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "no-store, private"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _public_lookup_pdf(request, purpose):
+    identity = _lookup_identity(request)
+    lookup_route = (
+        "exam-room-public-lookup" if purpose == "rooms" else "exam-public-lookup"
+    )
+    if not identity or identity.get("purpose") != purpose:
+        return redirect(lookup_route)
+
+    id_number = identity["id_number"]
+    email = identity["email"]
+    if purpose == "rooms":
+        assignments = _public_room_assignments(id_number, email)
+        if not assignments:
+            return redirect(lookup_route)
+        candidate = assignments[0].application
+        rows = [
+            {
+                "title": assignment.exam_room.exam_period.name,
+                "details": [
+                    assignment.exam_room.exam_period.cert_type.name,
+                    "Ngày thi: "
+                    + assignment.exam_room.exam_period.exam_date.strftime("%d/%m/%Y"),
+                    "Phòng thi: " + assignment.exam_room.name,
+                    "Ca thi: " + assignment.exam_room.session,
+                ],
+            }
+            for assignment in assignments
+        ]
+        title = "Lịch thi và phòng thi"
+    else:
+        results = _published_exam_results(id_number, email)
+        if not results:
+            return redirect(lookup_route)
+        candidate = results[0]["application"]
+        rows = []
+        for item in results:
+            score = item["score"]
+            score_text = (
+                "Trạng thái: Vắng thi"
+                if score.is_absent
+                else (
+                    f"Điểm đã công bố: {score.score:.2f} / "
+                    f"{item['period'].score_scale:.2f}"
+                )
+            )
+            certificates = item["certificates"]
+            certificate_lines = [
+                f"Chứng chỉ: {certificate.certificate_number} — "
+                f"{certificate.get_status_display()}"
+                for certificate in certificates
+            ] or ["Chứng chỉ: Chưa được cấp"]
+            rows.append(
+                {
+                    "title": item["period"].name,
+                    "details": [
+                        item["period"].cert_type.name,
+                        "Ngày thi: " + item["period"].exam_date.strftime("%d/%m/%Y"),
+                        score_text,
+                        *certificate_lines,
+                    ],
+                }
+            )
+        title = "Kết quả thi và chứng chỉ"
+
+    return _public_lookup_pdf_response(
+        title,
+        candidate,
+        _masked_id_number(id_number),
+        purpose,
+        rows,
+    )
+
+
 def _public_lookup_page(request, purpose):
     if request.method == "POST" and _increment_rate_limit(
         request,
@@ -397,76 +588,6 @@ def _public_lookup_page(request, purpose):
         LOOKUP_IP_LIMIT,
     ):
         return _lookup_rate_limit_response(request, purpose)
-
-    action = request.POST.get("action", "") if request.method == "POST" else ""
-    pending = request.session.get(LOOKUP_PENDING_SESSION_KEY)
-
-    if request.method == "POST" and action == "verify_code":
-        if (
-            not pending
-            or pending.get("expires_at", 0) <= timezone.now().timestamp()
-        ):
-            request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-            return _render_lookup_page(
-                request,
-                purpose,
-                state="warning",
-                state_title="Mã xác thực đã hết hạn",
-                state_message="Vui lòng nhập lại số CCCD và email để yêu cầu mã mới.",
-            )
-
-        if _identity_is_rate_limited(
-            request,
-            "otp",
-            pending["id_number"],
-            pending["email"],
-        ):
-            return _lookup_rate_limit_response(request, purpose)
-
-        submitted_form = PublicExamLookupOTPForm(request.POST)
-        if not submitted_form.is_valid():
-            return _render_lookup_page(
-                request,
-                purpose,
-                step="verify",
-                otp_form=_fresh_form_with_errors(PublicExamLookupOTPForm, submitted_form),
-                state="error",
-                state_title="Thông tin chưa hợp lệ",
-                state_message="Kiểm tra mã email và mã xác thực rồi thử lại.",
-                status=400,
-            )
-
-        pending["attempts"] += 1
-        request.session[LOOKUP_PENDING_SESSION_KEY] = pending
-        submitted_code = submitted_form.cleaned_data["otp"]
-        valid_code = constant_time_compare(
-            pending["otp_digest"],
-            _otp_digest(pending, submitted_code),
-        )
-        if not valid_code:
-            if pending["attempts"] >= LOOKUP_OTP_ATTEMPT_LIMIT:
-                request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-                return _lookup_rate_limit_response(request, purpose)
-            return _render_lookup_page(
-                request,
-                purpose,
-                step="verify",
-                otp_form=PublicExamLookupOTPForm(),
-                state="error",
-                state_title="Mã xác thực không hợp lệ",
-                state_message="Mã không chính xác hoặc đã hết hạn. Vui lòng thử lại.",
-                status=400,
-            )
-
-        request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-        request.session[LOOKUP_VERIFIED_SESSION_KEY] = {
-            "id_number": pending["id_number"],
-            "email": pending["email"],
-            "expires_at": (timezone.now() + LOOKUP_SESSION_TTL).timestamp(),
-        }
-        return redirect(
-            "exam-room-public-lookup" if purpose == "rooms" else "exam-public-lookup"
-        )
 
     if request.method == "POST":
         submitted_form = PublicExamLookupRequestForm(request.POST)
@@ -484,7 +605,7 @@ def _public_lookup_page(request, purpose):
                 ),
                 state="error",
                 state_title="Thông tin chưa hợp lệ",
-                state_message="Vui lòng kiểm tra số CCCD, email và mã xác thực.",
+                state_message="Vui lòng kiểm tra CCCD, email và mã xác thực trong hình.",
                 status=400,
             )
 
@@ -493,111 +614,34 @@ def _public_lookup_page(request, purpose):
         if _identity_is_rate_limited(request, "request", id_number, email):
             return _lookup_rate_limit_response(request, purpose)
 
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        pending = {
+        request.session[LOOKUP_RESULT_SESSION_KEY] = {
             "id_number": id_number,
             "email": email,
-            "nonce": secrets.token_urlsafe(24),
-            "otp_digest": "",
-            "expires_at": (timezone.now() + LOOKUP_CODE_TTL).timestamp(),
-            "attempts": 0,
+            "purpose": purpose,
+            "expires_at": (timezone.now() + LOOKUP_SESSION_TTL).timestamp(),
         }
-        pending["otp_digest"] = _otp_digest(pending, code)
-        request.session[LOOKUP_PENDING_SESSION_KEY] = pending
-
-        try:
-            sent_count = _send_lookup_code(email, code)
-        except (OSError, SMTPException):
-            logger.exception("Could not send an exam lookup OTP email")
-            request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-            return _render_lookup_page(
-                request,
-                purpose,
-                state="error",
-                state_title="Chưa thể gửi mã xác thực",
-                state_message="Dịch vụ email đang tạm thời không khả dụng. Vui lòng thử lại sau.",
-                status=503,
-            )
-        if sent_count != 1:
-            request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-            logger.error("Exam lookup OTP email backend did not send a message")
-            return _render_lookup_page(
-                request,
-                purpose,
-                state="error",
-                state_title="Chưa thể gửi mã xác thực",
-                state_message="Dịch vụ email đang tạm thời không khả dụng. Vui lòng thử lại sau.",
-                status=503,
-            )
-
-        return _render_lookup_page(
-            request,
-            purpose,
-            step="verify",
-            otp_form=PublicExamLookupOTPForm(),
-            state="warning",
-            state_title="Kiểm tra email của bạn",
-            state_message=(
-                "Mã xác thực đã được gửi tới email bạn vừa nhập. "
-                "Mã có hiệu lực trong 10 phút; chỉ thông tin khớp hồ sơ mới mở được dữ liệu."
-            ),
+        return redirect(
+            "exam-room-public-lookup" if purpose == "rooms" else "exam-public-lookup"
         )
 
     if request.GET.get("new") == "1":
-        request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-        request.session.pop(LOOKUP_VERIFIED_SESSION_KEY, None)
-        pending = None
+        request.session.pop(LOOKUP_RESULT_SESSION_KEY, None)
 
-    verified = _verified_identity(request)
-    if not verified:
-        if pending and pending.get("expires_at", 0) > timezone.now().timestamp():
-            return _render_lookup_page(
-                request,
-                purpose,
-                step="verify",
-                otp_form=PublicExamLookupOTPForm(),
-                state="warning",
-                state_title="Kiểm tra email của bạn",
-                state_message=(
-                    "Mã xác thực đã được gửi tới email bạn vừa nhập. "
-                    "Mã có hiệu lực trong 10 phút; chỉ thông tin khớp hồ sơ mới mở được dữ liệu."
-                ),
-            )
-        if pending:
-            request.session.pop(LOOKUP_PENDING_SESSION_KEY, None)
-            return _render_lookup_page(
-                request,
-                purpose,
-                state="warning",
-                state_title="Mã xác thực đã hết hạn",
-                state_message="Vui lòng nhập lại số CCCD và email để yêu cầu mã mới.",
-            )
+    identity = _lookup_identity(request)
+    if not identity or identity.get("purpose") != purpose:
+        if identity:
+            request.session.pop(LOOKUP_RESULT_SESSION_KEY, None)
         return _render_lookup_page(
             request,
             purpose,
             request_form=PublicExamLookupRequestForm(),
         )
 
-    id_number = verified["id_number"]
-    email = verified["email"]
+    id_number = identity["id_number"]
+    email = identity["email"]
     masked_id = _masked_id_number(id_number)
     if purpose == "rooms":
-        assignments = list(
-            ExamRoomAssignment.objects.filter(
-                application__id_number=id_number,
-                application__email__iexact=email,
-                application__status=ExamApplication.Status.VALID,
-            )
-            .select_related(
-                "application",
-                "exam_room__exam_period__cert_type",
-            )
-            .order_by(
-                "exam_room__exam_period__exam_date",
-                "exam_room__name",
-                "exam_room__session",
-            )
-        )
+        assignments = _public_room_assignments(id_number, email)
         return _render_lookup_page(
             request,
             purpose,
@@ -630,3 +674,15 @@ def exam_public_lookup(request):
 @require_http_methods(["GET", "POST"])
 def exam_room_public_lookup(request):
     return _public_lookup_page(request, "rooms")
+
+
+@never_cache
+@require_http_methods(["GET"])
+def exam_public_export_pdf(request):
+    return _public_lookup_pdf(request, "results")
+
+
+@never_cache
+@require_http_methods(["GET"])
+def exam_room_public_export_pdf(request):
+    return _public_lookup_pdf(request, "rooms")

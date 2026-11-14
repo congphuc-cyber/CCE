@@ -15,9 +15,30 @@ body {
   font-family: var(--font-sans) !important;
 }
 
-body.change-list h1.leading-5,
-body.change-list h1 .leading-5 {
-  line-height: 1.5 !important;
+/* Prevent clipping of Vietnamese diacritics in header and breadcrumbs */
+#header-inner h1,
+#header-inner h1 *,
+body.change-form h1,
+body.change-form h1 *,
+body.change-list h1,
+body.change-list h1 *,
+.cce-breadcrumbs,
+.cce-breadcrumbs * {
+  line-height: 1.6 !important;
+  overflow: visible !important;
+}
+
+#header-inner h1 a,
+#header-inner h1 span {
+  display: inline-block;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+#header-inner h1.overflow-hidden {
+  overflow: visible !important;
 }
 
 body.change-list {
@@ -161,7 +182,7 @@ body.change-list .filter-open-button::before {
 }
 
 body.change-list .filter-open-button::after {
-  content: "Áp dụng lọc";
+  content: "Bộ lọc";
   font-size: 0.875rem;
   font-weight: 500;
   color: #FFFFFF;
@@ -419,11 +440,425 @@ body.change-list #result_list tbody tr:hover td {
   color: #14532D !important;
 }
 
+a.deletelink,
+.submit-row a.deletelink,
+a[href*="/delete/"],
+.change-form a[href*="/delete/"],
+form a[href*="/delete/"],
+a.bg-red-600,
+.bg-red-600 a {
+  color: #FFFFFF !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+}
+
 a.deletelink:hover,
-.submit-row a.deletelink:hover {
+.submit-row a.deletelink:hover,
+a[href*="/delete/"]:hover,
+.change-form a[href*="/delete/"]:hover,
+form a[href*="/delete/"]:hover,
+a.bg-red-600:hover {
   background: var(--c-danger) !important;
   border-color: var(--c-danger) !important;
   color: #FFFFFF !important;
+  text-decoration: none !important;
+}
+
+/* Hide add button in change form */
+.change-form a.addlink,
+.change-form .addlink {
+  display: none !important;
+}
+
+/* ==========================================================================
+   CCE Admin Form Inputs (Crisp border, visible empty state, clear placeholder)
+   ========================================================================== */
+.cce-admin-input,
+.change-form input[type="text"],
+.change-form input[type="email"],
+.change-form input[type="date"],
+.change-form input[type="tel"],
+.change-form select,
+.change-form textarea {
+  display: block !important;
+  width: 100% !important;
+  max-width: 42rem !important;
+  height: 42px !important;
+  padding: 8px 14px !important;
+  font-size: 14px !important;
+  line-height: 22px !important;
+  color: #0F172A !important;
+  background-color: #FFFFFF !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+  box-sizing: border-box !important;
+}
+
+.cce-admin-input:hover,
+.change-form input[type="text"]:hover,
+.change-form input[type="email"]:hover,
+.change-form input[type="date"]:hover,
+.change-form input[type="tel"]:hover {
+  border-color: #94A3B8 !important;
+}
+
+.cce-admin-input:focus,
+.change-form input[type="text"]:focus,
+.change-form input[type="email"]:focus,
+.change-form input[type="date"]:focus,
+.change-form input[type="tel"]:focus {
+  border-color: #0284C7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18) !important;
+  outline: none !important;
+}
+
+.cce-admin-input::placeholder,
+.change-form input::placeholder {
+  color: #94A3B8 !important;
+  font-weight: 400 !important;
+  font-style: italic !important;
+}
+
+/* ==========================================================================
+   CCE Calendar Widget (Matching media_1794645160126_cb6b8637.png)
+   ========================================================================== */
+.cce-cal-popover {
+  position: absolute;
+  z-index: 999999;
+  display: none;
+  width: 296px;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 16px 18px 18px 18px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  font-family: var(--font-sans);
+  user-select: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-sizing: border-box;
+}
+
+.cce-cal-popover.is-visible {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cce-cal-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cce-cal-arrow-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #1E293B;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+.cce-cal-arrow-btn:hover {
+  background-color: #F1F5F9;
+}
+
+.cce-cal-dropdown-selectors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cce-cal-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0F172A;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.cce-cal-select-trigger:hover {
+  background-color: #F1F5F9;
+}
+
+.cce-cal-caret {
+  color: #64748B;
+}
+
+.cce-cal-nav-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+.cce-cal-close-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748B;
+  cursor: pointer;
+}
+
+.cce-cal-close-mode-btn:hover {
+  background-color: #F1F5F9;
+  color: #0F172A;
+}
+
+.cce-cal-week-labels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.cce-cal-week-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748B;
+  line-height: 24px;
+}
+
+.cce-cal-grid-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px 2px;
+}
+
+.cce-cal-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  width: 34px;
+  margin: 0 auto;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.cce-cal-outside-day {
+  color: #94A3B8;
+  cursor: default;
+}
+
+.cce-cal-current-day {
+  color: #0F172A;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.cce-cal-current-day:hover {
+  background-color: #F1F5F9;
+}
+
+.cce-cal-current-day.is-selected {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+
+.cce-cal-current-day.is-today:not(.is-selected) {
+  border: 1px solid #CBD5E1;
+}
+
+.cce-cal-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.cce-cal-picker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #0F172A;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cce-cal-picker-btn:hover {
+  background-color: #F1F5F9;
+  border-color: #CBD5E1;
+}
+
+.cce-cal-picker-btn.is-selected {
+  background-color: #000000;
+  color: #FFFFFF;
+  border-color: #000000;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   CCE Form Error Modal Popup (Item 6)
+   ========================================================================== */
+.change-form .errornote,
+.change-form div:has(> .errornote) {
+  display: none !important;
+}
+
+.cce-error-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: cceFadeIn 0.15s ease-out;
+}
+
+@keyframes cceFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cce-error-modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  animation: cceSlideUp 0.18s ease-out;
+}
+
+@keyframes cceSlideUp {
+  from { transform: translateY(12px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.cce-error-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background-color: #FEF2F2;
+  border-bottom: 1px solid #FEE2E2;
+}
+
+.cce-error-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cce-error-modal-icon {
+  color: #DC2626 !important;
+  font-size: 24px !important;
+}
+
+.cce-error-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #991B1B;
+}
+
+.cce-error-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #991B1B;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+.cce-error-modal-close:hover {
+  background-color: #FEE2E2;
+}
+
+.cce-error-modal-body {
+  padding: 18px 20px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.cce-error-modal-desc {
+  margin: 0 0 10px 0;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.cce-error-modal-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style-type: disc;
+  color: #DC2626;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+.cce-error-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  background-color: #F8FAFC;
+  border-top: 1px solid #E2E8F0;
+}
+
+.cce-error-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  background-color: #0284C7;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.cce-error-modal-btn:hover {
+  background-color: #0369A1;
 }
 
 /* ==========================================================================

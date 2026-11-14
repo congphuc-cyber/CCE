@@ -95,7 +95,9 @@ urlpatterns = [
     path('exam/certificates/<int:pk>/history/', training.exam_certificate_history, name='exam-certificate-history'),
     path('dang-ky-du-thi/', public_exams.exam_application_register, name='exam-application-public-register'),
     path('dang-ky-du-thi/thanh-cong/', public_exams.exam_application_registration_success, name='exam-application-public-success'),
+    path('xem-phong-thi/pdf/', public_exams.exam_room_public_export_pdf, name='exam-room-public-export-pdf'),
     path('xem-phong-thi/', public_exams.exam_room_public_lookup, name='exam-room-public-lookup'),
+    path('tra-cuu/pdf/', public_exams.exam_public_export_pdf, name='exam-public-export-pdf'),
     path('tra-cuu/', public_exams.exam_public_lookup, name='exam-public-lookup'),
     path('ui-demo/', training.ui_demo, name='ui-demo'),
 ]

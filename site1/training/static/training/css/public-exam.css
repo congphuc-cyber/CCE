@@ -114,7 +114,7 @@
   flex-direction: column;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-4);
+  padding: var(--space-3);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-lg);
   background: var(--c-surface);
@@ -232,6 +232,215 @@
 .public-exam-field .cce-select {
   min-height: 48px;
   font-size: var(--font-size-md);
+}
+
+.public-date-picker {
+  position: relative;
+}
+
+.public-date-control {
+  position: relative;
+}
+
+.public-date-input {
+  padding-right: 3rem;
+  cursor: pointer;
+}
+
+.public-date-input[readonly] {
+  background: var(--c-surface);
+  caret-color: transparent;
+}
+
+.public-date-toggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--c-primary-mid);
+  cursor: pointer;
+}
+
+.public-date-toggle:hover,
+.public-date-nav:hover {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.public-date-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.public-date-picker :focus-visible {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
+.public-date-calendar {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.public-date-picker.opens-up .public-date-calendar {
+  top: auto;
+  bottom: calc(100% + var(--space-2));
+}
+
+.public-date-calendar[hidden] {
+  display: none;
+}
+
+.public-date-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+.public-date-header-select {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.public-date-month-select {
+  width: 96px;
+  min-width: 0;
+}
+
+.public-date-year-select {
+  width: 78px;
+}
+
+.public-date-header-select:focus-visible,
+.public-date-nav:focus-visible {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
+.public-date-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.public-date-nav {
+  display: inline-flex;
+  width: 30px;
+  min-width: 30px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.public-date-nav .public-date-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.public-date-nav:hover:not(:disabled) {
+  background: var(--c-surface-muted);
+  color: var(--c-text);
+}
+
+.public-date-nav:disabled {
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.public-date-weekdays,
+.public-date-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.public-date-weekdays {
+  padding: var(--space-3) 0 var(--space-1);
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+}
+
+.public-date-day {
+  width: 34px;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.public-date-day:hover:not(:disabled) {
+  border-color: var(--c-primary-mid);
+  background: var(--c-primary-soft);
+}
+
+.public-date-day.is-outside-month {
+  color: var(--c-text-muted);
+}
+
+.public-date-day.is-today {
+  border-color: var(--c-text);
+  background: var(--c-text);
+  color: var(--c-surface);
+  font-weight: var(--font-weight-bold);
+}
+
+.public-date-day.is-selected {
+  border-color: var(--c-primary);
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+}
+
+.public-date-day:disabled {
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .public-required {

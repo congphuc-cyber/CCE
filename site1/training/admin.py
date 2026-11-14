@@ -283,6 +283,25 @@ class TeacherAdmin(BaseModelAdmin):
         )
 
 
+class LearnerClassFilter(SimpleListFilter):
+    title = "Lớp đang học"
+    parameter_name = "training_class"
+
+    def lookups(self, request, model_admin):
+        classes = TrainingClass.objects.all().order_by("name")
+        lookups = [(c.name, c.name) for c in classes]
+        lookups.append(("none", "Chưa ghi danh"))
+        return lookups
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if not val:
+            return queryset
+        if val == "none":
+            return queryset.filter(enrollments__isnull=True).distinct()
+        return queryset.filter(enrollments__training_class__name=val).distinct()
+
+
 class LearnerAdmin(BaseModelAdmin):
     feature_key = "learners"
     allow_delete = True
@@ -301,7 +320,14 @@ class LearnerAdmin(BaseModelAdmin):
     )
     list_display_links = None
     actions = None
-    search_fields = ("full_name", "id_number", "phone", "email")
+    list_filter = (LearnerClassFilter,)
+    search_fields = (
+        "full_name",
+        "id_number",
+        "phone",
+        "email",
+        "enrollments__training_class__name",
+    )
     ordering = ("full_name",)
 
     def get_queryset(self, request):
@@ -322,8 +348,6 @@ class LearnerAdmin(BaseModelAdmin):
 
     @admin.display(description="Xóa")
     def delete_action(self, obj):
-        if obj.enrollments.exists():
-            return ""
         url = reverse(f"{self.admin_site.name}:training_learner_delete", args=(obj.pk,))
         return format_html(
             '<a class="cce-table-btn table-action-delete" href="{}">Xóa</a>',
@@ -331,8 +355,6 @@ class LearnerAdmin(BaseModelAdmin):
         )
 
     def has_delete_permission(self, request, obj=None):
-        if obj is not None and obj.enrollments.exists():
-            return False
         return super().has_delete_permission(request, obj)
 
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):

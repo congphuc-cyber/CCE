@@ -1,4 +1,5 @@
 {% extends "training/base_public_exam.html" %}
+{% load static %}
 
 {% block title %}Đăng ký dự thi{% endblock %}
 {% block meta_description %}Đăng ký dự thi trực tuyến với Trung tâm Kỹ thuật Điện toán.{% endblock %}
@@ -31,8 +32,17 @@
       {% for field in form %}
         <div class="public-exam-field">
           <label class="cce-label" for="{{ field.id_for_label }}">{{ field.label }} <span class="public-required" aria-hidden="true">*</span></label>
-          {{ field }}
-          {% if field.help_text %}<p class="cce-form-help">{{ field.help_text }}</p>{% endif %}
+          {% if field.name == "date_of_birth" %}
+            {{ field }}
+          {% else %}
+            {{ field }}
+          {% endif %}
+          {% if field.help_text %}
+            <p class="cce-form-help"
+              {% if field.name == "exam_period" %}id="id_exam_period_help" aria-live="polite"{% endif %}>
+              {{ field.help_text }}
+            </p>
+          {% endif %}
           {% for error in field.errors %}
             <p class="cce-form-error" id="{{ field.auto_id }}-error">{{ error }}</p>
           {% endfor %}
@@ -44,7 +54,6 @@
     {% endfor %}
     <div class="public-exam-actions">
       <button class="cce-btn cce-btn-primary" type="submit">Gửi đăng ký</button>
-      <a class="cce-btn cce-btn-secondary" href="{% url 'home' %}">Quay về trang chủ</a>
     </div>
   </form>
 </section>
@@ -53,4 +62,5 @@
     document.getElementById("error-summary").focus();
   </script>
 {% endif %}
+<script src="{% static 'training/js/public-exam-registration.js' %}?v=public-date-picker-20261114-8" defer></script>
 {% endblock %}

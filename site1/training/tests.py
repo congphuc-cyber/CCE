@@ -1,5 +1,4 @@
 import csv
-import re
 from decimal import Decimal
 from datetime import date
 from io import BytesIO, StringIO
@@ -8,7 +7,6 @@ from unittest.mock import patch
 
 from django.contrib import admin
 from django.contrib.auth.models import Group, Permission, User
-from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -19,6 +17,7 @@ from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from captcha.models import CaptchaStore
+from reportlab.pdfbase import pdfmetrics
 
 from training.access import all_features, default_features_for_role
 from training.admin import BaseModelAdmin
@@ -46,6 +45,10 @@ from training.models import (
     TrainingClass,
 )
 from training.navigation import FEATURE_ICONS, ROLE_MENUS, group_menu_items, role_for_user
+from training.public_exam_views import (
+    _PUBLIC_PDF_REQUIRED_GLYPHS,
+    _register_public_pdf_font,
+)
 from training.templatetags.ui_components import status_class
 
 
@@ -304,6 +307,14 @@ class PhaseThreeTests(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["chart_values"], [])
+        self.assertFalse(response.context["chart_has_data"])
+        self.assertEqual(response.context["stats"][0]["value"], 0)
+        self.assertEqual(response.context["stats"][3]["value"], 0)
+        self.assertEqual(len(response.context["dashboard_charts"]), 6)
+        self.assertFalse(response.context["dashboard_has_chart_data"])
+        self.assertTrue(
+            all(not chart["has_data"] for chart in response.context["dashboard_charts"])
+        )
         self.assertContains(response, '<section class="cce-nav-group cce-nav-group-static">')
         self.assertContains(response, '<details class="cce-nav-group">')
         self.assertContains(response, "material-symbols-outlined cce-nav-icon")
@@ -314,9 +325,129 @@ class PhaseThreeTests(TestCase):
         self.assertContains(response, "cce-logout-button")
         self.assertNotContains(response, "Tài khoản</span>")
         self.assertContains(response, "Tổng đăng ký trực tuyến")
-        self.assertContains(response, "Chưa có nguồn dữ liệu đăng ký trực tuyến.")
-        self.assertContains(response, "Chưa có dữ liệu chứng nhận.")
+        self.assertNotContains(response, "Chưa có nguồn dữ liệu đăng ký trực tuyến.")
+        self.assertNotContains(response, "Chưa có dữ liệu chứng nhận.")
         self.assertContains(response, "Chưa có dữ liệu trong khoảng thời gian này.")
+
+    def test_dashboard_displays_online_registrations_certificates_and_chart(self):
+        user = self.create_user()
+        self.client.force_login(user)
+        period = _make_exam_period()
+        online_application = _make_application(
+            period,
+            full_name="Thí sinh đăng ký trực tuyến",
+            id_number="123450000001",
+        )
+        direct_application = _make_application(
+            period,
+            full_name="Thí sinh đăng ký trực tiếp",
+            id_number="123450000002",
+        )
+        direct_application.source = ExamApplication.Source.DIRECT
+        direct_application.save(update_fields=("source",))
+        online_application.status = ExamApplication.Status.NEW
+        online_application.save(update_fields=("status",))
+
+        course = _make_course()
+        training_class = TrainingClass.objects.create(
+            name="Lớp dashboard",
+            course=course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ 2, 4",
+            max_students=20,
+            status=TrainingClass.Status.CLOSED,
+        )
+        learner = Learner.objects.create(
+            full_name="Học viên dashboard",
+            id_number="123450000003",
+        )
+        open_class = TrainingClass.objects.create(
+            name="Lớp ghi danh dashboard",
+            course=course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ 3, 5",
+            max_students=20,
+            status=TrainingClass.Status.OPEN,
+        )
+        open_class.enrollments.create(learner=learner)
+        FinalCourseResult.objects.create(
+            training_class=training_class,
+            learner=learner,
+            score=85,
+        )
+        Certificate.objects.create(
+            training_class=training_class,
+            learner=learner,
+            certificate_number="CCE-DASHBOARD-0001",
+            status=Certificate.Status.ISSUED,
+        )
+
+        today = timezone.localdate()
+        response = self.client.get(
+            reverse("dashboard"),
+            {"from_date": today.isoformat(), "to_date": today.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        stats = {stat["label"]: stat["value"] for stat in response.context["stats"]}
+        self.assertEqual(stats["Tổng đăng ký trực tuyến"], 1)
+        self.assertEqual(stats["Chứng nhận đã cấp"], 1)
+        self.assertEqual(response.context["chart_labels"], [today.strftime("%d/%m/%Y")])
+        self.assertEqual(response.context["chart_values"], [1])
+        self.assertTrue(response.context["chart_has_data"])
+        self.assertContains(response, 'data-chart-series="1"')
+        self.assertEqual(
+            [dataset["data"] for dataset in response.context["chart_datasets"]],
+            [[1], [1], [1]],
+        )
+        self.assertContains(response, 'data-chart-mode="bar"')
+        charts = {
+            chart["id"]: chart
+            for chart in response.context["dashboard_charts"]
+        }
+        chart_types = {
+            chart["id"]: chart["type"]
+            for chart in response.context["dashboard_charts"]
+        }
+        self.assertEqual(
+            chart_types,
+            {
+                "exam-application-status-chart": "bar",
+                "exam-application-source-chart": "doughnut",
+                "training-class-status-chart": "bar",
+                "training-class-format-chart": "doughnut",
+                "training-certificate-status-chart": "bar",
+                "exam-period-status-chart": "bar",
+            },
+        )
+        self.assertEqual(charts["training-class-status-chart"]["index_axis"], "y")
+        self.assertEqual(charts["training-certificate-status-chart"]["index_axis"], "y")
+        self.assertEqual(charts["exam-period-status-chart"]["index_axis"], "y")
+        self.assertEqual(
+            charts["exam-application-status-chart"]["values"],
+            [1, 1, 0],
+        )
+        self.assertEqual(
+            charts["exam-application-source-chart"]["values"],
+            [1, 0, 0, 1],
+        )
+        self.assertEqual(
+            charts["training-class-status-chart"]["values"],
+            [1, 1],
+        )
+        self.assertEqual(
+            charts["training-class-format-chart"]["values"],
+            [1, 1],
+        )
+        self.assertEqual(
+            charts["training-certificate-status-chart"]["values"],
+            [1, 0, 0],
+        )
+        self.assertEqual(
+            charts["exam-period-status-chart"]["values"],
+            [0, 1, 0],
+        )
+        self.assertTrue(response.context["dashboard_has_chart_data"])
 
     def test_dashboard_date_range_displays_validation_errors(self):
         user = self.create_user()
@@ -1853,7 +1984,7 @@ class LearnerManagementTests(TestCase):
         self.assertFalse(duplicate.is_valid())
         self.assertEqual(duplicate.duplicate_learner.pk, existing.pk)
 
-    def test_enrolled_learner_cannot_be_deleted_and_class_is_list_only(self):
+    def test_enrolled_learner_has_delete_action_and_can_be_deleted(self):
         learner = Learner.objects.create(**{
             **self.learner_data(),
             "date_of_birth": "2000-01-02",
@@ -1863,16 +1994,17 @@ class LearnerManagementTests(TestCase):
 
         list_response = self.client.get(reverse("admin:training_learner_changelist"))
         self.assertContains(list_response, self.training_class.name)
-        self.assertNotContains(
+        self.assertContains(
             list_response,
             reverse("admin:training_learner_delete", args=(learner.pk,)),
         )
-        self.assertEqual(
-            self.client.get(
-                reverse("admin:training_learner_delete", args=(learner.pk,))
-            ).status_code,
-            403,
+        delete_response = self.client.post(
+            reverse("admin:training_learner_delete", args=(learner.pk,)),
+            {"post": "yes"},
         )
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertFalse(Learner.objects.filter(pk=learner.pk).exists())
+        self.assertFalse(Enrollment.objects.filter(learner_id=learner.pk).exists())
         self.assertEqual(
             tuple(LearnerAdminForm.base_fields),
             ("full_name", "date_of_birth", "id_number", "phone", "email"),
@@ -4065,13 +4197,9 @@ class ExamCertificateWorkflowTests(TestCase):
         self.assertContains(response, "Hệ thống")
 
 
-@override_settings(
-    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-)
 class PublicExamLookupTests(TestCase):
     def setUp(self):
         cache.clear()
-        mail.outbox.clear()
         self.period = _make_exam_period(name="Đợt thi tháng 01/2027")
         self.room = _make_exam_room(self.period, name="B202")
         self.app = _make_application(self.period, full_name="Lê Văn D", id_number="112233445566")
@@ -4079,41 +4207,54 @@ class PublicExamLookupTests(TestCase):
         self.app.email = "candidate@example.com"
         self.app.save(update_fields=["email"])
 
-    def captcha_payload(self):
+    def captcha_payload(self, valid=True):
         captcha_key = CaptchaStore.generate_key()
         captcha = CaptchaStore.objects.get(hashkey=captcha_key)
-        return {"captcha_0": captcha_key, "captcha_1": captcha.response}
+        return {
+            "captcha_0": captcha_key,
+            "captcha_1": captcha.response if valid else "invalid",
+        }
 
-    def request_code(self, client, route_name, id_number=None, email=None):
+    def test_pdf_fonts_support_vietnamese_characters(self):
+        _register_public_pdf_font()
+
+        for font_name in ("PublicExamSans", "PublicExamSans-Bold"):
+            character_map = pdfmetrics.getFont(font_name).face.charToGlyph
+            self.assertTrue(
+                all(
+                    character_map.get(codepoint, 0)
+                    for codepoint in _PUBLIC_PDF_REQUIRED_GLYPHS
+                )
+            )
+
+    def submit_lookup(
+        self,
+        client,
+        route_name,
+        id_number=None,
+        email=None,
+        valid_captcha=True,
+    ):
         payload = {
-            "action": "request_code",
-            "id_number": id_number or self.app.id_number,
-            "email": email or self.app.email,
-            **self.captcha_payload(),
+            "action": "lookup",
+            "id_number": id_number if id_number is not None else self.app.id_number,
+            "email": email if email is not None else self.app.email,
+            **self.captcha_payload(valid_captcha),
         }
         return client.post(reverse(route_name), payload)
-
-    def verify_code(self, client, route_name, code):
-        return client.post(
-            reverse(route_name),
-            {
-                "action": "verify_code",
-                "otp": code,
-                **self.captcha_payload(),
-            },
-        )
-
-    def code_from_last_email(self):
-        return re.search(r"\b[0-9]{6}\b", mail.outbox[-1].body).group(0)
 
     def test_public_lookup_page_is_available_without_login(self):
         response = self.client.get(reverse("exam-public-lookup"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Tra cứu điểm và chứng chỉ")
+        self.assertContains(response, "Mã xác thực trong hình")
         self.assertContains(response, 'name="captcha_0"')
+        self.assertContains(response, 'name="captcha_1"')
+        self.assertContains(response, "Tra cứu</button>")
+        self.assertNotContains(response, "Gửi mã qua email")
         self.assertContains(response, 'name="id_number"')
 
-    def test_lookup_requires_matching_email_otp_and_masks_id_number(self):
+    def test_lookup_requires_matching_cccd_email_and_masks_id_number(self):
         ExamScore.objects.create(
             assignment=self.assignment,
             score=Decimal("92.00"),
@@ -4131,17 +4272,7 @@ class PublicExamLookupTests(TestCase):
         self.assertNotContains(unauthenticated, self.app.full_name)
         self.assertNotContains(unauthenticated, certificate.certificate_number)
 
-        response = self.request_code(self.client, "exam-public-lookup")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Mã xác thực đã được gửi")
-        self.assertNotContains(response, self.app.id_number)
-        code = self.code_from_last_email()
-        self.assertNotEqual(
-            self.client.session["public_exam_lookup_pending"]["otp_digest"],
-            code,
-        )
-
-        response = self.verify_code(self.client, "exam-public-lookup", code)
+        response = self.submit_lookup(self.client, "exam-public-lookup")
         self.assertRedirects(response, reverse("exam-public-lookup"))
         response = self.client.get(reverse("exam-public-lookup"))
 
@@ -4152,6 +4283,14 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "92,00")
         self.assertContains(response, certificate.certificate_number)
         self.assertContains(response, "Thu hồi")
+        self.assertContains(response, "Xuất PDF")
+        self.assertContains(response, reverse("exam-public-export-pdf"))
+
+        pdf_response = self.client.get(reverse("exam-public-export-pdf"))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertIn("attachment;", pdf_response["Content-Disposition"])
+        self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
 
     def test_replaced_certificate_is_not_presented_as_active(self):
         second_period = _make_exam_period(name="Đợt thi tháng 02/2027")
@@ -4186,12 +4325,7 @@ class PublicExamLookupTests(TestCase):
         replaced_certificate.replaced_by = replacement_certificate
         replaced_certificate.save(update_fields=["replaced_by"])
 
-        self.request_code(self.client, "exam-public-lookup")
-        response = self.verify_code(
-            self.client,
-            "exam-public-lookup",
-            self.code_from_last_email(),
-        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
         self.assertRedirects(response, reverse("exam-public-lookup"))
         response = self.client.get(reverse("exam-public-lookup"))
 
@@ -4206,26 +4340,16 @@ class PublicExamLookupTests(TestCase):
             score=Decimal("92.00"),
             is_published=False,
         )
-        self.request_code(self.client, "exam-public-lookup")
-        response = self.verify_code(
-            self.client,
-            "exam-public-lookup",
-            self.code_from_last_email(),
-        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
         self.assertRedirects(response, reverse("exam-public-lookup"))
         unpublished_response = self.client.get(reverse("exam-public-lookup"))
 
         other_client = Client()
-        self.request_code(
+        response = self.submit_lookup(
             other_client,
             "exam-public-lookup",
             id_number="998877665544",
             email="other@example.com",
-        )
-        response = self.verify_code(
-            other_client,
-            "exam-public-lookup",
-            self.code_from_last_email(),
         )
         self.assertRedirects(response, reverse("exam-public-lookup"))
         missing_response = other_client.get(reverse("exam-public-lookup"))
@@ -4234,33 +4358,39 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(unpublished_response, "Không tìm thấy kết quả")
         self.assertEqual(unpublished_response.content, missing_response.content)
 
-    def test_lookup_rejects_bad_captcha_without_sending_email(self):
-        response = self.client.post(
-            reverse("exam-public-lookup"),
-            {
-                "action": "request_code",
-                "id_number": self.app.id_number,
-                "email": self.app.email,
-                "captcha_0": "invalid",
-                "captcha_1": "wrong",
-            },
+    def test_lookup_rejects_invalid_email(self):
+        response = self.submit_lookup(
+            self.client,
+            "exam-public-lookup",
+            email="not-an-email",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.context["request_form"].errors["email"])
+
+    def test_lookup_rejects_invalid_captcha_without_showing_results(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("92.00"),
+            is_published=True,
+        )
+
+        response = self.submit_lookup(
+            self.client,
+            "exam-public-lookup",
+            valid_captcha=False,
+        )
+
+        self.assertEqual(response.status_code, 400)
         self.assertContains(response, "Mã xác thực không đúng", status_code=400)
-        self.assertEqual(mail.outbox, [])
+        self.assertNotContains(response, self.app.full_name, status_code=400)
+        self.assertNotIn("public_exam_lookup_result", self.client.session)
 
-    def test_email_delivery_failure_is_reported_without_creating_a_success_state(self):
-        with patch(
-            "training.public_exam_views._send_lookup_code",
-            side_effect=OSError("mail service unavailable"),
-        ):
-            response = self.request_code(self.client, "exam-public-lookup")
+    def test_public_room_lookup_only_shows_the_candidates_rooms(self):
+        initial_response = self.client.get(reverse("exam-room-public-lookup"))
+        self.assertEqual(initial_response.status_code, 200)
+        self.assertContains(initial_response, 'name="captcha_0"')
+        self.assertContains(initial_response, "Tra cứu</button>")
 
-        self.assertEqual(response.status_code, 503)
-        self.assertContains(response, "Dịch vụ email đang tạm thời không khả dụng", status_code=503)
-        self.assertNotIn("public_exam_lookup_pending", self.client.session)
-
-    def test_public_room_lookup_only_shows_the_verified_candidates_rooms(self):
         other_room = _make_exam_room(self.period, name="C303")
         other_application = _make_application(
             self.period,
@@ -4271,13 +4401,7 @@ class PublicExamLookupTests(TestCase):
         other_application.save(update_fields=["email"])
         _make_assignment(other_room, other_application)
 
-        response = self.request_code(self.client, "exam-room-public-lookup")
-        self.assertEqual(response.status_code, 200)
-        response = self.verify_code(
-            self.client,
-            "exam-room-public-lookup",
-            self.code_from_last_email(),
-        )
+        response = self.submit_lookup(self.client, "exam-room-public-lookup")
         self.assertRedirects(response, reverse("exam-room-public-lookup"))
         response = self.client.get(reverse("exam-room-public-lookup"))
 
@@ -4285,46 +4409,59 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "112******566")
         self.assertNotContains(response, "C303")
         self.assertNotContains(response, other_application.full_name)
-        self.assertContains(response, "In / Xuất thông tin")
+        self.assertContains(response, "Xuất PDF")
+        self.assertContains(response, reverse("exam-room-public-export-pdf"))
 
-    def test_lookup_is_throttled_and_limits_otp_attempts(self):
+        pdf_response = self.client.get(reverse("exam-room-public-export-pdf"))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertIn("attachment;", pdf_response["Content-Disposition"])
+        self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
+
+    def test_pdf_exports_require_a_matching_captcha_verified_lookup(self):
+        response = self.client.get(reverse("exam-public-export-pdf"))
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+
+        self.submit_lookup(self.client, "exam-room-public-lookup")
+        response = self.client.get(reverse("exam-public-export-pdf"))
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+
+    def test_lookup_is_throttled_by_ip_and_identity(self):
         with patch("training.public_exam_views.LOOKUP_IP_LIMIT", 0):
-            limited = self.request_code(self.client, "exam-public-lookup")
+            limited = self.submit_lookup(self.client, "exam-public-lookup")
         self.assertEqual(limited.status_code, 429)
         self.assertEqual(limited["Retry-After"], "900")
         self.assertContains(limited, "Đã vượt giới hạn tra cứu", status_code=429)
 
         cache.clear()
-        request = self.request_code(self.client, "exam-public-lookup")
-        self.assertEqual(request.status_code, 200)
-        actual_code = self.code_from_last_email()
-        wrong_code = "000000" if actual_code != "000000" else "000001"
-        for attempt in range(5):
-            response = self.verify_code(
+        with patch("training.public_exam_views.LOOKUP_IDENTITY_LIMIT", 0):
+            limited = self.submit_lookup(
                 self.client,
                 "exam-public-lookup",
-                wrong_code,
             )
-        self.assertEqual(response.status_code, 429)
-        self.assertContains(response, "Đã vượt giới hạn tra cứu", status_code=429)
+        self.assertEqual(limited.status_code, 429)
+        self.assertContains(limited, "Đã vượt giới hạn tra cứu", status_code=429)
 
-    def test_expired_lookup_code_cannot_unlock_results(self):
-        self.request_code(self.client, "exam-public-lookup")
+    def test_expired_lookup_session_cannot_show_results(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("92.00"),
+            is_published=True,
+        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
+        self.assertRedirects(response, reverse("exam-public-lookup"))
         session = self.client.session
-        pending = session["public_exam_lookup_pending"]
-        pending["expires_at"] = timezone.now().timestamp() - 1
-        session["public_exam_lookup_pending"] = pending
+        lookup = session["public_exam_lookup_result"]
+        lookup["expires_at"] = timezone.now().timestamp() - 1
+        session["public_exam_lookup_result"] = lookup
         session.save()
 
-        response = self.verify_code(
-            self.client,
-            "exam-public-lookup",
-            self.code_from_last_email(),
-        )
+        response = self.client.get(reverse("exam-public-lookup"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Mã xác thực đã hết hạn")
-        self.assertNotIn("public_exam_lookup_verified", self.client.session)
+        self.assertContains(response, "Mã xác thực trong hình")
+        self.assertNotContains(response, self.app.full_name)
+        self.assertNotIn("public_exam_lookup_result", self.client.session)
 
 class PublicExamRegistrationTests(TestCase):
     def setUp(self):
@@ -4358,6 +4495,20 @@ class PublicExamRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Địa chỉ email")
         self.assertContains(response, "Ngày sinh")
+        self.assertNotContains(response, "Quay về trang chủ")
+        self.assertContains(response, " readonly ")
+        self.assertContains(response, 'placeholder="mm/dd/yyyy"')
+        self.assertContains(response, 'data-date-previous')
+        self.assertContains(response, 'data-date-month')
+        self.assertContains(response, 'data-date-year')
+        self.assertContains(
+            response,
+            f'data-cert-type="{self.course.pk}"',
+        )
+        self.assertContains(
+            response,
+            "public-exam-registration.js",
+        )
 
         response = self.client.post(
             reverse("exam-application-public-register"),
@@ -4380,6 +4531,48 @@ class PublicExamRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Đã nhận hồ sơ đăng ký")
         self.assertContains(response, self.course.name)
+        self.assertContains(
+            response,
+            f'href="{reverse("exam-application-public-register")}"',
+        )
+
+    def test_registration_calendar_value_is_parsed_into_a_date(self):
+        payload = self.valid_payload()
+        payload["date_of_birth"] = "01/02/2000"
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            payload,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        application = ExamApplication.objects.get(id_number="123456789012")
+        self.assertEqual(application.date_of_birth.isoformat(), "2000-01-02")
+
+    def test_registration_rejects_an_exam_period_for_another_certificate_type(self):
+        other_course = Course.objects.create(
+            name="Chứng chỉ khác",
+            pass_threshold=70,
+        )
+        other_period = _make_exam_period(
+            course=other_course,
+            name="Đợt thi chứng chỉ khác",
+        )
+        payload = self.valid_payload()
+        payload["exam_period"] = str(other_period.pk)
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            payload,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(
+            response,
+            "Đợt thi không thuộc loại chứng chỉ đã chọn.",
+            status_code=400,
+        )
+        self.assertFalse(ExamApplication.objects.exists())
 
     def test_invalid_registration_shows_field_errors_without_saving(self):
         payload = self.valid_payload()

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from functools import wraps
 
@@ -12,6 +13,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Q
+from django.db.models.functions import TruncDate
 from django.http import HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -202,15 +204,197 @@ def dashboard(request):
     if not user_has_feature(request.user, "dashboard"):
         raise PermissionDenied
 
+    today = timezone.localdate()
+    default_from_date = today - timedelta(days=29)
+    has_date_filters = "from_date" in request.GET or "to_date" in request.GET
     date_form = DashboardDateRangeForm(
-        request.GET if "from_date" in request.GET or "to_date" in request.GET else None
+        request.GET if has_date_filters else None,
+        initial={"from_date": default_from_date, "to_date": today},
     )
-    date_form.is_valid()
+    date_range_is_valid = date_form.is_valid() if date_form.is_bound else True
+    online_applications = ExamApplication.objects.filter(
+        source=ExamApplication.Source.ONLINE
+    )
+    chart_labels = []
+    chart_values = []
+    chart_datasets = []
+    chart_has_data = False
+    if date_range_is_valid:
+        cleaned_dates = date_form.cleaned_data if date_form.is_bound else {}
+        from_date = cleaned_dates.get("from_date") or default_from_date
+        to_date = cleaned_dates.get("to_date") or today
+        series = [
+            {
+                "label": "Hồ sơ đăng ký trực tuyến",
+                "short_label": "Hồ sơ trực tuyến",
+                "queryset": online_applications,
+                "date_field": "registered_at",
+                "color": "#173B57",
+                "fill_color": "rgba(23, 59, 87, 0.10)",
+            },
+            {
+                "label": "Lượt ghi danh lớp học",
+                "short_label": "Ghi danh lớp",
+                "queryset": Enrollment.objects.all(),
+                "date_field": "created_at",
+                "color": "#0F766E",
+                "fill_color": "rgba(15, 118, 110, 0.10)",
+            },
+            {
+                "label": "Chứng nhận đào tạo đã cấp",
+                "short_label": "Chứng nhận cấp",
+                "queryset": Certificate.objects.filter(
+                    status=Certificate.Status.ISSUED
+                ),
+                "date_field": "issued_at",
+                "color": "#A86512",
+                "fill_color": "rgba(168, 101, 18, 0.10)",
+            },
+        ]
+        series_counts = []
+        chart_days = set()
+        for item in series:
+            date_field = item["date_field"]
+            counts = dict(
+                item["queryset"]
+                .filter(**{f"{date_field}__date__range": (from_date, to_date)})
+                .annotate(day=TruncDate(date_field))
+                .values("day")
+                .annotate(total=Count("pk"))
+                .values_list("day", "total")
+            )
+            series_counts.append(counts)
+            chart_days.update(counts)
+
+        ordered_days = sorted(chart_days)
+        chart_labels = [day.strftime("%d/%m/%Y") for day in ordered_days]
+        chart_datasets = [
+            {
+                "label": item["label"],
+                "data": [counts.get(day, 0) for day in ordered_days],
+                "borderColor": item["color"],
+                "backgroundColor": item["fill_color"],
+                "fillColor": item["fill_color"],
+                "shortLabel": item["short_label"],
+            }
+            for item, counts in zip(series, series_counts)
+        ]
+        if chart_datasets:
+            chart_values = chart_datasets[0]["data"]
+        chart_has_data = bool(chart_labels)
+
+    def choice_chart(
+        chart_id,
+        title,
+        queryset,
+        value_field,
+        choices,
+        chart_type,
+        colors,
+        empty_message,
+        index_axis=None,
+    ):
+        counts = dict(
+            queryset.values(value_field)
+            .annotate(total=Count("pk"))
+            .values_list(value_field, "total")
+        )
+        choice_values = {value for value, _ in choices}
+        chart_labels = [label for _, label in choices]
+        chart_values = [counts.get(value, 0) for value, _ in choices]
+        unknown_statuses = sorted(set(counts) - choice_values)
+        chart_labels.extend(unknown_statuses)
+        chart_values.extend(counts[status] for status in unknown_statuses)
+        chart_colors = [
+            colors[index % len(colors)]
+            for index in range(len(chart_values))
+        ]
+        return {
+            "id": chart_id,
+            "title": title,
+            "type": chart_type,
+            "labels": chart_labels,
+            "values": chart_values,
+            "colors": chart_colors,
+            "index_axis": index_axis,
+            "has_data": any(chart_values),
+            "empty_message": empty_message,
+        }
+
+    dashboard_charts = [
+        choice_chart(
+            "exam-application-status-chart",
+            "Hồ sơ dự thi theo trạng thái",
+            ExamApplication.objects.all(),
+            "status",
+            ExamApplication.Status.choices,
+            "bar",
+            ["#3979AD", "#179B82", "#D95D63"],
+            "Chưa có hồ sơ dự thi.",
+        ),
+        choice_chart(
+            "exam-application-source-chart",
+            "Hồ sơ dự thi theo nguồn",
+            ExamApplication.objects.all(),
+            "source",
+            ExamApplication.Source.choices,
+            "doughnut",
+            ["#3979AD", "#E6A440", "#35A18B", "#8192A6"],
+            "Chưa có nguồn hồ sơ để thống kê.",
+        ),
+        choice_chart(
+            "training-class-status-chart",
+            "Lớp học theo trạng thái",
+            TrainingClass.objects.all(),
+            "status",
+            TrainingClass.Status.choices,
+            "bar",
+            ["#179B82", "#8192A6"],
+            "Chưa có lớp học để thống kê.",
+            index_axis="y",
+        ),
+        choice_chart(
+            "training-class-format-chart",
+            "Lớp học theo hình thức",
+            TrainingClass.objects.all(),
+            "learning_format",
+            TrainingClass.LearningFormat.choices,
+            "doughnut",
+            ["#3979AD", "#28A9A1"],
+            "Chưa có hình thức lớp học để thống kê.",
+        ),
+        choice_chart(
+            "training-certificate-status-chart",
+            "Chứng nhận đào tạo theo trạng thái",
+            Certificate.objects.all(),
+            "status",
+            Certificate.Status.choices,
+            "bar",
+            ["#179B82", "#D95D63", "#E6A440"],
+            "Chưa có chứng nhận đào tạo.",
+            index_axis="y",
+        ),
+        choice_chart(
+            "exam-period-status-chart",
+            "Đợt thi theo trạng thái",
+            ExamPeriod.objects.all(),
+            "status",
+            ExamPeriod.Status.choices,
+            "bar",
+            ["#E6A440", "#3979AD", "#8192A6"],
+            "Chưa có đợt thi.",
+            index_axis="y",
+        ),
+    ]
+    dashboard_has_chart_data = chart_has_data or any(
+        chart["has_data"] for chart in dashboard_charts
+    )
+
     stats = [
         {
             "label": "Tổng đăng ký trực tuyến",
-            "value": "—",
-            "note": "Chưa có nguồn dữ liệu đăng ký trực tuyến.",
+            "value": online_applications.count(),
+            "note": "Tổng hồ sơ đăng ký dự thi trực tuyến.",
         },
         {
             "label": "Lớp đang mở",
@@ -224,8 +408,10 @@ def dashboard(request):
         },
         {
             "label": "Chứng nhận đã cấp",
-            "value": "—",
-            "note": "Chưa có dữ liệu chứng nhận.",
+            "value": Certificate.objects.filter(
+                status=Certificate.Status.ISSUED
+            ).count(),
+            "note": "Số chứng nhận đào tạo còn hiệu lực.",
         },
     ]
     return render(
@@ -238,9 +424,15 @@ def dashboard(request):
             "stats": stats,
             "date_form": date_form,
             "chart_id": "daily-registration-chart",
-            "chart_title": "Đăng ký trực tuyến theo ngày",
-            "chart_labels": [],
-            "chart_values": [],
+            "chart_title": "Đăng ký, ghi danh và cấp chứng nhận theo ngày",
+            "chart_labels": chart_labels,
+            "chart_values": chart_values,
+            "chart_datasets": chart_datasets,
+            "chart_has_data": chart_has_data,
+            "chart_has_multiple_series": True,
+            "chart_data": {"labels": chart_labels, "datasets": chart_datasets},
+            "dashboard_charts": dashboard_charts,
+            "dashboard_has_chart_data": dashboard_has_chart_data,
         },
     )
 

@@ -2320,6 +2320,219 @@ select.form-control:focus, textarea.form-control:focus {
   gap: var(--space-3);
 }
 
+.cce-dashboard-analytics {
+  margin-top: var(--space-6);
+}
+
+.cce-dashboard-analytics-heading {
+  margin-bottom: var(--space-4);
+}
+
+.cce-dashboard-analytics-heading h2 {
+  margin: 0;
+  color: var(--c-text);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.cce-dashboard-analytics-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.cce-dashboard-trend-card {
+  margin-bottom: var(--space-4);
+  box-shadow: none;
+}
+
+.cce-dashboard-trend-header {
+  margin-bottom: var(--space-3);
+}
+
+.cce-dashboard-trend-header .cce-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cce-dashboard-trend-header .material-symbols-outlined {
+  color: var(--c-primary);
+  font-size: 1.25rem;
+}
+
+.cce-dashboard-trend-toolbar {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.cce-chart-interaction-hint {
+  margin: var(--space-1) 0 0 1.75rem;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.cce-chart-series-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.cce-chart-series-btn {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.cce-chart-series-btn:hover {
+  border-color: var(--c-primary-light);
+  color: var(--c-primary);
+}
+
+.cce-chart-series-btn:focus-visible,
+.cce-chart-mode-btn:focus-visible {
+  outline: 2px solid var(--c-focus-border);
+  outline-offset: 2px;
+}
+
+.cce-chart-series-btn.is-active {
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.cce-dashboard-trend-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.cce-dashboard-date-form {
+  margin-left: auto;
+}
+
+.cce-dashboard-date-form .cce-date-filter-group {
+  background: var(--c-surface-subtle);
+}
+
+.cce-dashboard-trend-chart-area {
+  position: relative;
+  height: 320px;
+  min-height: 260px;
+}
+
+.cce-dashboard-trend-chart-area canvas {
+  max-width: 100%;
+}
+
+.cce-dashboard-trend-chart-area .cce-empty-state {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cce-dashboard-trend-chart-area .cce-empty-state p {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.cce-dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.cce-dashboard-chart-card {
+  min-width: 0;
+  margin-bottom: 0;
+  padding: var(--space-5);
+  box-shadow: none;
+}
+
+.cce-dashboard-chart-card .cce-card-header {
+  min-height: 2.75rem;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+.cce-dashboard-chart-card .cce-card-title {
+  font-size: var(--font-size-md);
+}
+
+.cce-dashboard-chart-frame {
+  position: relative;
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cce-dashboard-chart-frame canvas {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.cce-dashboard-chart-empty {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.cce-chart-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  background: var(--c-surface-muted);
+}
+
+.cce-chart-mode-btn {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.cce-chart-mode-btn:hover {
+  color: var(--c-primary);
+}
+
+.cce-chart-mode-btn.is-active {
+  background: var(--c-surface);
+  color: var(--c-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+@media (max-width: 1100px) {
+  .cce-dashboard-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .cce-quick-action-tile {
   display: flex;
   align-items: center;
@@ -2746,5 +2959,69 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
   .cce-stat-grid {
     grid-template-columns: 1fr;
+  }
+  .cce-dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cce-chart-series-switch {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cce-chart-series-btn {
+    padding: 8px 6px;
+    font-size: var(--font-size-xs);
+    text-align: center;
+  }
+
+  .cce-dashboard-trend-actions {
+    align-items: stretch;
+  }
+
+  .cce-dashboard-date-form {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .cce-dashboard-trend-chart-area {
+    height: 280px;
+  }
+}
+
+@media (max-width: 576px) {
+  .cce-dashboard-trend-card .cce-filter-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cce-dashboard-trend-card .cce-date-filter-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .cce-dashboard-trend-card .cce-date-field-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-width: 0;
+    padding: 4px;
+  }
+
+  .cce-dashboard-trend-card .cce-date-field-wrap input[type="date"] {
+    width: 100% !important;
+    min-width: 0;
+    padding-right: 16px !important;
+  }
+
+  .cce-dashboard-trend-card .cce-date-separator {
+    display: none;
+  }
+
+  .cce-dashboard-trend-card .cce-date-filter-btn {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }

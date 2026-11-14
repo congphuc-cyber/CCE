@@ -234,6 +234,8 @@ class Command(BaseCommand):
                 defaults={
                     "full_name": name,
                     "phone": f"091{index + 1:07d}",
+                    "id_number": f"079200{index + 1:06d}",
+                    "date_of_birth": timezone.now().date().replace(year=1995 + (index % 10), month=(index % 12) + 1, day=(index % 28) + 1),
                 },
             )
             learners.append(learner)

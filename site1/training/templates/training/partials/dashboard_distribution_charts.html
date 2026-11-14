@@ -1,0 +1,110 @@
+<section class="cce-dashboard-chart-grid" aria-label="Biểu đồ phân bổ dữ liệu">
+  {% for chart in charts %}
+    <article class="cce-card cce-dashboard-chart-card" aria-labelledby="{{ chart.id }}-title">
+      <div class="cce-card-header">
+        <h3 class="cce-card-title" id="{{ chart.id }}-title">{{ chart.title }}</h3>
+      </div>
+      <div class="cce-dashboard-chart-frame">
+        {% if chart.has_data %}
+          <canvas id="{{ chart.id }}" role="img" aria-label="{{ chart.title }}"></canvas>
+        {% else %}
+          <p class="cce-dashboard-chart-empty">{{ chart.empty_message }}</p>
+        {% endif %}
+      </div>
+    </article>
+  {% endfor %}
+</section>
+
+{% if has_chart_data %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  {{ charts|json_script:"dashboard-distribution-chart-data" }}
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const configs = JSON.parse(
+        document.getElementById("dashboard-distribution-chart-data").textContent
+      );
+      const styles = getComputedStyle(document.documentElement);
+      const textColor = styles.getPropertyValue("--c-text-muted").trim();
+      const gridColor = styles.getPropertyValue("--c-border").trim();
+      const surfaceColor = styles.getPropertyValue("--c-surface").trim();
+
+      configs.forEach(function(config) {
+        if (!config.has_data) return;
+
+        const canvas = document.getElementById(config.id);
+        if (!canvas) return;
+
+        const isDoughnut = config.type === "doughnut";
+        const options = {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: isDoughnut,
+              position: "bottom",
+              labels: {
+                color: textColor,
+                usePointStyle: true,
+                pointStyle: "circle",
+                boxWidth: 8,
+                padding: 16
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const value = Number(context.raw || 0);
+                  if (isDoughnut) {
+                    const total = config.values.reduce(function(sum, item) {
+                      return sum + Number(item || 0);
+                    }, 0);
+                    const percent = total ? (value / total * 100).toFixed(1) : "0.0";
+                    return context.label + ": " + value.toLocaleString("vi-VN")
+                      + " (" + percent + "%)";
+                  }
+                  return (context.label || config.title) + ": "
+                    + value.toLocaleString("vi-VN");
+                }
+              }
+            }
+          }
+        };
+
+        if (config.type === "bar") {
+          const indexAxis = config.index_axis || "x";
+          const valueAxis = indexAxis === "y" ? "x" : "y";
+          const categoryAxis = indexAxis === "y" ? "y" : "x";
+          options.indexAxis = indexAxis;
+          options.scales = {};
+          options.scales[valueAxis] = {
+              beginAtZero: true,
+              ticks: { precision: 0, color: textColor },
+              grid: { color: gridColor }
+          };
+          options.scales[categoryAxis] = {
+              ticks: { color: textColor },
+              grid: { display: false }
+          };
+        }
+
+        new Chart(canvas, {
+          type: config.type,
+          data: {
+            labels: config.labels,
+            datasets: [{
+              label: config.title,
+              data: config.values,
+              backgroundColor: config.colors,
+              borderColor: isDoughnut ? surfaceColor : config.colors[0],
+              borderWidth: isDoughnut ? 2 : 0,
+              borderRadius: config.type === "bar" ? 4 : 0,
+              hoverOffset: isDoughnut ? 6 : 0,
+              maxBarThickness: 36
+            }]
+          },
+          options: options
+        });
+      });
+    });
+  </script>
+{% endif %}

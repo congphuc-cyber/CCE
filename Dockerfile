@@ -11,6 +11,7 @@ WORKDIR /app
 # Cài đặt công cụ hệ thống tối thiểu
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Cài đặt thư viện Python

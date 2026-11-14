@@ -8,7 +8,7 @@
   <meta name="description" content="{% block meta_description %}Thông tin đăng ký dự thi của Trung tâm Kỹ thuật Điện toán.{% endblock %}">
   <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}?v=edtech-rich-surfaces-20261111">
   <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=forbidden-page-center-20261111">
-  <link rel="stylesheet" href="{% static 'training/css/public-exam.css' %}">
+  <link rel="stylesheet" href="{% static 'training/css/public-exam.css' %}?v=lookup-captcha-20261114-1">
 </head>
 <body class="public-exam-page">
   <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
@@ -22,5 +22,6 @@
     </main>
     {% include "training/partials/public_exam_footer.html" %}
   </div>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

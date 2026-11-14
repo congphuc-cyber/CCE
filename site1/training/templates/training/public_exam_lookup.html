@@ -5,7 +5,7 @@
 {% block content %}
 <section class="public-exam-panel">
   <h1>Tra cứu điểm và chứng chỉ</h1>
-  <p class="public-exam-lead">Nhập CCCD và email đã đăng ký. Mã xác thực sẽ được gửi tới địa chỉ email bạn vừa nhập.</p>
+  <p class="public-exam-lead">Nhập CCCD, email đã đăng ký và mã xác thực trong hình để tra cứu điểm, chứng chỉ.</p>
 
   {% if state %}
     {% include "training/partials/public_state.html" with state=state title=state_title message=state_message %}
@@ -47,6 +47,7 @@
       </section>
     {% endif %}
     <div class="public-exam-actions">
+      <a class="cce-btn cce-btn-primary" href="{% url 'exam-public-export-pdf' %}">Xuất PDF</a>
       <a class="cce-btn cce-btn-outline" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
     </div>
   {% else %}

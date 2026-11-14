@@ -217,7 +217,7 @@ class Enrollment(models.Model):
         Learner,
         verbose_name="Học viên",
         related_name="enrollments",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
     )
     created_at = models.DateTimeField("Thời điểm ghi danh", auto_now_add=True)
 

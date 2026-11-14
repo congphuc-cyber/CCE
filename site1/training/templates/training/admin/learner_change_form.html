@@ -1,4 +1,7 @@
 {% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block nav-global-side %}{% endblock %}
 
 {% block after_field_sets %}
     {{ block.super }}
@@ -9,4 +12,126 @@
             <a href="{{ duplicate_learner_url }}">Dùng hồ sơ hiện có</a>.
         </div>
     {% endif %}
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    
+    <!-- CCE Calendar Popover Script -->
+    <script src="{% static 'training/js/cce-admin-datepicker.js' %}"></script>
+
+    <!-- Error Modal Popup -->
+    <div id="cce-form-error-modal" class="cce-error-modal-backdrop" style="display: {% if errors or adminform.form.non_field_errors %}flex{% else %}none{% endif %};" role="dialog" aria-modal="true" aria-labelledby="cce-error-modal-title">
+      <div class="cce-error-modal-card">
+        <div class="cce-error-modal-header">
+          <div class="cce-error-modal-title-wrap">
+            <span class="material-symbols-outlined cce-error-modal-icon">error</span>
+            <h3 id="cce-error-modal-title" class="cce-error-modal-title">Thông tin nhập chưa chính xác</h3>
+          </div>
+          <button type="button" class="cce-error-modal-close" onclick="closeCceErrorModal()" aria-label="Đóng popup">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="cce-error-modal-body">
+          <p class="cce-error-modal-desc">Vui lòng kiểm tra và sửa lại các mục sau:</p>
+          <ul id="cce-error-modal-list" class="cce-error-modal-list">
+            {% for field, error_list in errors.items %}
+              {% for error in error_list %}
+                <li>
+                  {% if field != '__all__' %}
+                    <strong>
+                      {% if field == 'full_name' %}Họ và tên
+                      {% elif field == 'date_of_birth' %}Ngày sinh
+                      {% elif field == 'id_number' %}Số CCCD
+                      {% elif field == 'phone' %}Số điện thoại
+                      {% elif field == 'email' %}Địa chỉ email
+                      {% else %}{{ field }}{% endif %}:
+                    </strong>
+                  {% endif %}
+                  {{ error }}
+                </li>
+              {% endfor %}
+            {% endfor %}
+            {% for error in adminform.form.non_field_errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="cce-error-modal-footer">
+          <button type="button" class="cce-error-modal-btn" onclick="closeCceErrorModal()">
+            Đã hiểu & Sửa lại
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function closeCceErrorModal() {
+        var modal = document.getElementById('cce-form-error-modal');
+        if (modal) {
+          modal.style.display = 'none';
+        }
+      }
+
+      function showCceErrorModal(errorList) {
+        var modal = document.getElementById('cce-form-error-modal');
+        var listEl = document.getElementById('cce-error-modal-list');
+        if (modal && listEl) {
+          listEl.innerHTML = '';
+          errorList.forEach(function(item) {
+            var li = document.createElement('li');
+            li.innerHTML = item;
+            listEl.appendChild(li);
+          });
+          modal.style.display = 'flex';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        var form = document.querySelector('form#learner_form') || document.querySelector('form');
+        if (!form) return;
+
+        form.addEventListener('submit', function(e) {
+          var errors = [];
+          var fullName = form.querySelector('[name="full_name"]');
+          var dob = form.querySelector('[name="date_of_birth"]');
+          var idNum = form.querySelector('[name="id_number"]');
+          var phone = form.querySelector('[name="phone"]');
+          var email = form.querySelector('[name="email"]');
+
+          if (fullName && !fullName.value.trim()) {
+            errors.push('<strong>Họ và tên:</strong> Vui lòng nhập họ và tên học viên.');
+          }
+          if (dob && !dob.value.trim()) {
+            errors.push('<strong>Ngày sinh:</strong> Vui lòng chọn hoặc nhập ngày sinh.');
+          }
+          if (idNum) {
+            var idVal = idNum.value.trim();
+            if (!idVal) {
+              errors.push('<strong>Số CCCD:</strong> Vui lòng nhập số căn cước công dân.');
+            } else if (!/^[0-9]{12}$/.test(idVal)) {
+              errors.push('<strong>Số CCCD:</strong> Số CCCD phải gồm đúng 12 chữ số.');
+            }
+          }
+          if (phone && !phone.value.trim()) {
+            errors.push('<strong>Số điện thoại:</strong> Vui lòng nhập số điện thoại liên hệ.');
+          }
+          if (email) {
+            var emailVal = email.value.trim();
+            if (!emailVal) {
+              errors.push('<strong>Địa chỉ email:</strong> Vui lòng nhập địa chỉ email.');
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+              errors.push('<strong>Địa chỉ email:</strong> Địa chỉ email không đúng định dạng.');
+            }
+          }
+
+          if (errors.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            showCceErrorModal(errors);
+            return false;
+          }
+        });
+      });
+    </script>
 {% endblock %}

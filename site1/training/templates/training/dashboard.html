@@ -69,8 +69,16 @@
     </div>
   </div>
 
-  <!-- Daily Registration Chart -->
-  {% include "training/partials/daily_chart.html" with chart_id=chart_id chart_title=chart_title chart_labels=chart_labels chart_values=chart_values date_form=date_form %}
+  <section class="cce-dashboard-analytics" aria-labelledby="dashboard-analytics-title">
+    <header class="cce-dashboard-analytics-heading">
+      <div>
+        <h2 id="dashboard-analytics-title">Phân tích hoạt động</h2>
+        <p>So sánh xu hướng và phân bổ dữ liệu đào tạo, khảo thí.</p>
+      </div>
+    </header>
+    {% include "training/partials/daily_chart.html" with chart_id=chart_id chart_title=chart_title chart_labels=chart_labels chart_values=chart_values chart_datasets=chart_datasets chart_data=chart_data chart_has_data=chart_has_data chart_has_multiple_series=chart_has_multiple_series date_form=date_form chartjs_loaded=True %}
+    {% include "training/partials/dashboard_distribution_charts.html" with charts=dashboard_charts has_chart_data=dashboard_has_chart_data %}
+  </section>
 </div>
 {% endblock %}
 

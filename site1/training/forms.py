@@ -115,10 +115,23 @@ class TeacherAdminForm(forms.ModelForm):
 
 
 class LearnerAdminForm(forms.ModelForm):
+    full_name = forms.CharField(
+        label="Họ và tên",
+        max_length=150,
+        required=True,
+        widget=forms.TextInput(attrs={
+            "class": "cce-admin-input",
+            "placeholder": "Nhập họ và tên học viên...",
+        }),
+    )
     date_of_birth = forms.DateField(
         label="Ngày sinh",
         required=True,
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=forms.DateInput(attrs={
+            "type": "date",
+            "class": "cce-admin-input",
+            "placeholder": "Chọn hoặc nhập ngày sinh...",
+        }),
     )
     id_number = forms.CharField(
         label="Số CCCD",
@@ -130,9 +143,28 @@ class LearnerAdminForm(forms.ModelForm):
                 message="Số CCCD phải gồm đúng 12 chữ số.",
             )
         ],
+        widget=forms.TextInput(attrs={
+            "class": "cce-admin-input",
+            "placeholder": "Nhập 12 chữ số căn cước công dân...",
+        }),
     )
-    phone = forms.CharField(label="Số điện thoại", max_length=30, required=True)
-    email = forms.EmailField(label="Địa chỉ email", required=True)
+    phone = forms.CharField(
+        label="Số điện thoại",
+        max_length=30,
+        required=True,
+        widget=forms.TextInput(attrs={
+            "class": "cce-admin-input",
+            "placeholder": "Nhập số điện thoại liên hệ...",
+        }),
+    )
+    email = forms.EmailField(
+        label="Địa chỉ email",
+        required=True,
+        widget=forms.EmailInput(attrs={
+            "class": "cce-admin-input",
+            "placeholder": "Nhập địa chỉ email...",
+        }),
+    )
 
     class Meta:
         model = Learner

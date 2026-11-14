@@ -1,7 +1,7 @@
 {% spaceless %}
   {% if audio %}
-    <a class="public-captcha-audio" title="Nghe mã xác thực" href="{{ audio }}">Nghe mã xác thực</a>
+    <a class="public-captcha-audio" title="Nghe mã CAPTCHA" href="{{ audio }}">Nghe mã CAPTCHA</a>
   {% endif %}
-  <img src="{{ image }}" alt="Hình mã xác thực CAPTCHA" class="captcha">
+  <img src="{{ image }}" alt="Mã xác thực trong hình" class="captcha">
   {% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
 {% endspaceless %}

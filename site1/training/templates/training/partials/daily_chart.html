@@ -1,87 +1,197 @@
-<div class="cce-card" style="margin-top: var(--space-6);">
-  <div class="cce-card-header" style="flex-wrap: wrap; gap: var(--space-3); align-items: center;">
-    <h2 class="cce-card-title" style="display: flex; align-items: center; gap: var(--space-2);">
-      <span class="material-symbols-outlined" style="font-size: 1.25rem; color: var(--c-primary);" aria-hidden="true">insights</span>
-      {{ chart_title|default:"Đăng ký trực tuyến theo ngày" }}
-    </h2>
-    {% if date_form %}
-      <form method="get" class="cce-filter-actions" style="margin: 0;">
-        <div class="cce-date-filter-group">
-          <div class="cce-date-field-wrap">
-            <label class="cce-date-field-label" for="{{ date_form.from_date.id_for_label }}">Từ</label>
-            {{ date_form.from_date }}
-          </div>
-          <span class="cce-date-separator" aria-hidden="true">
-            <span class="material-symbols-outlined" style="font-size: 16px;">arrow_forward</span>
-          </span>
-          <div class="cce-date-field-wrap">
-            <label class="cce-date-field-label" for="{{ date_form.to_date.id_for_label }}">Đến</label>
-            {{ date_form.to_date }}
-          </div>
-          <button class="cce-btn cce-btn-primary cce-btn-sm cce-date-filter-btn" type="submit">
-            <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">filter_alt</span>
-            <span>Lọc</span>
-          </button>
+<section class="cce-card cce-dashboard-trend-card" aria-labelledby="{{ chart_id|default:'cce-chart' }}-title">
+  <header class="cce-card-header cce-dashboard-trend-header">
+    <div>
+      <h3 class="cce-card-title" id="{{ chart_id|default:'cce-chart' }}-title">
+        <span class="material-symbols-outlined" aria-hidden="true">insights</span>
+        {{ chart_title|default:"Đăng ký trực tuyến theo ngày" }}
+      </h3>
+      {% if chart_has_multiple_series and chart_has_data %}
+        <p class="cce-chart-interaction-hint">Chọn chỉ số và kiểu biểu đồ; di chuột hoặc chạm để xem chi tiết.</p>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if date_form or chart_has_multiple_series %}
+    <div class="cce-dashboard-trend-toolbar">
+      {% if chart_has_multiple_series and chart_has_data %}
+        <div class="cce-chart-series-switch" role="group" aria-label="Chọn chỉ số cần xem">
+          {% for dataset in chart_datasets %}
+            <button
+              class="cce-chart-series-btn{% if forloop.first %} is-active{% endif %}"
+              type="button"
+              data-chart-series="{{ forloop.counter0 }}"
+              aria-pressed="{{ forloop.first|yesno:'true,false' }}"
+              title="{{ dataset.label }}"
+            >{{ dataset.shortLabel|default:dataset.label }}</button>
+          {% endfor %}
         </div>
-        {% if date_form.errors %}
-          <div class="cce-form-error" role="alert" style="margin-top: 6px; text-align: right;">
-            {% for field in date_form %}{% for err in field.errors %}<div>{{ err }}</div>{% endfor %}{% endfor %}
-            {% for err in date_form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+      {% endif %}
+
+      <div class="cce-dashboard-trend-actions">
+        {% if chart_has_multiple_series and chart_has_data %}
+          <div class="cce-chart-mode-switch" role="group" aria-label="Kiểu biểu đồ">
+            <button class="cce-chart-mode-btn is-active" type="button" data-chart-mode="line" aria-pressed="true">Đường</button>
+            <button class="cce-chart-mode-btn" type="button" data-chart-mode="bar" aria-pressed="false">Cột</button>
           </div>
         {% endif %}
-      </form>
-    {% endif %}
-  </div>
+        {% if date_form %}
+          <form method="get" class="cce-filter-actions cce-dashboard-date-form">
+            <div class="cce-date-filter-group">
+              <div class="cce-date-field-wrap">
+                <label class="cce-date-field-label" for="{{ date_form.from_date.id_for_label }}">Từ</label>
+                {{ date_form.from_date }}
+              </div>
+              <span class="cce-date-separator" aria-hidden="true">
+                <span class="material-symbols-outlined">arrow_forward</span>
+              </span>
+              <div class="cce-date-field-wrap">
+                <label class="cce-date-field-label" for="{{ date_form.to_date.id_for_label }}">Đến</label>
+                {{ date_form.to_date }}
+              </div>
+              <button class="cce-btn cce-btn-primary cce-btn-sm cce-date-filter-btn" type="submit">
+                <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+                <span>Lọc</span>
+              </button>
+            </div>
+            {% if date_form.errors %}
+              <div class="cce-form-error" role="alert">
+                {% for field in date_form %}{% for err in field.errors %}<div>{{ err }}</div>{% endfor %}{% endfor %}
+                {% for err in date_form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 
-  <div style="position: relative; min-height: 260px; display: flex; align-items: center; justify-content: center;">
-    {% if chart_values and chart_values|length > 0 %}
-      <canvas id="{{ chart_id|default:'cce-chart' }}" style="max-height: 280px; width: 100%;"></canvas>
+  <div class="cce-dashboard-trend-chart-area">
+    {% if chart_has_data|default:chart_values %}
+      <canvas
+        id="{{ chart_id|default:'cce-chart' }}"
+        role="img"
+        aria-label="{{ chart_title|default:'Biểu đồ thống kê' }}"
+      ></canvas>
     {% else %}
       <div class="cce-empty-state">
-        <p style="margin: 0; font-size: var(--font-size-sm); color: var(--c-text-muted);">
-          Chưa có dữ liệu trong khoảng thời gian này.
-        </p>
+        <p>Chưa có dữ liệu trong khoảng thời gian này.</p>
       </div>
     {% endif %}
   </div>
-</div>
+</section>
 
-{% if chart_values and chart_values|length > 0 %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% if chart_has_data|default:chart_values %}
+  {% if not chartjs_loaded %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  {% endif %}
+  {% if chart_has_multiple_series %}
+    {{ chart_data|json_script:"daily-chart-data" }}
+  {% endif %}
   <script>
     document.addEventListener("DOMContentLoaded", function() {
-      const ctx = document.getElementById("{{ chart_id|default:'cce-chart' }}");
-      if (ctx) {
-        new Chart(ctx, {
-          type: 'line',
-          data: {
+      const canvas = document.getElementById("{{ chart_id|default:'cce-chart' }}");
+      if (!canvas) return;
+
+      const hasMultipleSeries = {{ chart_has_multiple_series|yesno:"true,false" }};
+      const chartData = hasMultipleSeries
+        ? JSON.parse(document.getElementById("daily-chart-data").textContent)
+        : {
             labels: {{ chart_labels|safe }},
             datasets: [{
               label: "{{ chart_title|default:'Đăng ký trực tuyến' }}",
               data: {{ chart_values|safe }},
               borderColor: getComputedStyle(document.documentElement).getPropertyValue('--c-primary').trim(),
-              backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--c-primary-soft').trim(),
-              borderWidth: 2.5,
-              fill: true,
-              tension: 0.3,
-              pointBackgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--c-accent').trim(),
-              pointRadius: 4,
-              pointHoverRadius: 6
+              backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--c-primary-soft').trim()
             }]
+          };
+      const seriesButtons = document.querySelectorAll("[data-chart-series]");
+      const modeButtons = document.querySelectorAll("[data-chart-mode]");
+      let activeSeriesIndex = 0;
+      const activeSeriesButton = document.querySelector("[data-chart-series].is-active");
+      if (activeSeriesButton) {
+        activeSeriesIndex = Number(activeSeriesButton.dataset.chartSeries);
+      }
+
+      function buildDataset(index, mode) {
+        const dataset = Object.assign({}, chartData.datasets[index]);
+        dataset.borderWidth = 2.5;
+        dataset.tension = 0.3;
+        dataset.fill = mode === "line";
+        dataset.backgroundColor = mode === "line"
+          ? (dataset.fillColor || dataset.backgroundColor)
+          : dataset.borderColor;
+        dataset.pointBackgroundColor = hasMultipleSeries
+          ? dataset.borderColor
+          : getComputedStyle(document.documentElement).getPropertyValue('--c-accent').trim();
+        dataset.pointRadius = hasMultipleSeries ? 3 : 4;
+        dataset.pointHoverRadius = 6;
+        if (mode === "bar") {
+          dataset.borderRadius = 4;
+          dataset.maxBarThickness = 42;
+        }
+        return dataset;
+      }
+
+      const chart = new Chart(canvas, {
+        type: "line",
+        data: {
+          labels: chartData.labels,
+          datasets: [buildDataset(activeSeriesIndex, "line")]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ": "
+                    + Number(context.parsed.y || 0).toLocaleString("vi-VN");
+                }
+              }
+            }
           },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false }
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 8, color: getComputedStyle(document.documentElement).getPropertyValue('--c-text-muted').trim() }
             },
-            scales: {
-              x: { grid: { display: false } },
-              y: { beginAtZero: true, grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--c-border').trim() } }
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--c-text-muted').trim() },
+              grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--c-border').trim() }
             }
           }
+        }
+      });
+
+      seriesButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+          activeSeriesIndex = Number(button.dataset.chartSeries);
+          chart.data.datasets[0] = buildDataset(activeSeriesIndex, chart.config.type);
+          chart.update();
+          seriesButtons.forEach(function(seriesButton) {
+            const isActive = seriesButton === button;
+            seriesButton.classList.toggle("is-active", isActive);
+            seriesButton.setAttribute("aria-pressed", String(isActive));
+          });
         });
-      }
+      });
+
+      modeButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+          chart.config.type = button.dataset.chartMode;
+          chart.data.datasets[0] = buildDataset(activeSeriesIndex, chart.config.type);
+          chart.update();
+          modeButtons.forEach(function(modeButton) {
+            const isActive = modeButton === button;
+            modeButton.classList.toggle("is-active", isActive);
+            modeButton.setAttribute("aria-pressed", String(isActive));
+          });
+        });
+      });
     });
   </script>
 {% endif %}
