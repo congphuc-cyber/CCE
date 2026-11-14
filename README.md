@@ -4,45 +4,51 @@
 
 ---
 
-## ⚡ Cài đặt và chạy dự án
+## ⚡ Chạy dự án lần đầu
 
-### Yêu cầu trước khi cài đặt
+Làm lần lượt các bước dưới đây để cài đặt, tạo database, nạp dữ liệu mẫu và đăng nhập vào hệ thống.
 
-- Git.
-- Python `>= 3.10`; khuyến nghị Python 3.12.
-- Kết nối Internet trong lần cài đầu tiên để tải các thư viện Python.
-- Nếu chạy bằng Docker: Docker Desktop (Windows/macOS) hoặc Docker Engine và Docker Compose plugin (Linux).
+### Windows (PowerShell)
 
-Kiểm tra Python và Git đã có trên `PATH`:
+**Chuẩn bị:** cài Git và Python 3.10 trở lên (khuyến nghị Python 3.12). Khi cài Python, chọn **Add Python to PATH**. Mở PowerShell và kiểm tra:
 
-```bash
-python --version
+```powershell
 git --version
+python --version
 ```
 
-Trên Linux/macOS, dùng `python3 --version` nếu lệnh `python` không có.
-
-### Cách 1: Chạy trực tiếp trên máy
-
-#### Windows (PowerShell)
-
-Mở PowerShell, chạy lần lượt:
+**1. Tải mã nguồn về máy:**
 
 ```powershell
 git clone https://github.com/congphuc-cyber/LMS-.git
 cd LMS-
-.\scripts\setup.ps1 -Demo
-.\scripts\run.ps1
 ```
 
-Nếu PowerShell chặn chạy script, chỉ mở quyền cho cửa sổ hiện tại rồi chạy lại lệnh cài đặt:
+**2. Cài thư viện, tạo database và nạp dữ liệu dùng thử:**
+
+```powershell
+.\scripts\setup.ps1 -Demo
+```
+
+Chờ lệnh chạy xong. Script tự tạo môi trường Python `.venv`, cài các thư viện, tạo database, áp dụng migrations, tạo tài khoản quản trị và nạp dữ liệu mẫu.
+
+**3. Khởi động ứng dụng:**
+
+```powershell
+.\run.ps1
+```
+
+Mở **http://127.0.0.1:8001/** trên trình duyệt. Đăng nhập quản trị bằng username `cce_admin`; thông tin mật khẩu quản trị và tài khoản demo được in trong PowerShell sau bước cài đặt. Hãy lưu lại thông tin đó ở nơi an toàn. Nhấn `Ctrl+C` trong PowerShell để dừng ứng dụng.
+
+Nếu PowerShell báo không cho phép chạy script, chạy lệnh sau trong cùng cửa sổ rồi thực hiện lại bước 2:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\setup.ps1 -Demo
 ```
 
-#### Linux / macOS
+### Linux / macOS
+
+Đảm bảo đã cài Git và Python 3.10 trở lên. Trên Ubuntu/Debian, nếu chưa có Python hoặc hỗ trợ `venv`, cài bằng `sudo apt install git python3 python3-venv python3-pip`. Sau đó chạy trong Terminal:
 
 ```bash
 git clone https://github.com/congphuc-cyber/LMS-.git
@@ -52,85 +58,21 @@ chmod +x scripts/setup.sh scripts/run.sh
 ./scripts/run.sh
 ```
 
-Trên Ubuntu/Debian, nếu máy chưa có Python hoặc hỗ trợ `venv`, có thể cài trước bằng:
+Mở **http://127.0.0.1:8001/**. Thông tin tài khoản được in trong Terminal.
 
-```bash
-sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip
-```
+> Muốn chỉ tạo database và tài khoản quản trị mà không nạp dữ liệu mẫu, bỏ `-Demo` trên Windows hoặc `--demo` trên Linux/macOS.
 
-Lệnh `setup` tạo môi trường ảo `.venv`, cài thư viện từ `requirements/base.txt`, tạo `.env` nếu chưa có, chạy migration, tạo các nhóm quyền và tài khoản quản trị. Tham số `-Demo` / `--demo` nạp thêm dữ liệu mẫu để thử các màn hình nghiệp vụ. Bỏ tham số này nếu chỉ muốn khởi tạo hệ thống trống.
+### Chạy bằng Docker (tùy chọn)
 
-Sau khi khởi tạo, terminal hiển thị thông tin tài khoản quản trị; nếu có nạp dữ liệu demo, mật khẩu demo được tạo ngẫu nhiên cũng hiển thị tại đó. Lưu thông tin này ở nơi an toàn và không chia sẻ log terminal.
-
-Lệnh `run` khởi động máy chủ phát triển trên `127.0.0.1:8001`. Giữ cửa sổ terminal đang chạy; nhấn `Ctrl+C` để dừng. Có thể chọn cổng khác, ví dụ:
+Nếu đã cài Docker, chạy:
 
 ```powershell
-.\scripts\run.ps1 8002
-```
-
-```bash
-./scripts/run.sh 8002
-```
-
-#### Tự cấu hình tài khoản quản trị khi cài local
-
-Muốn chọn tên đăng nhập hoặc mật khẩu quản trị trước lần khởi tạo đầu tiên, đặt biến môi trường trong chính cửa sổ terminal rồi chạy `setup`. Ví dụ PowerShell:
-
-```powershell
-$env:BOOTSTRAP_SUPERUSER_USERNAME = "cce_admin"
-$env:BOOTSTRAP_SUPERUSER_PASSWORD = "thay-bang-mat-khau-rieng"
-.\scripts\setup.ps1 -Demo
-```
-
-Trên Linux/macOS:
-
-```bash
-export BOOTSTRAP_SUPERUSER_USERNAME="cce_admin"
-export BOOTSTRAP_SUPERUSER_PASSWORD="thay-bang-mat-khau-rieng"
-./scripts/setup.sh --demo
-```
-
-File `.env` được tạo làm mẫu cấu hình cục bộ và bị Git bỏ qua. Docker Compose tự đọc file này; ứng dụng chạy local không tự nạp `.env`, vì vậy cần đặt biến trong terminal như ví dụ trên nếu muốn thay đổi cấu hình lúc bootstrap. Không commit mật khẩu hoặc khóa bí mật lên Git. Để đổi mật khẩu quản trị sau khi đã cài đặt, chạy từ thư mục gốc:
-
-```powershell
-.\.venv\Scripts\python.exe .\site1\manage.py changepassword cce_admin
-```
-
-Trên Linux/macOS:
-
-```bash
-./.venv/bin/python site1/manage.py changepassword cce_admin
-```
-
-Lưu ý: chạy lại `bootstrap` sẽ đặt lại mật khẩu tài khoản quản trị theo biến môi trường hiện tại hoặc giá trị mặc định của ứng dụng.
-
-### Cách 2: Chạy bằng Docker Compose
-
-Cài và mở Docker trước, sau đó clone dự án:
-
-```bash
 git clone https://github.com/congphuc-cyber/LMS-.git
 cd LMS-
-```
-
-Nếu muốn cấu hình tài khoản hoặc biến môi trường, sao chép `.env.example` thành `.env` và sửa giá trị cục bộ **trước khi** chạy Compose. Có thể bỏ qua bước này để chạy bằng cấu hình mặc định. Không commit `.env`:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-```bash
-cp .env.example .env
-```
-
-Khởi động dịch vụ tại thư mục gốc:
-
-```bash
 docker compose up --build
 ```
 
-Compose sẽ build image, áp dụng migration, khởi tạo nhóm quyền và nạp dữ liệu demo theo cấu hình mặc định. Cơ sở dữ liệu và media được lưu trong Docker named volumes nên vẫn còn sau khi container dừng. Mở `http://127.0.0.1:8001/`; dùng `Ctrl+C` để dừng. Để chạy nền, dùng `docker compose up --build -d`; dừng và gỡ container bằng `docker compose down` (lệnh này giữ dữ liệu trong volumes).
+Compose tự khởi tạo database và dữ liệu demo. Mở **http://127.0.0.1:8001/**; thông tin tài khoản được in trong log khi container khởi động. Nhấn `Ctrl+C` để dừng.
 
 ---
 
