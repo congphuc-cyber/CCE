@@ -1,6 +1,367 @@
 {% extends "admin/change_form.html" %}
 {% load static %}
 
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        /* =====================================================================
+           1. White Delete Button Text (Chữ xóa học viên đổi thành màu trắng)
+           ===================================================================== */
+        a.deletelink,
+        .submit-row a.deletelink,
+        a[href*="/delete/"],
+        .change-form a[href*="/delete/"],
+        form a[href*="/delete/"],
+        a.bg-red-600,
+        .bg-red-600 a,
+        a[class*="bg-red-600"] {
+            color: #FFFFFF !important;
+            text-decoration: none !important;
+            font-weight: 600 !important;
+        }
+
+        a.deletelink:hover,
+        .submit-row a.deletelink:hover,
+        a[href*="/delete/"]:hover,
+        .change-form a[href*="/delete/"]:hover,
+        a[class*="bg-red-600"]:hover {
+            color: #FFFFFF !important;
+            background-color: #DC2626 !important;
+            text-decoration: none !important;
+        }
+
+        /* Hide default inline error banner */
+        .errornote,
+        div:has(> .errornote) {
+            display: none !important;
+        }
+
+        /* Suppress browser native datepicker indicator */
+        input#id_date_of_birth::-webkit-calendar-picker-indicator,
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.6;
+            cursor: pointer;
+        }
+
+        /* =====================================================================
+           2. Error Modal Popup (Nhập sai thông tin sẽ thông báo kiểu popup)
+           ===================================================================== */
+        .cce-error-modal-backdrop {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 9999999 !important;
+            background-color: rgba(15, 23, 42, 0.6) !important;
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+            display: none;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 16px !important;
+            box-sizing: border-box !important;
+        }
+
+        .cce-error-modal-card {
+            position: relative !important;
+            width: 100% !important;
+            max-width: 460px !important;
+            background: #FFFFFF !important;
+            border-radius: 14px !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1) !important;
+            overflow: hidden !important;
+            border: 1px solid #E2E8F0 !important;
+            font-family: inherit !important;
+            animation: cceModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        @keyframes cceModalPop {
+            from { transform: translateY(16px) scale(0.96); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .cce-error-modal-header {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 16px 20px !important;
+            background-color: #FEF2F2 !important;
+            border-bottom: 1px solid #FEE2E2 !important;
+        }
+
+        .cce-error-modal-title-wrap {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+
+        .cce-error-modal-icon {
+            color: #DC2626 !important;
+            font-size: 24px !important;
+            line-height: 1 !important;
+        }
+
+        .cce-error-modal-title {
+            margin: 0 !important;
+            font-size: 16px !important;
+            font-weight: 700 !important;
+            color: #991B1B !important;
+            line-height: 1.3 !important;
+        }
+
+        .cce-error-modal-close {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 32px !important;
+            height: 32px !important;
+            background: transparent !important;
+            border: none !important;
+            border-radius: 6px !important;
+            color: #991B1B !important;
+            cursor: pointer !important;
+            padding: 0 !important;
+            font-size: 20px !important;
+            transition: background-color 0.15s ease !important;
+        }
+
+        .cce-error-modal-close:hover {
+            background-color: #FEE2E2 !important;
+        }
+
+        .cce-error-modal-body {
+            padding: 20px !important;
+            color: #374151 !important;
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+        }
+
+        .cce-error-modal-desc {
+            margin: 0 0 12px 0 !important;
+            font-weight: 600 !important;
+            color: #1F2937 !important;
+        }
+
+        .cce-error-modal-list {
+            margin: 0 !important;
+            padding-left: 20px !important;
+            list-style-type: disc !important;
+            color: #DC2626 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+            font-size: 14px !important;
+            line-height: 20px !important;
+        }
+
+        .cce-error-modal-footer {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            padding: 14px 20px !important;
+            background-color: #F8FAFC !important;
+            border-top: 1px solid #E2E8F0 !important;
+        }
+
+        .cce-error-modal-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 9px 22px !important;
+            background-color: #0284C7 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            transition: background-color 0.15s ease !important;
+        }
+
+        .cce-error-modal-btn:hover {
+            background-color: #0369A1 !important;
+        }
+
+        /* =====================================================================
+           3. Datepicker Popover Styles (Chọn lịch dạng popup như hình)
+           ===================================================================== */
+        .cce-cal-popover {
+            position: absolute !important;
+            z-index: 999999 !important;
+            display: none;
+            width: 292px !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 16px !important;
+            padding: 16px 18px 18px 18px !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+            user-select: none !important;
+            box-sizing: border-box !important;
+            font-family: inherit !important;
+            animation: cceCalFade 0.15s ease-out !important;
+        }
+
+        @keyframes cceCalFade {
+            from { transform: translateY(6px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .cce-cal-popover.is-visible {
+            display: block !important;
+        }
+
+        .cce-cal-top-header {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            margin-bottom: 12px !important;
+        }
+
+        .cce-cal-arrow-btn {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 28px !important;
+            height: 28px !important;
+            background: transparent !important;
+            border: none !important;
+            border-radius: 6px !important;
+            color: #1E293B !important;
+            cursor: pointer !important;
+            padding: 0 !important;
+            transition: background-color 0.12s ease !important;
+        }
+
+        .cce-cal-arrow-btn:hover {
+            background-color: #F1F5F9 !important;
+        }
+
+        .cce-cal-dropdown-selectors {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }
+
+        .cce-cal-select-trigger {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 4px 6px !important;
+            border-radius: 6px !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            color: #0F172A !important;
+            cursor: pointer !important;
+            transition: background-color 0.12s ease !important;
+        }
+
+        .cce-cal-select-trigger:hover {
+            background-color: #F1F5F9 !important;
+        }
+
+        .cce-cal-week-labels {
+            display: grid !important;
+            grid-template-columns: repeat(7, 1fr) !important;
+            margin-bottom: 8px !important;
+            text-align: center !important;
+        }
+
+        .cce-cal-week-label {
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            color: #64748B !important;
+            line-height: 24px !important;
+        }
+
+        .cce-cal-grid-cells {
+            display: grid !important;
+            grid-template-columns: repeat(7, 1fr) !important;
+            gap: 4px 2px !important;
+        }
+
+        .cce-cal-cell {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 34px !important;
+            width: 34px !important;
+            margin: 0 auto !important;
+            border: none !important;
+            background: transparent !important;
+            border-radius: 8px !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            box-sizing: border-box !important;
+            color: #0F172A !important;
+            padding: 0 !important;
+        }
+
+        .cce-cal-outside-day {
+            color: #94A3B8 !important;
+            cursor: pointer !important;
+        }
+
+        .cce-cal-outside-day:hover {
+            background-color: #F8FAFC !important;
+        }
+
+        .cce-cal-current-day {
+            cursor: pointer !important;
+            transition: background-color 0.12s ease, color 0.12s ease !important;
+        }
+
+        .cce-cal-current-day:hover {
+            background-color: #F1F5F9 !important;
+        }
+
+        .cce-cal-current-day.is-selected {
+            background-color: #000000 !important;
+            color: #FFFFFF !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+        }
+
+        .cce-cal-picker-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 8px !important;
+            padding: 8px 0 !important;
+        }
+
+        .cce-cal-picker-btn {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 10px 4px !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 8px !important;
+            background: #FFFFFF !important;
+            color: #0F172A !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            cursor: pointer !important;
+            transition: all 0.12s ease !important;
+        }
+
+        .cce-cal-picker-btn:hover {
+            background-color: #F1F5F9 !important;
+            border-color: #CBD5E1 !important;
+        }
+
+        .cce-cal-picker-btn.is-selected {
+            background-color: #000000 !important;
+            color: #FFFFFF !important;
+            border-color: #000000 !important;
+            font-weight: 600 !important;
+        }
+    </style>
+{% endblock %}
+
 {% block nav-global-side %}{% endblock %}
 
 {% block after_field_sets %}
@@ -16,11 +377,8 @@
 
 {% block admin_change_form_document_ready %}
     {{ block.super }}
-    
-    <!-- CCE Calendar Popover Script -->
-    <script src="{% static 'training/js/cce-admin-datepicker.js' %}"></script>
 
-    <!-- Error Modal Popup -->
+    <!-- Error Modal Dialog -->
     <div id="cce-form-error-modal" class="cce-error-modal-backdrop" style="display: {% if errors or adminform.form.non_field_errors %}flex{% else %}none{% endif %};" role="dialog" aria-modal="true" aria-labelledby="cce-error-modal-title">
       <div class="cce-error-modal-card">
         <div class="cce-error-modal-header">
@@ -65,6 +423,7 @@
       </div>
     </div>
 
+    <!-- Inline Script for Modal, Datepicker, and Delete Button -->
     <script>
       function closeCceErrorModal() {
         var modal = document.getElementById('cce-form-error-modal');
@@ -87,7 +446,349 @@
         }
       }
 
+      // Close modal on backdrop click
+      document.addEventListener('click', function(e) {
+        var modal = document.getElementById('cce-form-error-modal');
+        if (modal && modal.style.display === 'flex' && e.target === modal) {
+          closeCceErrorModal();
+        }
+      });
+
+      // Close modal on Escape
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeCceErrorModal();
+        }
+      });
+
+      // Calendar Popover Engine
+      (function() {
+        const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+        let popoverEl = null;
+        let activeInput = null;
+        let viewYear = 2026;
+        let viewMonth = 10; // November
+        let selectedDate = null;
+        let mode = 'days';
+
+        function pad(n) {
+          return n < 10 ? '0' + n : String(n);
+        }
+
+        function formatISO(y, m, d) {
+          return y + '-' + pad(m + 1) + '-' + pad(d);
+        }
+
+        function parseISO(str) {
+          if (!str) return null;
+          const parts = str.split('-');
+          if (parts.length !== 3) return null;
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const d = parseInt(parts[2], 10);
+          if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+          return new Date(y, m, d);
+        }
+
+        function createPopover() {
+          if (popoverEl) return popoverEl;
+          popoverEl = document.createElement('div');
+          popoverEl.id = 'cce-custom-calendar-popover';
+          popoverEl.className = 'cce-cal-popover';
+          popoverEl.setAttribute('role', 'dialog');
+          popoverEl.setAttribute('aria-modal', 'true');
+
+          popoverEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+          });
+
+          document.body.appendChild(popoverEl);
+
+          document.addEventListener('mousedown', function(e) {
+            if (popoverEl && popoverEl.classList.contains('is-visible')) {
+              if (!popoverEl.contains(e.target) && e.target !== activeInput && (!activeInput || !activeInput.contains(e.target))) {
+                closeCalPopover();
+              }
+            }
+          });
+
+          return popoverEl;
+        }
+
+        function openCalPopover(input) {
+          activeInput = input;
+          createPopover();
+
+          const currentVal = parseISO(input.value);
+          const today = new Date();
+
+          if (currentVal) {
+            selectedDate = currentVal;
+            viewYear = currentVal.getFullYear();
+            viewMonth = currentVal.getMonth();
+          } else {
+            selectedDate = null;
+            viewYear = today.getFullYear();
+            viewMonth = today.getMonth();
+          }
+
+          mode = 'days';
+          renderCalendar();
+          positionCalPopover();
+          popoverEl.classList.add('is-visible');
+        }
+
+        function closeCalPopover() {
+          if (popoverEl) {
+            popoverEl.classList.remove('is-visible');
+          }
+          mode = 'days';
+        }
+
+        function positionCalPopover() {
+          if (!activeInput || !popoverEl) return;
+          const rect = activeInput.getBoundingClientRect();
+          const popWidth = 300;
+          const popHeight = 350;
+
+          let left = rect.left + window.scrollX;
+          let top = rect.bottom + window.scrollY + 6;
+
+          if (left + popWidth > window.innerWidth - 12) {
+            left = Math.max(12, window.innerWidth - popWidth - 12 + window.scrollX);
+          }
+
+          const viewportBottom = window.innerHeight + window.scrollY;
+          if (top + popHeight > viewportBottom && rect.top > popHeight) {
+            top = rect.top + window.scrollY - popHeight - 6;
+          }
+
+          popoverEl.style.left = left + 'px';
+          popoverEl.style.top = top + 'px';
+        }
+
+        function renderCalendar() {
+          if (!popoverEl) return;
+          if (mode === 'months') {
+            renderMonths();
+          } else if (mode === 'years') {
+            renderYears();
+          } else {
+            renderDays();
+          }
+        }
+
+        function renderDays() {
+          const today = new Date();
+          const todayY = today.getFullYear();
+          const todayM = today.getMonth();
+          const todayD = today.getDate();
+
+          const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay();
+          const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+          const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+          let html = '<div class="cce-cal-top-header">' +
+            '<button type="button" class="cce-cal-arrow-btn cce-cal-prev-btn" aria-label="Tháng trước">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
+            '</button>' +
+            '<div class="cce-cal-dropdown-selectors">' +
+              '<button type="button" class="cce-cal-select-trigger cce-cal-month-trigger">' +
+                '<span>' + MONTH_SHORT[viewMonth] + '</span>' +
+                '<svg style="color:#64748B;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+              '</button>' +
+              '<button type="button" class="cce-cal-select-trigger cce-cal-year-trigger">' +
+                '<span>' + viewYear + '</span>' +
+                '<svg style="color:#64748B;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+              '</button>' +
+            '</div>' +
+            '<button type="button" class="cce-cal-arrow-btn cce-cal-next-btn" aria-label="Tháng sau">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="cce-cal-week-labels">' +
+            WEEKDAYS.map(function(w) { return '<span class="cce-cal-week-label">' + w + '</span>'; }).join('') +
+          '</div>' +
+          '<div class="cce-cal-grid-cells">';
+
+          for (let i = firstDayIndex - 1; i >= 0; i--) {
+            const d = daysInPrevMonth - i;
+            html += '<span class="cce-cal-cell cce-cal-outside-day">' + d + '</span>';
+          }
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const isSelected = selectedDate && (
+              viewYear === selectedDate.getFullYear() &&
+              viewMonth === selectedDate.getMonth() &&
+              d === selectedDate.getDate()
+            );
+            const isToday = (viewYear === todayY && viewMonth === todayM && d === todayD);
+            const classes = ['cce-cal-cell', 'cce-cal-current-day'];
+            if (isSelected) classes.push('is-selected');
+            if (isToday && !isSelected) classes.push('is-today');
+            const iso = formatISO(viewYear, viewMonth, d);
+            html += '<button type="button" class="' + classes.join(' ') + '" data-date="' + iso + '">' + d + '</button>';
+          }
+
+          const totalCells = firstDayIndex + daysInMonth;
+          const nextDays = (totalCells % 7 === 0) ? 0 : 7 - (totalCells % 7);
+          for (let d = 1; d <= nextDays; d++) {
+            html += '<span class="cce-cal-cell cce-cal-outside-day">' + d + '</span>';
+          }
+
+          html += '</div>';
+          popoverEl.innerHTML = html;
+
+          popoverEl.querySelector('.cce-cal-prev-btn').addEventListener('click', function() {
+            viewMonth--;
+            if (viewMonth < 0) {
+              viewMonth = 11;
+              viewYear--;
+            }
+            renderDays();
+          });
+
+          popoverEl.querySelector('.cce-cal-next-btn').addEventListener('click', function() {
+            viewMonth++;
+            if (viewMonth > 11) {
+              viewMonth = 0;
+              viewYear++;
+            }
+            renderDays();
+          });
+
+          popoverEl.querySelector('.cce-cal-month-trigger').addEventListener('click', function() {
+            mode = 'months';
+            renderCalendar();
+          });
+
+          popoverEl.querySelector('.cce-cal-year-trigger').addEventListener('click', function() {
+            mode = 'years';
+            renderCalendar();
+          });
+
+          popoverEl.querySelectorAll('.cce-cal-current-day[data-date]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              const val = btn.getAttribute('data-date');
+              if (activeInput) {
+                activeInput.value = val;
+                activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              closeCalPopover();
+            });
+          });
+        }
+
+        function renderMonths() {
+          let html = '<div class="cce-cal-top-header">' +
+            '<span style="font-size:15px; font-weight:600; color:#0F172A;">Chọn tháng</span>' +
+            '<button type="button" class="cce-cal-arrow-btn cce-cal-close-mode" aria-label="Đóng">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="cce-cal-picker-grid">';
+
+          MONTH_SHORT.forEach(function(m, idx) {
+            const isCurrent = idx === viewMonth;
+            html += '<button type="button" class="cce-cal-picker-btn ' + (isCurrent ? 'is-selected' : '') + '" data-month="' + idx + '">' + m + '</button>';
+          });
+
+          html += '</div>';
+          popoverEl.innerHTML = html;
+
+          popoverEl.querySelector('.cce-cal-close-mode').addEventListener('click', function() {
+            mode = 'days';
+            renderCalendar();
+          });
+
+          popoverEl.querySelectorAll('.cce-cal-picker-btn[data-month]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              viewMonth = parseInt(btn.getAttribute('data-month'), 10);
+              mode = 'days';
+              renderCalendar();
+            });
+          });
+        }
+
+        function renderYears() {
+          const currentYear = viewYear;
+          const startYear = Math.floor(currentYear / 12) * 12;
+          const endYear = startYear + 11;
+
+          let html = '<div class="cce-cal-top-header">' +
+            '<button type="button" class="cce-cal-arrow-btn cce-cal-prev-year">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
+            '</button>' +
+            '<span style="font-size:15px; font-weight:600; color:#0F172A;">' + startYear + ' - ' + endYear + '</span>' +
+            '<button type="button" class="cce-cal-arrow-btn cce-cal-next-year">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="cce-cal-picker-grid">';
+
+          for (let y = startYear; y <= endYear; y++) {
+            const isCurrent = y === viewYear;
+            html += '<button type="button" class="cce-cal-picker-btn ' + (isCurrent ? 'is-selected' : '') + '" data-year="' + y + '">' + y + '</button>';
+          }
+
+          html += '</div>';
+          popoverEl.innerHTML = html;
+
+          popoverEl.querySelector('.cce-cal-prev-year').addEventListener('click', function() {
+            viewYear -= 12;
+            renderYears();
+          });
+
+          popoverEl.querySelector('.cce-cal-next-year').addEventListener('click', function() {
+            viewYear += 12;
+            renderYears();
+          });
+
+          popoverEl.querySelectorAll('.cce-cal-picker-btn[data-year]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              viewYear = parseInt(btn.getAttribute('data-year'), 10);
+              mode = 'days';
+              renderCalendar();
+            });
+          });
+        }
+
+        // Initialize on date_of_birth
+        function initDateField() {
+          const input = document.getElementById('id_date_of_birth') || document.querySelector('input[name="date_of_birth"]');
+          if (!input) return;
+
+          input.addEventListener('click', function(e) {
+            e.preventDefault();
+            openCalPopover(input);
+          });
+
+          input.addEventListener('focus', function() {
+            openCalPopover(input);
+          });
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initDateField);
+        } else {
+          initDateField();
+        }
+      })();
+
+      // Force delete button text color to white & client validation check
       document.addEventListener('DOMContentLoaded', function() {
+        // Delete button white color
+        var deleteLinks = document.querySelectorAll('a[href*="/delete/"], .bg-red-600 a, a.deletelink');
+        deleteLinks.forEach(function(el) {
+          el.style.setProperty('color', '#FFFFFF', 'important');
+          el.style.setProperty('text-decoration', 'none', 'important');
+          el.style.setProperty('font-weight', '600', 'important');
+        });
+
+        // Form submit validation popup
         var form = document.querySelector('form#learner_form') || document.querySelector('form');
         if (!form) return;
 

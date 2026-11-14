@@ -128,9 +128,9 @@ class LearnerAdminForm(forms.ModelForm):
         label="Ngày sinh",
         required=True,
         widget=forms.DateInput(attrs={
-            "type": "date",
             "class": "cce-admin-input",
-            "placeholder": "Chọn hoặc nhập ngày sinh...",
+            "placeholder": "YYYY-MM-DD (chọn ngày sinh)",
+            "autocomplete": "off",
         }),
     )
     id_number = forms.CharField(
