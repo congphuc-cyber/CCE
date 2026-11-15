@@ -1,0 +1,108 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Điểm cuối khóa{% endblock %}
+{% block breadcrumb_title %}Điểm cuối khóa{% endblock %}
+{% block page_title %}Điểm cuối khóa{% endblock %}
+{% block page_description %}Theo dõi tiến độ nhập, trạng thái chốt và công bố kết quả theo lớp.{% endblock %}
+
+{% block content %}
+  <div class="cce-stat-grid stat-theme-score" style="margin-bottom:var(--space-6);">
+    <div class="cce-stat-card">
+      <div class="cce-stat-label">Tổng số lớp</div>
+      <div class="cce-stat-value">{{ total_classes }}</div>
+      <div class="cce-stat-note">Lớp bạn có quyền xem kết quả</div>
+    </div>
+    <div class="cce-stat-card">
+      <div class="cce-stat-label">Đã đủ kết quả</div>
+      <div class="cce-stat-value">{{ completed_classes }}</div>
+      <div class="cce-stat-note">Tất cả học viên đã có điểm hoặc vắng</div>
+    </div>
+    <div class="cce-stat-card">
+      <div class="cce-stat-label">Đã chốt</div>
+      <div class="cce-stat-value">{{ locked_classes }}</div>
+      <div class="cce-stat-note">Lớp đã khóa chỉnh sửa thông thường</div>
+    </div>
+    <div class="cce-stat-card">
+      <div class="cce-stat-label">Đã công bố</div>
+      <div class="cce-stat-value">{{ published_classes }}</div>
+      <div class="cce-stat-note">Toàn bộ kết quả trong lớp đã công bố</div>
+    </div>
+  </div>
+
+  <section class="cce-card" aria-labelledby="final-result-classes-heading">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="final-result-classes-heading">Danh sách lớp</h2>
+    </div>
+    {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+
+    {% if page_obj.object_list %}
+      <div class="cce-table-wrap">
+        <table class="cce-table cce-table-centered" role="table">
+          <thead>
+            <tr>
+              <th scope="col">Lớp</th>
+              <th scope="col">Khóa học</th>
+              <th scope="col">Học viên</th>
+              <th scope="col">Tiến độ kết quả</th>
+              <th scope="col">Chốt kết quả</th>
+              <th scope="col">Công bố</th>
+              <th scope="col">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in page_obj %}
+              <tr>
+                <td><strong>{{ row.training_class.name }}</strong></td>
+                <td>{{ row.training_class.course.name }}</td>
+                <td>{{ row.enrolled_count }}</td>
+                <td>
+                  {% if row.is_complete %}
+                    <span class="cce-badge cce-badge-valid">
+                      {{ row.completed_count }}/{{ row.enrolled_count }} hoàn tất
+                    </span>
+                  {% elif row.enrolled_count %}
+                    <span class="cce-badge cce-badge-draft">
+                      {{ row.completed_count }}/{{ row.enrolled_count }} hoàn tất
+                    </span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-new">Chưa có học viên</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.training_class.final_results_locked %}
+                    <span class="cce-badge cce-badge-closed">Đã chốt</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-draft">Chưa chốt</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.is_published %}
+                    <span class="cce-badge cce-badge-published">Đã công bố</span>
+                  {% elif row.has_publications %}
+                    <span class="cce-badge cce-badge-draft">Một phần</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-new">Chưa</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a class="cce-table-btn cce-table-btn-outline" href="{{ row.results_url }}">
+                    Mở bảng điểm
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "training/partials/pagination.html" with page_obj=page_obj count_label="lớp" %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8);">
+        {% if keyword %}
+          Không tìm thấy lớp hoặc khóa học phù hợp với từ khóa “{{ keyword }}”.
+        {% else %}
+          Chưa có lớp nào trong phạm vi được phân quyền.
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

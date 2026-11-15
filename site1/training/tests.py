@@ -74,6 +74,9 @@ class RoleNavigationTests(TestCase):
             "exam-application-list": "exam-applications",
             "exam-room-list": "exam-rooms",
             "exam-score-list": "exam-scores",
+            "final-results-list": "final-results",
+            "class-results": "final-results",
+            "class-results-upload": "final-results",
             "exam-certificate-list": "exam-certificates",
             "mybk-export": "mybk-export",
             "exam-statistics": "exam-statistics",
@@ -121,6 +124,7 @@ class RoleNavigationTests(TestCase):
         self.assertEqual(context["user_role_label"], "Giáo vụ · Giáo viên")
         self.assertIn("courses", keys)
         self.assertIn("my-classes", keys)
+        self.assertIn("final-results", keys)
         self.assertEqual(context["sidebar_items"][0]["key"], "dashboard")
 
     def test_sidebar_shows_only_role_groups_except_for_administrators(self):
@@ -131,11 +135,11 @@ class RoleNavigationTests(TestCase):
         teacher_navigation = ui_navigation(request)
         self.assertEqual(
             [group["key"] for group in teacher_navigation["sidebar_groups"]],
-            ["teaching"],
+            ["training", "teaching"],
         )
         self.assertEqual(
             [item["key"] for item in teacher_navigation["sidebar_items"]],
-            ["my-classes"],
+            ["final-results", "my-classes"],
         )
 
         administrator = User.objects.create_user(username="administrator-sidebar")
@@ -154,6 +158,14 @@ class RoleNavigationTests(TestCase):
             default_features_for_role("Quản trị viên"),
             {item["key"] for item in all_features()},
         )
+
+    def test_final_results_are_defaulted_for_training_roles(self):
+        for role_name in ("Giáo vụ", "Giáo viên"):
+            with self.subTest(role=role_name):
+                self.assertIn(
+                    "final-results",
+                    default_features_for_role(role_name),
+                )
 
     def test_sidebar_items_are_grouped_without_losing_features(self):
         items = ROLE_MENUS["Giáo vụ"]["items"]
@@ -808,7 +820,7 @@ class PhaseFourTests(TestCase):
         response = self.client.get(detail_url)
         self.assertContains(response, "cce-btn-transfer-action")
         self.assertContains(response, "cce-btn-history-action")
-        self.assertContains(response, "cce-btn-results-action")
+        self.assertNotContains(response, "cce-btn-results-action")
 
         response = self.client.post(
             reverse("class-close", args=(self.training_class.pk,)),
@@ -1496,7 +1508,7 @@ class PhaseFiveTests(TestCase):
             username="phase-five-restricted-superuser",
             password="Admin-pass-9518#",
         )
-        revoked_features = {"classes", "exam-scores"}
+        revoked_features = {"classes", "exam-scores", "final-results"}
         selected = [
             f"{group.pk}:{feature['key']}"
             for role_name, group in self.groups.items()
@@ -1539,6 +1551,7 @@ class PhaseFiveTests(TestCase):
             403,
         )
         self.assertEqual(self.client.get(reverse("class-transfer")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("final-results-list")).status_code, 403)
         course = Course.objects.create(name="Superuser denied class", pass_threshold=50)
         training_class = TrainingClass.objects.create(
             name="SUPERUSER-DENIED-CLASS",
@@ -2511,6 +2524,66 @@ class FinalCourseResultTests(TestCase):
         self.assertTrue(result.is_absent)
         self.assertIsNone(result.score)
 
+    def test_upload_preserves_existing_absence_when_file_contains_a_score(self):
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=None,
+            is_absent=True,
+        )
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        upload_file = self.score_file([[
+            self.learners[0].full_name,
+            self.learners[0].id_number,
+            "80",
+        ]])
+
+        preview = self.client.post(
+            upload_url,
+            {
+                "file": upload_file,
+                "preview": "1",
+            },
+        ).json()
+
+        self.assertTrue(preview["ok"])
+        self.assertEqual(preview["overwrite_count"], 1)
+        self.assertIn("Vắng", preview["preview_rows"][0]["preview_text"])
+        self.assertNotIn("80 điểm", preview["preview_rows"][0]["preview_text"])
+
+        confirmation_required = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[0].full_name,
+                    self.learners[0].id_number,
+                    "80",
+                ]]),
+            },
+        ).json()
+        self.assertTrue(confirmation_required["requires_overwrite_confirmation"])
+        self.assertEqual(confirmation_required["saved"], 0)
+
+        confirmed = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[0].full_name,
+                    self.learners[0].id_number,
+                    "80",
+                ]]),
+                "confirm_overwrite_count": "1",
+            },
+        ).json()
+        self.assertTrue(confirmed["ok"])
+        self.assertEqual(confirmed["saved"], 0)
+        result.refresh_from_db()
+        self.assertTrue(result.is_absent)
+        self.assertIsNone(result.score)
+
     def test_upload_requires_a_matching_class_column(self):
         row = [
             self.learners[0].full_name,
@@ -2594,12 +2667,74 @@ class FinalCourseResultTests(TestCase):
             ).exists()
         )
 
+    def test_final_result_list_is_scoped_by_role_and_its_own_feature_permission(self):
+        other_class = TrainingClass.objects.create(
+            name="ATD-KQ-OTHER",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ Sáu, 18:00",
+            max_students=5,
+        )
+        results = self._complete_and_lock_results()
+        for result in results:
+            result.is_published = True
+            result.save(update_fields=("is_published",))
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        list_url = reverse("final-results-list")
+
+        RoleFeaturePermission.objects.update_or_create(
+            group=Group.objects.get(name="Giáo vụ"),
+            feature="classes",
+            defaults={"allowed": False, "deny_overrides": True},
+        )
+        self.client.force_login(self.manager)
+        manager_page = self.client.get(list_url)
+        self.assertEqual(manager_page.status_code, 200)
+        self.assertEqual(manager_page.context["total_classes"], 2)
+        self.assertEqual(manager_page.context["completed_classes"], 1)
+        self.assertEqual(manager_page.context["locked_classes"], 1)
+        self.assertEqual(manager_page.context["published_classes"], 1)
+        self.assertContains(manager_page, "3/3 hoàn tất")
+        self.assertContains(manager_page, "Đã chốt")
+        self.assertContains(manager_page, "Đã công bố")
+        filtered_page = self.client.get(list_url, {"keyword": other_class.name})
+        self.assertEqual(filtered_page.context["total_classes"], 1)
+        self.assertContains(filtered_page, other_class.name)
+        self.assertNotContains(filtered_page, self.training_class.name)
+        self.assertEqual(self.client.get(results_url).status_code, 200)
+        self.assertFalse(user_has_feature(self.manager, "classes"))
+        self.assertTrue(user_has_feature(self.manager, "final-results"))
+
+        teacher_user = self.create_assigned_teacher()
+        self.client.force_login(teacher_user)
+        teacher_page = self.client.get(list_url)
+        self.assertEqual(teacher_page.status_code, 200)
+        self.assertEqual(teacher_page.context["total_classes"], 1)
+        self.assertContains(teacher_page, self.training_class.name)
+        self.assertNotContains(teacher_page, other_class.name)
+        self.assertEqual(self.client.get(results_url).status_code, 200)
+        self.assertEqual(
+            self.client.get(
+                reverse("class-results", args=(other_class.pk,))
+            ).status_code,
+            403,
+        )
+
+        RoleFeaturePermission.objects.update_or_create(
+            group=Group.objects.get(name="Giáo viên"),
+            feature="final-results",
+            defaults={"allowed": False, "deny_overrides": True},
+        )
+        self.assertEqual(self.client.get(list_url).status_code, 403)
+        self.assertEqual(self.client.get(results_url).status_code, 403)
+
     def test_results_and_upload_pages_render_and_respect_role_permissions(self):
         results_url = reverse("class-results", args=(self.training_class.pk,))
         upload_url = reverse(
             "class-results-upload",
             args=(self.training_class.pk,),
         )
+        self.assertEqual(self.client.get(reverse("final-results-list")).status_code, 200)
         self.assertEqual(self.client.get(results_url).status_code, 200)
         upload_page = self.client.get(upload_url)
         self.assertEqual(upload_page.status_code, 200)
@@ -2615,9 +2750,9 @@ class FinalCourseResultTests(TestCase):
         class_detail = self.client.get(
             reverse("class-detail", args=(self.training_class.pk,))
         )
-        self.assertContains(
+        self.assertNotContains(
             class_detail,
-            reverse("class-results", args=(self.training_class.pk,)),
+            "Kết quả cuối khóa",
         )
         sample = self.client.get(
             reverse(
@@ -2657,21 +2792,30 @@ class FinalCourseResultTests(TestCase):
         self.client.force_login(teacher_user)
 
         class_list = self.client.get(reverse("my-class-list"))
-        self.assertContains(class_list, "Ghi nhận kết quả")
-        self.assertContains(
+        self.assertNotContains(class_list, "Ghi nhận kết quả")
+        self.assertNotContains(
             class_list,
             reverse("class-results", args=(self.training_class.pk,)),
         )
         self.assertContains(class_list, "ATD-KQ-01")
         self.assertNotContains(class_list, "ATD-KQ-02")
 
+        final_result_list = self.client.get(reverse("final-results-list"))
+        self.assertEqual(final_result_list.status_code, 200)
+        self.assertContains(final_result_list, "ATD-KQ-01")
+        self.assertNotContains(final_result_list, "ATD-KQ-02")
+        self.assertContains(
+            final_result_list,
+            reverse("class-results", args=(self.training_class.pk,)),
+        )
+
         results_url = reverse("class-results", args=(self.training_class.pk,))
         results_page = self.client.get(results_url)
         self.assertEqual(results_page.status_code, 200)
-        self.assertEqual(results_page.context["active_menu"], "my-classes")
+        self.assertEqual(results_page.context["active_menu"], "final-results")
         self.assertContains(
             results_page,
-            '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
+            '<a class="cce-nav-link is-active active" href="/final-results/" aria-current="page">',
         )
         self.assertFalse(results_page.context["can_finalize"])
         self.assertNotContains(results_page, 'id="openFinalizeResults"')
@@ -2705,7 +2849,7 @@ class FinalCourseResultTests(TestCase):
         self.assertEqual(upload_page.status_code, 200)
         self.assertContains(
             upload_page,
-            '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
+            '<a class="cce-nav-link is-active active" href="/final-results/" aria-current="page">',
         )
         uploaded = self.client.post(
             upload_url,

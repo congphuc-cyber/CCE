@@ -5,6 +5,7 @@ ROLE_MENUS = {
             {"key": "dashboard", "label": "Bảng điều khiển", "url_name": "dashboard"},
             {"key": "courses", "label": "Chương trình đào tạo", "url_name": "admin:training_course_changelist"},
             {"key": "classes", "label": "Lớp học", "url_name": "admin:training_trainingclass_changelist"},
+            {"key": "final-results", "label": "Điểm cuối khóa", "url_name": "final-results-list"},
             {"key": "teachers", "label": "Giáo viên", "url_name": "admin:training_teacher_changelist"},
             {"key": "learners", "label": "Học viên", "url_name": "admin:training_learner_changelist"},
             {"key": "certificates", "label": "Chứng nhận", "url_name": "certificate-list"},
@@ -15,6 +16,7 @@ ROLE_MENUS = {
         "key": "teacher",
         "items": [
             {"key": "my-classes", "label": "Lớp của tôi", "url_name": "my-class-list"},
+            {"key": "final-results", "label": "Điểm cuối khóa", "url_name": "final-results-list"},
         ],
     },
     "Cán bộ thi": {
@@ -54,6 +56,7 @@ FEATURE_SECTIONS = {
     "dashboard": "dashboard",
     "courses": "training",
     "classes": "training",
+    "final-results": "training",
     "teachers": "training",
     "learners": "training",
     "certificates": "training",
@@ -75,6 +78,7 @@ FEATURE_ICONS = {
     "dashboard": "dashboard",
     "courses": "auto_stories",
     "classes": "groups",
+    "final-results": "grading",
     "teachers": "person_celebrate",
     "learners": "badge",
     "certificates": "workspace_premium",

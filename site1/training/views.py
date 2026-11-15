@@ -1034,7 +1034,6 @@ def my_class_list(request):
             "schedule": item.schedule,
             "status": item.get_status_display(),
             "view_url": reverse("class-detail", args=(item.pk,)),
-            "results_url": reverse("class-results", args=(item.pk,)),
         }
         for item in page_obj
     ]

@@ -5,6 +5,10 @@ from training.navigation import group_menu_items, roles_for_user
 ROUTE_FEATURES = {
     "dashboard": "dashboard",
     "my-class-list": "my-classes",
+    "final-results-list": "final-results",
+    "class-results": "final-results",
+    "class-results-upload": "final-results",
+    "class-results-upload-sample": "final-results",
     "class-detail": "classes",
     "class-close": "classes",
     "class-enroll": "classes",

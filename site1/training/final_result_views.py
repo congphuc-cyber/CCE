@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, F, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -50,20 +50,130 @@ ABSENCE_FILE_FIELD_ALIASES = {"vang", "absent", "is_absent"}
 
 def _can_manage_final_results(user):
     roles = set(roles_for_user(user))
-    return bool(roles & RESULT_ROLES) and user_has_feature(user, "classes")
+    return bool(roles & RESULT_ROLES) and user_has_feature(user, "final-results")
 
 
 def _can_access_final_results(user, training_class):
+    if not user_has_feature(user, "final-results"):
+        return False
     if _can_manage_final_results(user):
         return True
     return (
         "Giáo viên" in roles_for_user(user)
-        and user_has_feature(user, "my-classes")
         and ClassAssignment.objects.filter(
             training_class=training_class,
             teacher__user=user,
             is_active=True,
         ).exists()
+    )
+
+
+@login_required
+def final_result_list(request):
+    can_manage_results = _can_manage_final_results(request.user)
+    roles = set(roles_for_user(request.user))
+    if can_manage_results:
+        classes = TrainingClass.objects.all()
+    elif "Giáo viên" in roles and user_has_feature(request.user, "final-results"):
+        classes = TrainingClass.objects.filter(
+            teacher_assignments__teacher__user=request.user,
+            teacher_assignments__is_active=True,
+        ).distinct()
+    else:
+        raise PermissionDenied
+
+    keyword = request.GET.get("keyword", "").strip()
+    if keyword:
+        classes = classes.filter(
+            Q(name__icontains=keyword) | Q(course__name__icontains=keyword)
+        )
+
+    enrolled_learner = Q(
+        final_results__learner__enrollments__training_class_id=F("pk")
+    )
+    classes = (
+        classes.select_related("course")
+        .annotate(
+            final_result_enrolled_count=Count(
+                "enrollments__learner_id",
+                distinct=True,
+            ),
+            final_result_completed_count=Count(
+                "final_results__learner_id",
+                filter=(
+                    Q(final_results__score__isnull=False)
+                    | Q(final_results__is_absent=True)
+                ) & enrolled_learner,
+                distinct=True,
+            ),
+            final_result_published_count=Count(
+                "final_results__learner_id",
+                filter=Q(final_results__is_published=True) & enrolled_learner,
+                distinct=True,
+            ),
+        )
+        .order_by("name", "pk")
+    )
+
+    total_classes = classes.count()
+    completed_classes = classes.filter(
+        final_result_enrolled_count__gt=0,
+        final_result_completed_count__gte=F("final_result_enrolled_count"),
+    ).count()
+    locked_classes = classes.filter(final_results_locked_at__isnull=False).count()
+    published_classes = classes.filter(
+        final_result_enrolled_count__gt=0,
+        final_result_published_count__gte=F("final_result_enrolled_count"),
+    ).count()
+
+    page_obj = Paginator(classes, PAGE_SIZE).get_page(request.GET.get("page"))
+    rows = []
+    for training_class in page_obj.object_list:
+        is_complete = (
+            training_class.final_result_enrolled_count > 0
+            and training_class.final_result_completed_count
+            >= training_class.final_result_enrolled_count
+        )
+        is_published = (
+            training_class.final_result_enrolled_count > 0
+            and training_class.final_result_published_count
+            >= training_class.final_result_enrolled_count
+        )
+        rows.append({
+            "training_class": training_class,
+            "enrolled_count": training_class.final_result_enrolled_count,
+            "completed_count": training_class.final_result_completed_count,
+            "is_complete": is_complete,
+            "is_published": is_published,
+            "has_publications": training_class.final_result_published_count > 0,
+            "results_url": reverse("class-results", args=(training_class.pk,)),
+        })
+    page_obj.object_list = rows
+
+    return render(
+        request,
+        "training/final_result_list.html",
+        {
+            "active_menu": "final-results",
+            "page_title": "Điểm cuối khóa",
+            "page_description": "Theo dõi và quản lý kết quả cuối khóa theo lớp học.",
+            "breadcrumbs": [{"label": "Điểm cuối khóa"}],
+            "page_obj": page_obj,
+            "keyword": keyword,
+            "filter_fields": [
+                {
+                    "name": "keyword",
+                    "label": "Tìm lớp hoặc khóa học",
+                    "type": "text",
+                    "placeholder": "Nhập tên lớp hoặc khóa học...",
+                    "value": keyword,
+                }
+            ],
+            "total_classes": total_classes,
+            "completed_classes": completed_classes,
+            "locked_classes": locked_classes,
+            "published_classes": published_classes,
+        },
     )
 
 
@@ -205,23 +315,18 @@ def _render_results(
         id_number__isnull=True
     ).exclude(id_number="").exists()
 
-    class_breadcrumb = (
-        {"label": "Lớp học", "url": reverse("admin:training_trainingclass_changelist")}
-        if can_manage_results
-        else {"label": "Lớp của tôi", "url": reverse("my-class-list")}
-    )
     context = {
-        "active_menu": "classes" if can_manage_results else "my-classes",
+        "active_menu": "final-results",
         "page_title": f"Kết quả cuối khóa — {training_class.name}",
         "page_description": (
             f"Ngưỡng đạt: {training_class.course.pass_threshold} điểm. "
             "Bài đánh giá diễn ra ngoài hệ thống."
         ),
         "breadcrumbs": [
-            class_breadcrumb,
+            {"label": "Điểm cuối khóa", "url": reverse("final-results-list")},
             {
                 "label": training_class.name,
-                "url": reverse("class-detail", args=(training_class.pk,)),
+                "url": reverse("class-results", args=(training_class.pk,)),
             },
             {"label": "Kết quả cuối khóa"},
         ],
@@ -824,6 +929,13 @@ def _parse_final_result_csv(uploaded, training_class):
         .exclude(id_number__isnull=True)
         .exclude(id_number="")
     }
+    existing_absence_ids = set(
+        FinalCourseResult.objects.filter(
+            training_class=training_class,
+            is_absent=True,
+            learner__id_number__in=learners_by_id,
+        ).values_list("learner__id_number", flat=True)
+    )
     entries = []
     errors = []
     preview_rows = []
@@ -883,14 +995,15 @@ def _parse_final_result_csv(uploaded, training_class):
                 "Họ và tên trong file không khớp với số CCCD.",
             )
 
-        is_absent = False
+        file_is_absent = False
         if error is None:
-            is_absent, error = _parse_absence(raw_absence)
+            file_is_absent, error = _parse_absence(raw_absence)
             if error:
                 error_column = "Vắng"
-        if error is None and is_absent and raw_score:
+        if error is None and file_is_absent and raw_score:
             error_column, error = "Vắng", "Không nhập điểm khi đã đánh dấu vắng."
-        elif error is None and not is_absent and not raw_score:
+        is_absent = file_is_absent or id_number in existing_absence_ids
+        if error is None and not is_absent and not raw_score:
             error_column, error = (
                 "Điểm cuối khóa",
                 "Vui lòng nhập điểm cuối khóa hoặc đánh dấu vắng.",
@@ -1076,7 +1189,7 @@ def class_final_result_upload(request, class_id):
         request,
         "training/class_final_results_upload.html",
         {
-            "active_menu": "classes" if can_manage_results else "my-classes",
+            "active_menu": "final-results",
             "page_title": f"Upload file điểm — {training_class.name}",
             "page_description": (
                 "Chọn file CSV UTF-8 có lớp, họ tên, CCCD và điểm cuối khóa "
@@ -1085,8 +1198,12 @@ def class_final_result_upload(request, class_id):
             ),
             "breadcrumbs": [
                 {
+                    "label": "Điểm cuối khóa",
+                    "url": reverse("final-results-list"),
+                },
+                {
                     "label": training_class.name,
-                    "url": reverse("class-detail", args=(training_class.pk,)),
+                    "url": reverse("class-results", args=(training_class.pk,)),
                 },
                 {
                     "label": "Kết quả cuối khóa",

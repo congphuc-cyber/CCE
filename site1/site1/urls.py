@@ -28,6 +28,11 @@ urlpatterns = [
     path('profile/', training.profile, name='profile'),
     path('learners/import/', learners.learner_import, name='learner-import'),
     path('my-classes/', training.my_class_list, name='my-class-list'),
+    path(
+        'final-results/',
+        final_results.final_result_list,
+        name='final-results-list',
+    ),
     path('classes/transfers/', training.class_transfer, name='class-transfer'),
     path(
         'classes/transfers/history/',

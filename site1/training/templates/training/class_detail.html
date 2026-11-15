@@ -27,11 +27,6 @@
         <span class="material-symbols-outlined" aria-hidden="true">history</span>
         <span>Lịch sử chuyển lớp</span>
       </a>
-      <a class="cce-btn cce-btn-secondary cce-btn-results-action" href="{% url 'class-results' training_class.pk %}">
-        <span class="material-symbols-outlined" aria-hidden="true">grading</span>
-        <span>Kết quả cuối khóa</span>
-      </a>
-
       {% if training_class.status == "open" %}
         {% if can_enroll %}
           <a class="cce-class-action-btn cce-btn-enroll-action" href="{{ enrollment_url }}">
