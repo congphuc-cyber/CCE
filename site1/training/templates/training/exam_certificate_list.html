@@ -2,153 +2,523 @@
 
 {% block title %}Chứng chỉ khảo thí{% endblock %}
 {% block breadcrumb_title %}Chứng chỉ khảo thí{% endblock %}
-{% block page_title %}Quản lý chứng chỉ khảo thí{% endblock %}
-{% block page_description %}Cấp, theo dõi, thu hồi và thay thế chứng chỉ cho thí sinh đạt yêu cầu trong từng đợt thi.{% endblock %}
+{% block page_title %}Danh sách chứng chỉ{% endblock %}
+{% block page_description %}Theo dõi, cấp và quản lý chứng chỉ khảo thí của thí sinh.{% endblock %}
 
 {% block page_actions %}
-  <a class="cce-btn cce-btn-primary" href="#issue-exam-certificate-form">Cấp chứng chỉ</a>
+  <a class="cce-btn cce-btn-primary" href="{% url 'exam-certificate-issue' %}">
+    <span class="material-symbols-outlined" aria-hidden="true">workspace_premium</span>
+    Cấp chứng chỉ
+  </a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .exam-certificate-filter-card { margin-bottom:16px; }
+  .exam-certificate-filter-card .cce-card-header { padding-bottom:0; border-bottom:0; }
+  .exam-certificate-filter-card .cce-filter-bar { margin-top:12px; }
+  .exam-certificate-filter-card .cce-filter-item { flex:1 1 180px; }
+  .exam-certificate-filter-card .cce-filter-item:first-child { flex:2 1 260px; }
+  .exam-certificate-list-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .exam-certificate-list-header .cce-card-title, .exam-certificate-count { text-align:left; }
+  .exam-certificate-count { color:var(--c-text-muted); font-size:var(--font-size-sm); }
+  .exam-certificate-table { min-width:1050px; }
+  .exam-certificate-table th, .exam-certificate-table td { text-align:center; vertical-align:middle; }
+  .exam-certificate-table .cce-badge::before,
+  .exam-certificate-modal .cce-badge::before { display:none; }
+  .exam-certificate-actions { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .exam-certificate-actions .cce-btn { min-width:48px; justify-content:center; }
+  .exam-certificate-actions .exam-action-view { border-color:#c8ddf5; background:#eaf3ff; color:#235d91; }
+  .exam-certificate-actions .exam-action-view:hover { border-color:#8bb9e7; background:#dcecff; color:#174b7b; }
+  .exam-certificate-actions .exam-action-download { border-color:#a9d8d2; background:#e6f5f3; color:#176b63; }
+  .exam-certificate-actions .exam-action-download:hover { border-color:#76bdb4; background:#d4eeea; color:#10554e; }
+  .exam-certificate-actions .exam-action-edit { border-color:#efd09b; background:#fff4df; color:#875511; }
+  .exam-certificate-actions .exam-action-edit:hover { border-color:#e2b761; background:#ffebc5; color:#704308; }
+  .exam-certificate-actions button:disabled { cursor:not-allowed; opacity:.55; }
+  .exam-action-menu { position:relative; }
+  .exam-action-menu summary { list-style:none; cursor:pointer; }
+  .exam-action-menu summary::-webkit-details-marker { display:none; }
+  .exam-action-menu[open] .exam-action-options { display:grid; }
+  .exam-action-options {
+    display:none;
+    position:absolute;
+    z-index:5;
+    top:calc(100% + 4px);
+    right:0;
+    min-width:270px;
+    padding:8px;
+    gap:3px;
+    border:1px solid var(--c-border);
+    border-radius:12px;
+    background:var(--c-surface,#fff);
+    box-shadow:0 14px 32px rgb(20 48 69 / 18%);
+  }
+  .exam-action-options-heading { padding:5px 9px 7px; color:var(--c-text-muted); font-size:10px; font-weight:var(--font-weight-bold); letter-spacing:.08em; text-transform:uppercase; }
+  .exam-action-option { display:flex; align-items:center; width:100%; gap:10px; padding:10px; border:0; border-radius:8px; background:transparent; color:var(--c-text); text-align:left; cursor:pointer; transition:background-color .15s ease, transform .15s ease; }
+  .exam-action-option:hover { background:#f2f7fb; }
+  .exam-action-option:focus-visible { outline:2px solid var(--c-primary); outline-offset:1px; }
+  .exam-action-option-icon { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; border-radius:9px; }
+  .exam-action-option-icon .material-symbols-outlined { font-size:20px; }
+  .exam-action-option-icon.is-status { background:#e9f2fc; color:#2b6898; }
+  .exam-action-option-icon.is-history { background:#f0ebfb; color:#6948a5; }
+  .exam-action-option-copy { display:grid; min-width:0; gap:3px; }
+  .exam-action-option-copy strong { font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+  .exam-action-option-copy small { color:var(--c-text-muted); font-size:11px; line-height:1.35; }
+  .exam-action-option-arrow { margin-left:auto; color:#8796a2; font-size:18px; }
+  .exam-action-options-empty { display:flex; align-items:center; gap:9px; padding:10px; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-action-options-empty .material-symbols-outlined { color:#8494a1; font-size:19px; }
+  .exam-certificate-cell-subtitle { display:block; margin-top:3px; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-certificate-score { display:inline-flex; min-width:56px; justify-content:center; padding:5px 9px; border:1px solid #dceaf5; border-radius:7px; background:#eff6fb; color:#285f87; font-weight:var(--font-weight-semibold); }
+  .exam-certificate-status-badge::before { display:none!important; }
+  .exam-certificate-status-badge { display:inline-flex; justify-content:center; padding:6px 9px; border:1px solid transparent; border-radius:999px; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); white-space:nowrap; }
+  .exam-certificate-status-badge.is-issued { border-color:#ccebdd; background:#e6f5ee; color:#13734e; }
+  .exam-certificate-status-badge.is-revoked { border-color:#f5cbd0; background:#fff0f1; color:#bb3040; }
+  .exam-certificate-status-badge.is-replaced { border-color:#f0ddb4; background:#fff5e5; color:#8b5a10; }
+  .exam-certificate-status-badge.is-pending { border-color:#dbe5ed; background:#f2f6f9; color:#516779; }
+  .exam-certificate-modal { width:min(650px,calc(100vw - 32px)); max-width:650px; max-height:86vh; padding:0; overflow:auto; border:1px solid #dce6ed; border-radius:16px; color:var(--c-text); box-shadow:0 24px 70px rgb(15 38 56 / 26%); }
+  .exam-certificate-history-modal { width:min(960px,calc(100vw - 32px)); max-width:960px; }
+  .exam-certificate-modal::backdrop { background:rgb(19 39 55 / 52%); backdrop-filter:blur(2px); }
+  .exam-certificate-modal-header { position:relative; display:flex; align-items:center; justify-content:center; gap:16px; padding:20px 64px; border-bottom:1px solid #e7edf2; background:linear-gradient(120deg,#f6f9fc,#fff 78%); }
+  .exam-certificate-modal-title { display:flex; align-items:center; justify-content:center; gap:13px; min-width:0; text-align:center; }
+  .exam-certificate-modal-title > div { text-align:center; }
+  .exam-certificate-modal-title-icon { display:grid; place-items:center; flex:0 0 42px; width:42px; height:42px; border:1px solid #d9e8f2; border-radius:12px; background:#eaf3fa; color:#2b6898; }
+  .exam-certificate-modal-title-icon.is-history { border-color:#e4dcf4; background:#f1edfa; color:#684ba0; }
+  .exam-certificate-modal-title-icon .material-symbols-outlined { font-size:22px; }
+  .exam-certificate-modal-header h2 { margin:0; color:var(--c-text); font-size:var(--font-size-lg); font-weight:var(--font-weight-bold); }
+  .exam-certificate-modal-header p { margin:4px 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm); line-height:1.45; }
+  .exam-certificate-modal-close { position:absolute; top:50%; right:20px; display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; border:1px solid #e1e8ed; border-radius:9px; background:#fff; color:#617487; cursor:pointer; transform:translateY(-50%); transition:background .15s ease,color .15s ease; }
+  .exam-certificate-modal-close:hover { background:#f1f5f8; color:#243b4d; }
+  .exam-certificate-modal-close .material-symbols-outlined { font-size:20px; }
+  .exam-certificate-modal-body { display:grid; gap:18px; padding:20px 24px; }
+  .exam-certificate-modal-footer { display:flex; justify-content:flex-end; gap:9px; padding:15px 24px; border-top:1px solid #e7edf2; background:#fbfcfd; }
+  .exam-certificate-modal-summary { display:flex; justify-content:space-between; align-items:center; gap:14px; margin:0; padding:14px 16px; border:1px solid #dfeaf1; border-radius:11px; background:linear-gradient(110deg,#f3f8fc,#fff); }
+  .exam-certificate-modal-record { display:flex; align-items:center; gap:12px; min-width:0; }
+  .exam-certificate-modal-record-icon { display:grid; place-items:center; flex:0 0 40px; width:40px; height:40px; border-radius:11px; background:#e6f0f8; color:#326b94; }
+  .exam-certificate-modal-record-icon .material-symbols-outlined { font-size:21px; }
+  .exam-certificate-modal-record-copy { min-width:0; }
+  .exam-certificate-modal-record-label { display:block; margin-bottom:3px; color:var(--c-text-muted); font-size:10px; font-weight:var(--font-weight-bold); letter-spacing:.08em; text-transform:uppercase; }
+  .exam-certificate-modal-summary strong { display:block; color:var(--c-text); font-size:var(--font-size-sm); overflow-wrap:anywhere; }
+  .exam-certificate-modal-summary .exam-certificate-modal-subtitle { display:block; margin-top:3px; color:var(--c-text-muted); font-size:var(--font-size-xs); line-height:1.45; }
+  .exam-certificate-modal-field { display:grid; gap:7px; margin-top:0; }
+  .exam-certificate-modal-field label { color:var(--c-text); text-align:left; font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+  .exam-certificate-modal-field .cce-select { min-height:44px; }
+  .exam-certificate-modal-field textarea { min-height:112px; resize:vertical; line-height:1.55; }
+  .exam-certificate-modal-field .exam-certificate-cell-subtitle { margin-top:0; }
+  .exam-certificate-status-warning { display:flex; align-items:flex-start; gap:9px; margin-top:-8px; padding:12px 14px; border:1px solid #f1dfbf; border-radius:9px; background:#fff8ec; color:#805616; font-size:var(--font-size-sm); line-height:1.5; }
+  .exam-certificate-status-warning .material-symbols-outlined { flex:0 0 auto; margin-top:1px; font-size:18px; }
+  .exam-certificate-status-warning[hidden] { display:none; }
+  .exam-certificate-history-table { min-width:760px; table-layout:fixed; }
+  .exam-certificate-history-table-wrap { overflow-x:auto; border:1px solid #e2e9ef; border-radius:10px; }
+  .exam-certificate-history-table-wrap .cce-table { margin:0; }
+  .exam-certificate-history-table th { text-align:center; text-transform:none; letter-spacing:0; }
+  .exam-certificate-history-table th:nth-child(1) { width:120px; }
+  .exam-certificate-history-table th:nth-child(2) { width:170px; }
+  .exam-certificate-history-table th:nth-child(3) { width:250px; }
+  .exam-certificate-history-table th:nth-child(3), .exam-certificate-history-table td:nth-child(3) { text-align:center; }
+  .exam-certificate-history-table td { vertical-align:middle; line-height:1.55; }
+  .exam-certificate-history-table tbody tr:nth-child(even) { background:#f9fbfc; }
+  .exam-certificate-history-table td:last-child { overflow-wrap:anywhere; }
+  .exam-certificate-history-flow { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:7px; }
+  .exam-certificate-history-state { display:inline-flex; justify-content:center; min-width:88px; padding:6px 9px; border:1px solid transparent; border-radius:6px; background:#eff4f7; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); white-space:nowrap; }
+  .exam-certificate-history-state.is-issued { border-color:#ccebdd; background:#e6f5ee; color:#13734e; }
+  .exam-certificate-history-state.is-revoked { border-color:#f5cbd0; background:#fff0f1; color:#bb3040; }
+  .exam-certificate-history-state.is-replaced { border-color:#f0ddb4; background:#fff5e5; color:#8b5a10; }
+  .exam-certificate-history-state.is-pending { border-color:#dbe5ed; background:#f2f6f9; color:#516779; }
+  .exam-certificate-history-reason { color:var(--c-text); overflow-wrap:anywhere; }
+  .exam-certificate-history-empty { padding:34px 18px; border:1px dashed var(--c-border); border-radius:9px; color:var(--c-text-muted); text-align:center; }
+  .exam-certificate-history-empty .material-symbols-outlined { display:grid; place-items:center; width:42px; height:42px; margin:0 auto 10px; border-radius:50%; background:#eef3f7; color:#688196; font-size:22px; }
+  @media (max-width:700px) {
+    .exam-certificate-list-header { align-items:flex-start; flex-direction:column; }
+    .exam-certificate-actions { gap:4px; }
+    .exam-certificate-modal-summary { align-items:flex-start; flex-direction:column; }
+    .exam-certificate-modal-header { padding-right:56px; padding-left:56px; }
+    .exam-certificate-modal-body { padding-right:17px; padding-left:17px; }
+    .exam-certificate-modal-footer { padding-right:17px; padding-left:17px; }
+  }
+  @media (max-width:520px) {
+    .exam-certificate-modal { width:calc(100vw - 20px); max-height:92vh; }
+    .exam-certificate-modal-header { padding:17px 48px; }
+    .exam-certificate-modal-title { align-items:center; }
+    .exam-certificate-modal-title-icon { flex-basis:36px; width:36px; height:36px; }
+    .exam-certificate-modal-summary { align-items:flex-start; }
+    .exam-certificate-modal-footer { flex-direction:column-reverse; }
+    .exam-certificate-modal-footer .cce-btn { justify-content:center; }
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="cce-stat-grid stat-theme-certificates" style="margin-bottom:var(--space-6);">
-  <div class="cce-stat-card">
-    <div class="cce-stat-label">Tổng đủ điều kiện cấp</div>
-    <div class="cce-stat-value">{{ total_eligible|default:0 }}</div>
-    <div class="cce-stat-note">Thí sinh đạt ngưỡng điểm đã công bố</div>
+<section class="cce-card exam-certificate-filter-card">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Bộ lọc tìm kiếm</h2>
+    <span class="exam-certificate-count">Tìm theo thí sinh, số chứng chỉ, đợt thi hoặc trạng thái</span>
   </div>
-  <div class="cce-stat-card">
-    <div class="cce-stat-label">Đã cấp</div>
-    <div class="cce-stat-value">{{ total_issued|default:0 }}</div>
-    <div class="cce-stat-note">Chứng chỉ còn hiệu lực</div>
-  </div>
-  <div class="cce-stat-card">
-    <div class="cce-stat-label">Đã thu hồi</div>
-    <div class="cce-stat-value">{{ total_revoked|default:0 }}</div>
-    <div class="cce-stat-note">Chứng chỉ bị thu hồi trong lịch sử</div>
-  </div>
-  <div class="cce-stat-card">
-    <div class="cce-stat-label">Tỷ lệ đạt</div>
-    <div class="cce-stat-value">{{ pass_rate|default:0 }}%</div>
-    <div class="cce-stat-note">Tính theo thí sinh đã có điểm công bố</div>
-  </div>
-</div>
-
-<section class="cce-card" id="issue-exam-certificate-form" style="margin-bottom: var(--space-6);">
-  <div class="cce-card-header" style="padding-bottom:0; border-bottom:none;">
-    <h2 class="cce-card-title">Cấp chứng chỉ khảo thí</h2>
-  </div>
-  <form method="post" novalidate>
-    {% csrf_token %}
-    <input type="hidden" name="issue_exam_certificate" value="1">
-    <div class="cce-form-grid two-col">
-      <div class="cce-form-field">
-        <label for="id_exam_period">Đợt thi</label>
-        {{ issue_form.exam_period }}
-        {% if issue_form.exam_period.errors %}<div class="cce-error">{{ issue_form.exam_period.errors|join:", " }}</div>{% endif %}
-      </div>
-      <div class="cce-form-field">
-        <label for="id_application">Thí sinh</label>
-        {{ issue_form.application }}
-        {% if issue_form.application.errors %}<div class="cce-error">{{ issue_form.application.errors|join:", " }}</div>{% endif %}
-      </div>
+  <form method="get" class="cce-filter-bar" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:end;">
+    <div class="cce-filter-item">
+      <label for="exam-keyword">Tìm kiếm</label>
+      <input class="cce-input" type="text" id="exam-keyword" name="q" value="{{ search_query|default:'' }}" placeholder="Nhập tên, CCCD hoặc số chứng chỉ">
     </div>
-    {% if issue_form.non_field_errors %}
-      <div class="cce-error" style="margin-top:var(--space-3);">{{ issue_form.non_field_errors|join:", " }}</div>
-    {% endif %}
-    <div class="cce-form-actions" style="margin-top: var(--space-4);">
-      <button type="submit" class="cce-btn cce-btn-primary">Xác nhận cấp</button>
+    <div class="cce-filter-item">
+      <label for="exam-period">Đợt thi</label>
+      <select class="cce-select" id="exam-period" name="period">
+        <option value="">Tất cả đợt thi</option>
+        {% for item in periods %}
+          <option value="{{ item.pk }}" {% if selected_period == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cce-filter-item">
+      <label for="exam-status">Trạng thái</label>
+      <select class="cce-select" id="exam-status" name="status">
+        <option value="">Tất cả trạng thái</option>
+        <option value="pending" {% if selected_status == "pending" %}selected{% endif %}>Chờ cấp</option>
+        <option value="issued" {% if selected_status == "issued" %}selected{% endif %}>Đã cấp</option>
+        <option value="revoked" {% if selected_status == "revoked" %}selected{% endif %}>Đã thu hồi</option>
+        <option value="replaced" {% if selected_status == "replaced" %}selected{% endif %}>Đã thay thế</option>
+      </select>
+    </div>
+    <div class="cce-filter-actions">
+      <button class="cce-btn cce-btn-primary" type="submit">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        Tìm kiếm
+      </button>
+      <a class="cce-btn cce-btn-secondary cce-btn-reset" href="{% url 'exam-certificate-list' %}">
+        <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+        Đặt lại
+      </a>
     </div>
   </form>
 </section>
 
 <section class="cce-card">
-  <div class="cce-card-header" style="padding-bottom:0; border-bottom:none;">
-    <h2 class="cce-card-title">Danh sách chứng chỉ</h2>
+  <div class="cce-card-header exam-certificate-list-header">
+    <h2 class="cce-card-title">
+      Danh sách chứng chỉ
+      <span class="cce-badge cce-badge-valid">{{ page_obj.paginator.count }}</span>
+    </h2>
+    <span class="exam-certificate-count">{{ page_obj.paginator.count }} thí sinh / chứng chỉ</span>
   </div>
-
-  <form method="get" class="cce-filter-bar" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:end; margin-top: var(--space-4);">
-    <div class="cce-filter-item">
-      <label for="keyword">Tìm kiếm</label>
-      <input class="cce-input" type="text" id="keyword" name="keyword" value="{{ keyword|default:'' }}" placeholder="Tên thí sinh, CCCD, đợt thi, số chứng chỉ">
-    </div>
-    <div class="cce-filter-item">
-      <label for="period_id">Đợt thi</label>
-      <select class="cce-select" id="period_id" name="period_id">
-        <option value="">Tất cả</option>
-        {% for item in periods %}
-          <option value="{{ item.pk }}" {% if period_id == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="cce-filter-item">
-      <label for="application_id">Thí sinh</label>
-      <select class="cce-select" id="application_id" name="application_id">
-        <option value="">Tất cả</option>
-        {% for item in applications %}
-          <option value="{{ item.pk }}" {% if application_id == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.full_name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="cce-filter-item">
-      <label for="status">Trạng thái</label>
-      <select class="cce-select" id="status" name="status">
-        <option value="">Tất cả</option>
-        {% for value, label in status_choices %}
-          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="cce-filter-actions">
-      <button class="cce-btn cce-btn-primary" type="submit">Áp dụng lọc</button>
-      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-certificate-list' %}">Đặt lại</a>
-    </div>
-  </form>
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table">
+      <table class="cce-table exam-certificate-table">
         <thead>
           <tr>
             <th>Số chứng chỉ</th>
             <th>Thí sinh</th>
             <th>Đợt thi</th>
+            <th>Điểm</th>
             <th>Ngày cấp</th>
             <th>Trạng thái</th>
             <th>Hành động</th>
           </tr>
         </thead>
         <tbody>
-          {% for certificate in page_obj %}
+          {% for row in page_obj %}
             <tr>
-              <td><strong>{{ certificate.certificate_number }}</strong></td>
-              <td>{{ certificate.application.full_name }}</td>
-              <td>{{ certificate.exam_period.name }}</td>
-              <td>{{ certificate.issued_at|date:"d/m/Y" }}</td>
               <td>
-                {% if certificate.status == 'issued' %}
-                  <span class="cce-badge cce-badge-published">Đã cấp</span>
-                {% elif certificate.status == 'revoked' %}
-                  <span class="cce-badge cce-badge-closed">Thu hồi</span>
+                {% if row.certificate %}
+                  <strong>{{ row.certificate.certificate_number }}</strong>
                 {% else %}
-                  <span class="cce-badge cce-badge-duplicate">Đã thay thế</span>
+                  <span class="exam-certificate-cell-subtitle">—</span>
                 {% endif %}
               </td>
-              <td style="white-space:nowrap;">
-                <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{% url 'exam-certificate-history' certificate.pk %}">Lịch sử</a>
-                <a class="cce-btn cce-btn-outline cce-btn-sm" href="{% url 'exam-certificate-status-change' certificate.pk %}">Cập nhật</a>
+              <td>
+                {{ row.application.full_name }}
+                <span class="exam-certificate-cell-subtitle">{{ row.application.id_number|default:"—" }}</span>
+              </td>
+              <td>{{ row.period.name }}</td>
+              <td>
+                {% if row.score and row.score.score is not None %}
+                  <span class="exam-certificate-score">{{ row.score.score }}</span>
+                {% elif row.score and row.score.is_absent %}
+                  <span class="exam-certificate-cell-subtitle">Vắng thi</span>
+                {% else %}
+                  <span class="exam-certificate-cell-subtitle">—</span>
+                {% endif %}
+              </td>
+              <td>{% if row.certificate %}{{ row.certificate.issued_at|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+              <td>
+                {% if row.status == "issued" %}
+                  <span class="exam-certificate-status-badge is-issued">Đã cấp</span>
+                {% elif row.status == "revoked" %}
+                  <span class="exam-certificate-status-badge is-revoked">Đã thu hồi</span>
+                {% elif row.status == "replaced" %}
+                  <span class="exam-certificate-status-badge is-replaced">Đã thay thế</span>
+                {% else %}
+                  <span class="exam-certificate-status-badge is-pending">Chờ cấp</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="exam-certificate-actions">
+                  {% if row.certificate %}
+                    <a class="cce-btn cce-btn-secondary cce-btn-sm exam-action-view" href="{% url 'exam-certificate-record-detail' row.certificate.pk %}" aria-label="Xem chứng chỉ của {{ row.application.full_name }}">Xem</a>
+                  {% else %}
+                    <a class="cce-btn cce-btn-secondary cce-btn-sm exam-action-view" href="{% url 'exam-certificate-candidate-detail' row.period.pk row.application.pk %}" aria-label="Xem thông tin thí sinh {{ row.application.full_name }}">Xem</a>
+                  {% endif %}
+                  {% if row.status == "pending" %}
+                    <a class="cce-btn cce-btn-primary cce-btn-sm" href="{% url 'exam-certificate-issue' %}?issue_period={{ row.period.pk }}&amp;issue_application={{ row.application.pk }}#exam-certificate-issue-form" aria-label="Cấp chứng chỉ cho {{ row.application.full_name }}">Cấp</a>
+                  {% elif row.status == "issued" %}
+                    <a class="cce-btn cce-btn-sm exam-action-download" href="{% url 'exam-certificate-pdf' row.certificate.pk %}" aria-label="Tải PDF chứng chỉ {{ row.certificate.certificate_number }}">Tải</a>
+                  {% elif row.certificate %}
+                    <button class="cce-btn cce-btn-sm exam-action-download" type="button" disabled title="Chứng chỉ đã thu hồi hoặc bị thay thế nên không thể tải." aria-label="Không thể tải chứng chỉ {{ row.certificate.certificate_number }}">Tải</button>
+                  {% else %}
+                    <span class="exam-certificate-cell-subtitle" aria-hidden="true">—</span>
+                  {% endif %}
+                  <details class="exam-action-menu">
+                    <summary class="cce-btn cce-btn-sm exam-action-edit">Sửa</summary>
+                    {% if row.certificate %}
+                      <div class="exam-action-options" aria-label="Thao tác chứng chỉ">
+                        <div class="exam-action-options-heading">Quản lý chứng chỉ</div>
+                        {% if row.certificate.status == "issued" %}
+                          <button class="exam-action-option" type="button" data-open-dialog="exam-certificate-status-modal-{{ row.certificate.pk }}">
+                            <span class="exam-action-option-icon is-status" aria-hidden="true"><span class="material-symbols-outlined">edit_note</span></span>
+                            <span class="exam-action-option-copy">
+                              <strong>Thay đổi trạng thái</strong>
+                              <small>Thu hồi hoặc thay thế chứng chỉ</small>
+                            </span>
+                            <span class="material-symbols-outlined exam-action-option-arrow" aria-hidden="true">chevron_right</span>
+                          </button>
+                        {% endif %}
+                        <button class="exam-action-option" type="button" data-open-dialog="exam-certificate-history-modal-{{ row.certificate.pk }}">
+                          <span class="exam-action-option-icon is-history" aria-hidden="true"><span class="material-symbols-outlined">history</span></span>
+                          <span class="exam-action-option-copy">
+                            <strong>Xem lịch sử sửa đổi</strong>
+                            <small>Người thực hiện, thời gian và lý do</small>
+                          </span>
+                          <span class="material-symbols-outlined exam-action-option-arrow" aria-hidden="true">chevron_right</span>
+                        </button>
+                      </div>
+                    {% else %}
+                      <div class="exam-action-options" aria-label="Trạng thái thao tác">
+                        <span class="exam-action-options-empty">
+                          <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                          Chưa có chứng chỉ để chỉnh sửa
+                        </span>
+                      </div>
+                    {% endif %}
+                  </details>
+
+                  {% if row.certificate %}
+                    {% if row.certificate.status == "issued" %}
+                    <dialog class="exam-certificate-modal" id="exam-certificate-status-modal-{{ row.certificate.pk }}" aria-labelledby="exam-certificate-status-title-{{ row.certificate.pk }}">
+                      <div class="exam-certificate-modal-header">
+                        <div class="exam-certificate-modal-title">
+                          <span class="exam-certificate-modal-title-icon" aria-hidden="true"><span class="material-symbols-outlined">published_with_changes</span></span>
+                          <div>
+                            <h2 id="exam-certificate-status-title-{{ row.certificate.pk }}">Thay đổi trạng thái</h2>
+                            <p>Chọn trạng thái mới và ghi rõ lý do để lưu thay đổi.</p>
+                          </div>
+                        </div>
+                        <button class="exam-certificate-modal-close" type="button" data-close-dialog aria-label="Đóng"><span class="material-symbols-outlined">close</span></button>
+                      </div>
+                      <form method="post" action="{% url 'exam-certificate-status-change' row.certificate.pk %}" data-exam-status-form>
+                        {% csrf_token %}
+                        <div class="exam-certificate-modal-body">
+                          <div class="exam-certificate-modal-summary">
+                            <div class="exam-certificate-modal-record">
+                              <span class="exam-certificate-modal-record-icon" aria-hidden="true"><span class="material-symbols-outlined">workspace_premium</span></span>
+                              <div class="exam-certificate-modal-record-copy">
+                                <span class="exam-certificate-modal-record-label">Chứng chỉ khảo thí</span>
+                                <strong>{{ row.certificate.certificate_number }}</strong>
+                                <span class="exam-certificate-modal-subtitle">{{ row.application.full_name }} · {{ row.period.name }}</span>
+                              </div>
+                            </div>
+                            {% if row.status == "issued" %}
+                              <span class="exam-certificate-status-badge is-issued">Đã cấp</span>
+                            {% elif row.status == "revoked" %}
+                              <span class="exam-certificate-status-badge is-revoked">Đã thu hồi</span>
+                            {% else %}
+                              <span class="exam-certificate-status-badge is-replaced">Đã thay thế</span>
+                            {% endif %}
+                          </div>
+                          <div class="exam-certificate-modal-field">
+                            <label for="exam-certificate-status-{{ row.certificate.pk }}">Trạng thái mới <span aria-hidden="true">*</span></label>
+                            <select class="cce-select" id="exam-certificate-status-{{ row.certificate.pk }}" name="status" required data-exam-status-select>
+                              <option value="">Chọn trạng thái</option>
+                              {% if row.certificate.status != "issued" %}<option value="issued">Đã cấp</option>{% endif %}
+                              {% if row.certificate.status != "revoked" %}<option value="revoked">Thu hồi</option>{% endif %}
+                              {% if row.certificate.status != "replaced" %}<option value="replaced">Thay thế</option>{% endif %}
+                            </select>
+                          </div>
+                          <div class="exam-certificate-status-warning" data-exam-status-warning hidden>
+                            <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                            <span data-exam-status-warning-text></span>
+                          </div>
+                          <div class="exam-certificate-modal-field">
+                            <label for="exam-certificate-reason-{{ row.certificate.pk }}">Lý do thay đổi <span aria-hidden="true">*</span></label>
+                            <textarea class="cce-textarea" id="exam-certificate-reason-{{ row.certificate.pk }}" name="reason" required placeholder="Nhập lý do thu hồi hoặc thay thế chứng chỉ..."></textarea>
+                            <span class="exam-certificate-cell-subtitle">Bắt buộc nhập lý do để xác nhận thay đổi.</span>
+                          </div>
+                        </div>
+                        <div class="exam-certificate-modal-footer">
+                          <button class="cce-btn cce-btn-secondary" type="button" data-close-dialog>Hủy</button>
+                          <button class="cce-btn cce-btn-primary" type="submit" data-exam-status-submit disabled>Chọn trạng thái mới</button>
+                        </div>
+                      </form>
+                    </dialog>
+                    {% endif %}
+
+                    <dialog class="exam-certificate-modal exam-certificate-history-modal" id="exam-certificate-history-modal-{{ row.certificate.pk }}" aria-labelledby="exam-certificate-history-title-{{ row.certificate.pk }}">
+                      <div class="exam-certificate-modal-header">
+                        <div class="exam-certificate-modal-title">
+                          <span class="exam-certificate-modal-title-icon is-history" aria-hidden="true"><span class="material-symbols-outlined">history</span></span>
+                          <div>
+                            <h2 id="exam-certificate-history-title-{{ row.certificate.pk }}">Lịch sử thay đổi</h2>
+                            <p>Theo dõi người thực hiện, thời điểm và lý do của từng thay đổi.</p>
+                          </div>
+                        </div>
+                        <button class="exam-certificate-modal-close" type="button" data-close-dialog aria-label="Đóng"><span class="material-symbols-outlined">close</span></button>
+                      </div>
+                      <div class="exam-certificate-modal-body">
+                        <div class="exam-certificate-modal-summary">
+                          <div class="exam-certificate-modal-record">
+                            <span class="exam-certificate-modal-record-icon" aria-hidden="true"><span class="material-symbols-outlined">workspace_premium</span></span>
+                            <div class="exam-certificate-modal-record-copy">
+                              <span class="exam-certificate-modal-record-label">Chứng chỉ khảo thí</span>
+                              <strong>{{ row.certificate.certificate_number }}</strong>
+                              <span class="exam-certificate-modal-subtitle">{{ row.application.full_name }} · {{ row.period.name }}</span>
+                            </div>
+                          </div>
+                          {% if row.status == "issued" %}
+                            <span class="exam-certificate-status-badge is-issued">Đã cấp</span>
+                          {% elif row.status == "revoked" %}
+                            <span class="exam-certificate-status-badge is-revoked">Đã thu hồi</span>
+                          {% else %}
+                            <span class="exam-certificate-status-badge is-replaced">Đã thay thế</span>
+                          {% endif %}
+                        </div>
+                        {% if row.certificate.history.all %}
+                          <div class="exam-certificate-history-table-wrap">
+                            <table class="cce-table exam-certificate-history-table">
+                              <thead>
+                                <tr>
+                                  <th>Thời điểm</th>
+                                  <th>Người thực hiện</th>
+                                  <th>Trạng thái cũ → mới</th>
+                                  <th>Lý do</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {% for item in row.certificate.history.all %}
+                                  <tr>
+                                    <td>{{ item.changed_at|date:"d/m/Y" }}<span class="exam-certificate-cell-subtitle">{{ item.changed_at|date:"H:i" }}</span></td>
+                                    <td>
+                                      {% if item.changed_by %}
+                                        {{ item.changed_by.get_full_name|default:item.changed_by.username }}
+                                        <span class="exam-certificate-cell-subtitle">
+                                          {% with actor_group=item.changed_by.groups.first %}
+                                            {% if actor_group %}{{ actor_group.name }}{% else %}Người dùng{% endif %}
+                                          {% endwith %}
+                                        </span>
+                                      {% else %}
+                                        Hệ thống
+                                      {% endif %}
+                                    </td>
+                                    <td>
+                                      <div class="exam-certificate-history-flow">
+                                        <span class="exam-certificate-history-state {% if item.old_status == 'issued' and item.new_status == 'issued' %}is-pending{% elif item.old_status == 'issued' %}is-issued{% elif item.old_status == 'revoked' %}is-revoked{% elif item.old_status == 'replaced' %}is-replaced{% endif %}">{% if item.old_status == 'issued' and item.new_status == 'issued' and row.certificate.replaced_certificate.all %}Chờ thay thế{% elif item.old_status == 'issued' and item.new_status == 'issued' %}Chờ cấp{% else %}{{ item.get_old_status_display }}{% endif %}</span>
+                                        <span aria-hidden="true">→</span>
+                                        <span class="exam-certificate-history-state {% if item.new_status == 'issued' %}is-issued{% elif item.new_status == 'revoked' %}is-revoked{% else %}is-replaced{% endif %}">{% if item.old_status == 'issued' and item.new_status == 'issued' %}Đã cấp{% else %}{{ item.get_new_status_display }}{% endif %}</span>
+                                      </div>
+                                    </td>
+                                    <td class="exam-certificate-history-reason">
+                                      {% if row.certificate.replaced_certificate.all %}
+                                        {{ row.certificate.replaced_certificate.all.0.reason|default:item.reason|default:"—" }}
+                                      {% elif item.old_status == 'issued' and item.new_status == 'issued' %}
+                                        {{ item.reason|default:"Đã đạt kỳ thi và điểm đã được công bố." }}
+                                      {% elif item.old_status != item.new_status %}
+                                        {{ item.reason|default:"—" }}
+                                      {% else %}
+                                        —
+                                      {% endif %}
+                                    </td>
+                                  </tr>
+                                {% endfor %}
+                              </tbody>
+                            </table>
+                          </div>
+                        {% else %}
+                          <div class="exam-certificate-history-empty">
+                            <span class="material-symbols-outlined" aria-hidden="true">history</span>
+                            Chưa có lịch sử thay đổi cho chứng chỉ này.
+                          </div>
+                        {% endif %}
+                      </div>
+                      <div class="exam-certificate-modal-footer">
+                        <button class="cce-btn cce-btn-primary" type="button" data-close-dialog>Đóng</button>
+                      </div>
+                    </dialog>
+                  {% endif %}
+                </div>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="chứng chỉ" %}
   {% else %}
     <div class="cce-empty-state" style="padding:var(--space-8); text-align:center;">
       <span class="material-symbols-outlined" style="font-size:3rem; color:var(--c-primary-light);">workspace_premium</span>
-      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có chứng chỉ nào</p>
-      <p style="color:var(--c-text-muted);">Danh sách trống theo tiêu chí hiện tại.</p>
+      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Không có chứng chỉ phù hợp</p>
+      <p style="color:var(--c-text-muted);">Thử thay đổi tiêu chí tìm kiếm hoặc bộ lọc.</p>
     </div>
   {% endif %}
 </section>
+
+<script>
+  (function () {
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll(".exam-action-menu[open]").forEach(function (menu) {
+        if (!menu.contains(event.target)) menu.open = false;
+      });
+    });
+
+    document.querySelectorAll("[data-open-dialog]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var dialog = document.getElementById(button.getAttribute("data-open-dialog"));
+        var actionMenu = button.closest(".exam-action-menu");
+        if (actionMenu) actionMenu.open = false;
+        if (dialog) dialog.showModal();
+      });
+    });
+
+    document.querySelectorAll("dialog.exam-certificate-modal").forEach(function (dialog) {
+      dialog.querySelectorAll("[data-close-dialog]").forEach(function (button) {
+        button.addEventListener("click", function () { dialog.close(); });
+      });
+
+      var form = dialog.querySelector("[data-exam-status-form]");
+      if (!form) return;
+      var status = form.querySelector("[data-exam-status-select]");
+      var reason = form.querySelector("textarea[name='reason']");
+      var submit = form.querySelector("[data-exam-status-submit]");
+      var warning = form.querySelector("[data-exam-status-warning]");
+      var warningText = form.querySelector("[data-exam-status-warning-text]");
+      var actionLabels = {
+        issued: "Xác nhận cấp lại",
+        revoked: "Xác nhận thu hồi",
+        replaced: "Xác nhận thay thế"
+      };
+      var warningMessages = {
+        issued: "Trạng thái chứng chỉ sẽ được chuyển lại thành đã cấp.",
+        revoked: "Chứng chỉ sẽ không còn hiệu lực sau khi xác nhận thu hồi.",
+        replaced: "Hệ thống sẽ tạo chứng chỉ mới để thay thế chứng chỉ này."
+      };
+
+      function updateStatusForm() {
+        var selected = status.value;
+        submit.textContent = actionLabels[selected] || "Chọn trạng thái mới";
+        submit.disabled = !selected || !reason.value.trim();
+        warningText.textContent = warningMessages[selected] || "";
+        warning.hidden = !warningMessages[selected];
+      }
+
+      status.addEventListener("change", updateStatusForm);
+      reason.addEventListener("input", updateStatusForm);
+      updateStatusForm();
+    });
+  })();
+</script>
 {% endblock %}

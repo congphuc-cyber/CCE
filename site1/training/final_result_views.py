@@ -115,9 +115,14 @@ def _render_results(
     field_errors=None,
     reason_error="",
     reason_value="",
+    editing_learner_id=None,
+    editing_learner_name="",
+    edit_score_value="",
+    edit_score_error="",
     status=200,
 ):
     can_manage_results = _can_manage_final_results(request.user)
+    can_edit_scores = can_manage_results or not training_class.final_results_locked
     learners = _class_learners(training_class)
     page_obj = Paginator(learners, PAGE_SIZE).get_page(request.GET.get("page"))
     learner_ids = [learner.pk for learner in page_obj.object_list]
@@ -132,7 +137,11 @@ def _render_results(
     rows = []
     for learner in page_obj.object_list:
         result = saved_results.get(learner.pk)
-        if score_values is not None and learner.pk in score_values:
+        if (
+            result is None
+            and score_values is not None
+            and learner.pk in score_values
+        ):
             score_value = score_values[learner.pk]
         else:
             score_value = str(result.score) if result else ""
@@ -148,6 +157,19 @@ def _render_results(
             "outcome": _outcome(score, training_class.course.pass_threshold),
             "error": (field_errors or {}).get(learner.pk) or error,
             "input_id": f"score-{learner.pk}",
+            "score_saved": result is not None,
+            "score_readonly": (
+                not can_edit_scores
+                or result is not None
+            ),
+            "history_url": (
+                reverse(
+                    "class-results-history",
+                    args=(training_class.pk, learner.pk),
+                )
+                if result
+                else ""
+            ),
         })
 
     enrolled_ids = list(
@@ -188,7 +210,7 @@ def _render_results(
         ],
         "training_class": training_class,
         "can_manage_results": can_manage_results,
-        "can_edit_scores": can_manage_results or not training_class.final_results_locked,
+        "can_edit_scores": can_edit_scores,
         "can_upload_results": can_manage_results or not training_class.final_results_locked,
         "rows": rows,
         "page_obj": page_obj,
@@ -198,6 +220,11 @@ def _render_results(
         "final_results_locked_by": training_class.final_results_locked_by,
         "reason_error": reason_error,
         "reason_value": reason_value,
+        "editing_learner_id": editing_learner_id,
+        "editing_learner_name": editing_learner_name,
+        "edit_score_value": edit_score_value,
+        "edit_score_error": edit_score_error,
+        "is_editing_score": editing_learner_id is not None,
         "results_url": reverse("class-results", args=(training_class.pk,)),
         "upload_url": reverse("class-results-upload", args=(training_class.pk,)),
         "upload_sample_url": reverse(
@@ -330,7 +357,11 @@ def _save_result_entries(actor, training_class, entries, reason=""):
             result,
             old_values=old_values,
             new_values=snapshot_instance(result),
-            reason=reason,
+            reason=(
+                "Đã hoàn thành khóa học"
+                if action == AuditLog.Action.CREATE
+                else reason
+            ),
             object_label=f"{learner.full_name} — {training_class.name}",
         )
         saved_count += 1
@@ -355,18 +386,19 @@ def class_final_results(request, class_id):
         if not can_manage_results:
             raise PermissionDenied
         return _finalize_results(request, training_class)
+    if action == "edit_score":
+        if not (can_manage_results or not training_class.final_results_locked):
+            raise PermissionDenied
+        return _edit_final_result(request, training_class)
     if not can_manage_results and training_class.final_results_locked:
         raise PermissionDenied
-    if action == "save_locked" and not can_manage_results:
-        raise PermissionDenied
-    if action not in {"save", "save_locked"}:
+    if action != "save":
         raise PermissionDenied
 
     page_obj = Paginator(_class_learners(training_class), PAGE_SIZE).get_page(
         request.GET.get("page")
     )
     entries, score_values, field_errors = _validate_manual_scores(request, page_obj)
-    reason = request.POST.get("reason", "").strip()
     reason_error = ""
     saved_count = 0
 
@@ -377,12 +409,6 @@ def class_final_results(request, class_id):
         )
         if not can_manage_results and locked_class.final_results_locked:
             raise PermissionDenied
-        if locked_class.final_results_locked and action != "save_locked":
-            reason_error = "Kết quả đã được chốt. Hãy dùng thao tác sửa sau chốt."
-        elif not locked_class.final_results_locked and action == "save_locked":
-            reason_error = "Kết quả chưa được chốt; hãy lưu bằng thao tác thông thường."
-        elif locked_class.final_results_locked and not reason:
-            reason_error = "Vui lòng nhập lý do sửa điểm sau khi chốt."
 
         allowed_ids = set(
             _class_learners(locked_class)
@@ -392,12 +418,25 @@ def class_final_results(request, class_id):
         if len(allowed_ids) != len(entries):
             reason_error = "Danh sách học viên đã thay đổi. Tải lại trang rồi thử lại."
 
+        existing_results = {
+            result.learner_id: result
+            for result in FinalCourseResult.objects.select_for_update().filter(
+                training_class=locked_class,
+                learner_id__in=[entry["learner"].pk for entry in entries],
+            )
+        }
+        for entry in entries:
+            existing = existing_results.get(entry["learner"].pk)
+            if existing and existing.score != entry["score"]:
+                field_errors[entry["learner"].pk] = (
+                    "Điểm đã lưu đang bị khóa. Dùng nút Sửa điểm để thay đổi."
+                )
+
         if not field_errors and not reason_error:
             saved_count = _save_result_entries(
                 request.user,
                 locked_class,
                 entries,
-                reason=reason if locked_class.final_results_locked else "",
             )
 
     if field_errors or reason_error:
@@ -407,7 +446,6 @@ def class_final_results(request, class_id):
             score_values=score_values,
             field_errors=field_errors,
             reason_error=reason_error,
-            reason_value=reason,
         )
 
     messages.success(
@@ -417,6 +455,101 @@ def class_final_results(request, class_id):
         else "Không có thay đổi điểm cần lưu.",
     )
     return _redirect_to_results(request, training_class)
+
+
+def _edit_final_result(request, training_class):
+    try:
+        learner_id = int(request.POST.get("learner_id", ""))
+    except (TypeError, ValueError):
+        raise PermissionDenied
+
+    existing_result = get_object_or_404(
+        FinalCourseResult.objects.select_related("learner"),
+        training_class=training_class,
+        learner_id=learner_id,
+    )
+    raw_score = request.POST.get("score", "")
+    reason = request.POST.get("reason", "").strip()
+    score, score_error = _parse_score(raw_score)
+    reason_error = "Vui lòng nhập lý do sửa điểm." if not reason else ""
+
+    if not score_error and not reason_error:
+        with transaction.atomic():
+            locked_class = get_object_or_404(
+                TrainingClass.objects.select_for_update().select_related("course"),
+                pk=training_class.pk,
+            )
+            if (
+                locked_class.final_results_locked
+                and not _can_manage_final_results(request.user)
+            ):
+                raise PermissionDenied
+            result = get_object_or_404(
+                FinalCourseResult.objects.select_for_update(),
+                training_class=locked_class,
+                learner_id=learner_id,
+            )
+            if result.score != score:
+                old_values = snapshot_instance(result)
+                result.score = score
+                result.modified_by = request.user
+                result.full_clean()
+                result.save()
+                record_audit(
+                    request.user,
+                    AuditLog.Action.EDIT,
+                    result,
+                    old_values=old_values,
+                    new_values=snapshot_instance(result),
+                    reason=reason,
+                    object_label=f"{result.learner.full_name} — {locked_class.name}",
+                )
+                messages.success(request, "Đã sửa điểm và ghi nhận lý do vào nhật ký thao tác.")
+            else:
+                messages.info(request, "Điểm không thay đổi.")
+        return _redirect_to_results(request, training_class)
+
+    return _render_results(
+        request,
+        training_class,
+        reason_error=reason_error,
+        reason_value=reason,
+        editing_learner_id=learner_id,
+        editing_learner_name=existing_result.learner.full_name,
+        edit_score_value=raw_score,
+        edit_score_error=score_error or "",
+    )
+
+
+@login_required
+def class_final_result_history(request, class_id, learner_id):
+    training_class = get_object_or_404(
+        TrainingClass.objects.select_related("course"),
+        pk=class_id,
+    )
+    if not _can_access_final_results(request.user, training_class):
+        raise PermissionDenied
+    result = get_object_or_404(
+        FinalCourseResult.objects.select_related("learner", "training_class"),
+        training_class=training_class,
+        learner_id=learner_id,
+    )
+    history = AuditLog.objects.filter(
+        object_type=FinalCourseResult._meta.label,
+        object_id=str(result.pk),
+    )
+    return render(
+        request,
+        "training/class_final_result_history.html",
+        {
+            "active_menu": "classes",
+            "page_title": "Lịch sử sửa điểm",
+            "training_class": training_class,
+            "result": result,
+            "history": history,
+            "results_url": reverse("class-results", args=(training_class.pk,)),
+        },
+    )
 
 
 def _normalize_header(value):
@@ -662,7 +795,6 @@ def class_final_result_upload(request, class_id):
                 ),
             })
 
-        reason = request.POST.get("reason", "").strip()
         with transaction.atomic():
             locked_class = get_object_or_404(
                 TrainingClass.objects.select_for_update().select_related("course"),
@@ -670,11 +802,6 @@ def class_final_result_upload(request, class_id):
             )
             if not can_manage_results and locked_class.final_results_locked:
                 raise PermissionDenied
-            if locked_class.final_results_locked and not reason:
-                return _json_upload_failure(
-                    "Vui lòng nhập lý do sửa điểm sau khi chốt."
-                )
-
             entries, errors, preview_rows = _parse_final_result_csv(
                 uploaded,
                 locked_class,
@@ -687,11 +814,26 @@ def class_final_result_upload(request, class_id):
                     preview_rows=preview_rows,
                 )
 
+            existing_results = {
+                result.learner_id: result.score
+                for result in FinalCourseResult.objects.select_for_update().filter(
+                    training_class=locked_class,
+                    learner_id__in=[entry["learner"].pk for entry in entries],
+                )
+            }
+            if any(
+                existing_results.get(entry["learner"].pk) != entry["score"]
+                for entry in entries
+                if entry["learner"].pk in existing_results
+            ):
+                return _json_upload_failure(
+                    "Điểm đã lưu đang bị khóa. Vui lòng dùng nút Sửa điểm tại bảng kiểm tra."
+                )
+
             saved_count = _save_result_entries(
                 request.user,
                 locked_class,
                 entries,
-                reason=reason if locked_class.final_results_locked else "",
             )
 
         return JsonResponse({

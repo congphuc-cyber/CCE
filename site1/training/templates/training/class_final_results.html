@@ -20,6 +20,49 @@
   </a>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  .score-validation-dialog { width:min(576px,calc(100vw - 32px)); max-width:576px; max-height:calc(100vh - 32px); padding:0; overflow:hidden; border:0; border-radius:17px; color:var(--c-text); box-shadow:0 24px 70px rgb(15 23 42 / 28%); }
+  .score-validation-dialog::backdrop { background:rgb(31 41 55 / 58%); backdrop-filter:blur(2px); }
+  .score-edit-dialog { width:min(540px,calc(100vw - 32px)); max-width:540px; max-height:calc(100vh - 32px); padding:0; overflow:hidden; border:0; border-radius:17px; color:var(--c-text); box-shadow:0 24px 70px rgb(15 23 42 / 28%); }
+  .score-edit-dialog::backdrop { background:rgb(31 41 55 / 58%); backdrop-filter:blur(2px); }
+  .score-edit-header { display:flex; align-items:center; gap:13px; padding:19px 24px; border-bottom:1px solid var(--c-border); background:#f8fafc; }
+  .score-edit-header h2 { flex:1; margin:0; font-size:var(--font-size-md); font-weight:var(--font-weight-bold); }
+  .score-edit-body { display:grid; gap:var(--space-4); padding:22px 24px; }
+  .score-edit-footer { display:flex; justify-content:flex-end; gap:var(--space-2); padding:16px 24px; border-top:1px solid var(--c-border); background:#f8fafc; }
+  .score-edit-close { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:transparent; color:var(--c-text-muted); font-size:23px; cursor:pointer; }
+  .score-edit-close:hover { background:#e2e8f0; color:var(--c-text); }
+  .final-results-table { width:100%; min-width:900px; table-layout:fixed; }
+  .final-results-table th, .final-results-table td { text-align:center; vertical-align:middle; }
+  .final-results-name { overflow-wrap:anywhere; }
+  .final-results-score-input { width:100%; text-align:center; }
+  .final-results-score-input[readonly] { background:#f8fafc; color:#334155; cursor:not-allowed; }
+  .final-results-actions { display:grid; grid-template-columns:minmax(90px,1fr) minmax(150px,1.5fr); align-items:center; gap:8px; }
+  .final-results-actions .cce-btn { display:inline-flex; min-height:36px; align-items:center; justify-content:center; padding-inline:10px; white-space:nowrap; }
+  .score-validation-header { display:flex; align-items:center; gap:13px; min-height:80px; padding:17px 25px; border-bottom:1px solid #f6d5d5; background:#fff1f1; color:#b42323; }
+  .score-validation-header-icon { display:grid; place-items:center; flex:0 0 25px; width:25px; height:25px; border:2px solid currentColor; border-radius:50%; font-size:15px; font-weight:700; line-height:1; }
+  .score-validation-header h2 { flex:1; margin:0; font-size:var(--font-size-md); font-weight:var(--font-weight-bold); }
+  .score-validation-close { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:7px; background:transparent; color:inherit; font-size:23px; cursor:pointer; }
+  .score-validation-close:hover { background:#ffe3e3; }
+  .score-validation-body { padding:24px 27px 25px; }
+  .score-validation-body p { margin:0 0 15px; color:var(--c-text); font-size:var(--font-size-sm); }
+  .score-validation-errors { display:grid; gap:8px; margin:0; padding:0 0 0 23px; color:#dc2626; font-size:var(--font-size-sm); }
+  .score-validation-errors li { padding-left:2px; }
+  .score-validation-footer { display:flex; justify-content:flex-end; padding:17px 25px; border-top:1px solid var(--c-border); background:#f8fafc; }
+  .score-validation-footer .cce-btn { min-width:190px; }
+  @media (max-width:560px) {
+    .score-validation-header { padding:15px 17px; }
+    .score-validation-body { padding:20px 19px; }
+    .score-validation-footer { padding:14px 17px; }
+    .score-validation-footer .cce-btn { width:100%; }
+    .score-edit-body { padding:19px; }
+    .score-edit-footer { flex-direction:column-reverse; padding:14px 19px; }
+    .score-edit-footer .cce-btn { width:100%; }
+    .final-results-actions { grid-template-columns:1fr; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
   {% if final_results_locked %}
     <div class="cce-alert cce-alert-warning" role="status" style="margin-bottom:var(--space-4); color:var(--c-warning-hover);">
@@ -40,11 +83,11 @@
   {% else %}
     <div class="cce-alert cce-alert-info" role="status" style="margin-bottom:var(--space-4);">
       <span class="material-symbols-outlined" aria-hidden="true">info</span>
-      Để trống ô điểm nếu không muốn thay đổi điểm đã lưu. Có thể sửa điểm trước khi chốt kết quả.
+      Điểm lần đầu nhập sẽ được ghi lý do “Đã hoàn thành khóa học” và khóa lại. Muốn điều chỉnh, chọn Sửa điểm ở cột Kiểm tra và nhập lý do.
     </div>
   {% endif %}
 
-  {% if reason_error %}
+  {% if reason_error and not is_editing_score %}
     <div class="cce-alert cce-alert-error" role="alert" style="margin-bottom:var(--space-4);">
       {{ reason_error }}
     </div>
@@ -64,25 +107,19 @@
       </div>
     </div>
 
-    <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+    <form method="post" action="{{ results_url }}?page={{ page_obj.number }}" {% if can_edit_scores %}novalidate data-score-form{% endif %}>
       {% csrf_token %}
-      <input type="hidden" name="action" value="{% if final_results_locked %}save_locked{% else %}save{% endif %}">
-
-      {% if final_results_locked and can_manage_results %}
-        <div class="cce-form-group" style="padding:var(--space-4);">
-          <label class="cce-label" for="final-results-reason">
-            Lý do sửa điểm <span class="cce-required" aria-hidden="true">*</span>
-          </label>
-          <textarea class="cce-textarea" id="final-results-reason" name="reason"
-                    rows="3" required aria-describedby="final-results-reason-help">{{ reason_value }}</textarea>
-          <p class="cce-form-help" id="final-results-reason-help">
-            Lý do sẽ được ghi lại trong nhật ký thao tác.
-          </p>
-        </div>
-      {% endif %}
+      <input type="hidden" name="action" value="save">
 
       <div class="cce-table-wrap">
-        <table class="cce-table">
+        <table class="cce-table final-results-table">
+          <colgroup>
+            <col style="width:23%">
+            <col style="width:17%">
+            <col style="width:22%">
+            <col style="width:12%">
+            <col style="width:26%">
+          </colgroup>
           <thead>
             <tr>
               <th scope="col">Họ và tên</th>
@@ -95,22 +132,41 @@
           <tbody>
             {% for row in rows %}
               <tr>
-                <td><strong>{{ row.learner.full_name }}</strong></td>
+                <td class="final-results-name"><strong>{{ row.learner.full_name }}</strong></td>
                 <td>{% if row.learner.id_number %}<code>{{ row.learner.id_number }}</code>{% else %}—{% endif %}</td>
                 <td>
-                  <input class="cce-input" type="number" inputmode="decimal"
+                  <input class="cce-input final-results-score-input" type="number" inputmode="decimal"
                          id="{{ row.input_id }}" name="score_{{ row.learner.pk }}"
                          min="0" max="100" step="0.01"
                          value="{{ row.score_value }}"
-                         {% if not can_edit_scores %}readonly aria-readonly="true"{% endif %}
+                         {% if row.score_readonly %}readonly aria-readonly="true"{% endif %}
+                         data-score-input
                          aria-label="Điểm cuối khóa của {{ row.learner.full_name }}">
                 </td>
                 <td>{{ row.outcome }}</td>
                 <td>
                   {% if row.error %}
                     <span class="cce-form-error">{{ row.error }}</span>
+                  {% endif %}
+                  {% if row.score_saved %}
+                    <div class="final-results-actions">
+                      {% if can_edit_scores %}
+                        <button class="cce-btn cce-btn-primary cce-btn-sm" type="button"
+                                data-edit-score
+                                data-learner-id="{{ row.learner.pk }}"
+                                data-learner-name="{{ row.learner.full_name }}"
+                                data-current-score="{{ row.score_value }}">
+                          Sửa điểm
+                        </button>
+                      {% endif %}
+                      <a class="cce-btn cce-btn-secondary cce-btn-sm" href="{{ row.history_url }}">
+                        Xem lịch sử sửa đổi
+                      </a>
+                    </div>
                   {% else %}
-                    <span style="color:var(--c-text-muted);">—</span>
+                    {% if not row.error %}
+                      <span style="color:var(--c-text-muted);">—</span>
+                    {% endif %}
                   {% endif %}
                 </td>
               </tr>
@@ -130,13 +186,57 @@
       {% if rows and can_edit_scores %}
         <div class="cce-form-actions" style="padding:var(--space-4); display:flex; gap:var(--space-3); flex-wrap:wrap;">
           <button class="cce-btn cce-btn-primary" type="submit">Lưu điểm</button>
-          {% if final_results_locked %}
-            <span class="cce-form-help">Sau khi lưu, kết quả vẫn giữ trạng thái đã chốt.</span>
-          {% endif %}
         </div>
       {% endif %}
     </form>
   </section>
+
+  {% if can_edit_scores %}
+    <dialog class="score-edit-dialog" id="score-edit-dialog"
+            aria-labelledby="score-edit-title" aria-describedby="score-edit-description"
+            data-open-on-load="{% if is_editing_score %}true{% else %}false{% endif %}">
+      <form method="post" action="{{ results_url }}?page={{ page_obj.number }}"
+            novalidate data-score-form data-score-edit-form>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit_score">
+        <input type="hidden" name="learner_id" id="score-edit-learner-id" value="{{ editing_learner_id|default:'' }}">
+        <div class="score-edit-header">
+          <h2 id="score-edit-title">Sửa điểm cuối khóa</h2>
+          <button class="score-edit-close" type="button" data-close-score-edit aria-label="Đóng">×</button>
+        </div>
+        <div class="score-edit-body">
+          <p id="score-edit-description" style="margin:0; color:var(--c-text-muted);">
+            Học viên: <strong id="score-edit-learner-name">{{ editing_learner_name }}</strong>
+          </p>
+          <div class="cce-form-group">
+            <label class="cce-label" for="score-edit-value">
+              Điểm mới <span class="cce-required" aria-hidden="true">*</span>
+            </label>
+            <input class="cce-input" type="number" inputmode="decimal" id="score-edit-value"
+                   name="score" min="0" max="100" step="0.01" required
+                   value="{{ edit_score_value }}" data-score-input
+                   aria-label="Điểm cuối khóa mới">
+            {% if edit_score_error %}
+              <span class="cce-form-error" role="alert">{{ edit_score_error }}</span>
+            {% endif %}
+          </div>
+          <div class="cce-form-group">
+            <label class="cce-label" for="score-edit-reason">
+              Lý do sửa điểm <span class="cce-required" aria-hidden="true">*</span>
+            </label>
+            <textarea class="cce-textarea" id="score-edit-reason" name="reason"
+                      rows="3" required>{{ reason_value }}</textarea>
+            {% if reason_error %}<span class="cce-form-error" role="alert">{{ reason_error }}</span>{% endif %}
+            <p class="cce-form-help">Lý do sẽ được ghi vào nhật ký thao tác.</p>
+          </div>
+        </div>
+        <div class="score-edit-footer">
+          <button class="cce-btn cce-btn-secondary" type="button" data-close-score-edit>Hủy</button>
+          <button class="cce-btn cce-btn-primary" type="submit">Lưu thay đổi</button>
+        </div>
+      </form>
+    </dialog>
+  {% endif %}
 
   {% if can_finalize %}
     <form method="post" action="{{ results_url }}" style="margin-top:var(--space-4);">
@@ -152,5 +252,124 @@
     <p class="cce-form-help" style="margin-top:var(--space-3);">
       Nhập điểm cho tất cả học viên đang ghi danh để có thể chốt kết quả lớp.
     </p>
+  {% endif %}
+
+  {% if can_edit_scores %}
+    <dialog class="score-validation-dialog" id="score-validation-dialog" aria-labelledby="score-validation-title" aria-describedby="score-validation-description">
+      <div class="score-validation-header">
+        <span class="score-validation-header-icon" aria-hidden="true">!</span>
+        <h2 id="score-validation-title">Thông tin nhập chưa chính xác</h2>
+        <button class="score-validation-close" type="button" data-close-score-dialog aria-label="Đóng">×</button>
+      </div>
+      <div class="score-validation-body">
+        <p id="score-validation-description">Vui lòng kiểm tra và sửa lại các mục sau:</p>
+        <ul class="score-validation-errors" id="score-validation-errors"></ul>
+      </div>
+      <div class="score-validation-footer">
+        <button class="cce-btn cce-btn-primary" type="button" data-close-score-dialog>Đã hiểu &amp; Sửa lại</button>
+      </div>
+    </dialog>
+
+    <script>
+      (function() {
+        var scoreInputs = document.querySelectorAll("[data-score-input]");
+        var forms = document.querySelectorAll("[data-score-form]");
+        var dialog = document.getElementById("score-validation-dialog");
+        var editDialog = document.getElementById("score-edit-dialog");
+        var errorList = document.getElementById("score-validation-errors");
+        var closeButtons = dialog.querySelectorAll("[data-close-score-dialog]");
+        var lastInvalidInput = null;
+        var wasOutOfRange = [];
+        var editInput = editDialog ? document.getElementById("score-edit-value") : null;
+        var editLearnerId = editDialog ? document.getElementById("score-edit-learner-id") : null;
+        var editLearnerName = editDialog ? document.getElementById("score-edit-learner-name") : null;
+        var editReason = editDialog ? document.getElementById("score-edit-reason") : null;
+
+        function getInvalidScores(form) {
+          return Array.prototype.filter.call(scoreInputs, function(input) {
+            return (!form || form.contains(input))
+              && input.value !== ""
+              && (input.validity.rangeOverflow || input.validity.rangeUnderflow);
+          });
+        }
+
+        function showRangeDialog(invalidInputs) {
+          lastInvalidInput = invalidInputs[0];
+          while (errorList.firstChild) errorList.removeChild(errorList.firstChild);
+          invalidInputs.forEach(function(input) {
+            var item = document.createElement("li");
+            item.textContent = input.getAttribute("aria-label") + ": Điểm phải nằm trong khoảng 0 đến 100.";
+            errorList.appendChild(item);
+          });
+          if (!dialog.open) dialog.showModal();
+        }
+
+        Array.prototype.forEach.call(scoreInputs, function(input) {
+          function checkRange() {
+            var index = Array.prototype.indexOf.call(scoreInputs, input);
+            var isOutOfRange = input.value !== "" && (input.validity.rangeOverflow || input.validity.rangeUnderflow);
+            if (isOutOfRange && !wasOutOfRange[index]) {
+              showRangeDialog([input]);
+            }
+            wasOutOfRange[index] = isOutOfRange;
+          }
+
+          var initialIndex = Array.prototype.indexOf.call(scoreInputs, input);
+          wasOutOfRange[initialIndex] = (
+            input.value !== ""
+            && (input.validity.rangeOverflow || input.validity.rangeUnderflow)
+          );
+          input.addEventListener("input", checkRange);
+          input.addEventListener("change", checkRange);
+        });
+
+        Array.prototype.forEach.call(closeButtons, function(button) {
+          button.addEventListener("click", function() {
+            dialog.close();
+            if (lastInvalidInput) lastInvalidInput.focus();
+          });
+        });
+
+        Array.prototype.forEach.call(forms, function(form) {
+          form.addEventListener("submit", function(event) {
+            var invalidInputs = getInvalidScores(form);
+            if (invalidInputs.length) {
+              event.preventDefault();
+              showRangeDialog(invalidInputs);
+            } else if (!form.checkValidity()) {
+              event.preventDefault();
+              form.reportValidity();
+            }
+          });
+        });
+
+        if (editDialog) {
+          var editButtons = document.querySelectorAll("[data-edit-score]");
+          var closeEditButtons = editDialog.querySelectorAll("[data-close-score-edit]");
+
+          Array.prototype.forEach.call(editButtons, function(button) {
+            button.addEventListener("click", function() {
+              editLearnerId.value = button.getAttribute("data-learner-id");
+              editLearnerName.textContent = button.getAttribute("data-learner-name");
+              editInput.value = button.getAttribute("data-current-score");
+              editReason.value = "";
+              if (!editDialog.open) editDialog.showModal();
+              editInput.focus();
+            });
+          });
+
+          Array.prototype.forEach.call(closeEditButtons, function(button) {
+            button.addEventListener("click", function() {
+              editDialog.close();
+            });
+          });
+
+          if (editDialog.getAttribute("data-open-on-load") === "true") {
+            editDialog.showModal();
+            editInput.focus();
+          }
+        }
+      }());
+    </script>
   {% endif %}
 {% endblock %}

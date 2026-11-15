@@ -1328,6 +1328,7 @@ def exam_score_list(request):
         "pass_rate": pass_rate,
         "selected_period": selected_period,
         "selected_room": selected_room,
+        "has_active_score_filters": bool(period_id or room_id),
     })
 
 

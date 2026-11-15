@@ -28,13 +28,17 @@
         <div class="cce-timeline-item" style="display:grid; grid-template-columns: 120px 1fr; gap: var(--space-3); align-items:start; padding: var(--space-3) 0; border-bottom:1px solid var(--c-border);">
           <div style="font-size:var(--font-size-xs); color:var(--c-text-muted);">{{ item.changed_at|date:"d/m/Y H:i" }}</div>
           <div>
-            <div style="font-weight:var(--font-weight-bold); margin-bottom:4px;">
-              {{ item.old_status }} → {{ item.new_status }}
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:var(--font-weight-bold);margin-bottom:4px;">
+              <span>{% if is_replacement_certificate and item.old_status == 'issued' and item.new_status == 'issued' %}Chờ thay thế{% else %}{{ item.previous_status_display }}{% endif %}</span>
+              <span aria-hidden="true">→</span>
+              <span>{{ item.get_new_status_display }}</span>
             </div>
             <div style="color:var(--c-text-muted); margin-bottom:4px;">Người thực hiện:
               {% if item.changed_by %}{{ item.changed_by.get_full_name|default:item.changed_by.username }}{% else %}Hệ thống{% endif %}
             </div>
-            {% if item.reason %}
+            {% if item.old_status == 'issued' and item.new_status == 'issued' %}
+              <div style="color:var(--c-text-muted);">Lý do: {% if is_replacement_certificate %}{{ replacement_reason|default:item.reason }}{% else %}Đã hoàn thành khóa học và đủ điều kiện để cấp chứng nhận.{% endif %}</div>
+            {% elif item.reason %}
               <div style="color:var(--c-text-muted);">Lý do: {{ item.reason }}</div>
             {% endif %}
           </div>

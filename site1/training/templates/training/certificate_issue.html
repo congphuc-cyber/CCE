@@ -1,0 +1,184 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Cấp chứng nhận{% endblock %}
+{% block breadcrumb_title %}Cấp chứng nhận{% endblock %}
+{% block page_title %}Cấp chứng nhận{% endblock %}
+{% block page_description %}Chọn học viên, kiểm tra điều kiện và xác nhận cấp chứng nhận.{% endblock %}
+
+{% block page_actions %}
+  {% if learner %}
+    {% if can_issue %}
+      <span class="cce-badge cce-badge-published">Đủ điều kiện cấp</span>
+    {% else %}
+      <span class="cce-badge cce-badge-closed">Chưa đủ điều kiện</span>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .certificate-issue-layout { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr); gap:16px; align-items:start; }
+  .certificate-issue-main { display:grid; gap:14px; }
+  .certificate-issue-card .cce-card-header { padding-bottom:12px; }
+  .certificate-issue-card .cce-card-title { font-size:var(--font-size-md); }
+  .certificate-issue-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+  .certificate-issue-fields .cce-form-field { min-width:0; }
+  .certificate-issue-hint { margin:12px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .certificate-check-list { display:grid; gap:0; }
+  .certificate-check { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:12px; align-items:center; padding:12px; border-bottom:1px solid var(--c-border); }
+  .certificate-check:last-child { border-bottom:0; }
+  .certificate-check-icon { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:#e9f6f1; color:#11805b; font-size:15px; }
+  .certificate-check.is-failed { margin:4px 0; border:1px solid #f4c7cd; border-radius:7px; background:#fff0f1; }
+  .certificate-check.is-failed .certificate-check-icon { background:#ffe1e5; color:#c73546; }
+  .certificate-check.is-failed .certificate-check-title,
+  .certificate-check.is-failed .certificate-check-description { color:#b42336; }
+  .certificate-check-title { margin:0; color:var(--c-text); font-weight:var(--font-weight-semibold); }
+  .certificate-check-description { margin:3px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .certificate-check-status { min-width:62px; text-align:center; }
+  .certificate-number-preview { padding:14px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-surface-muted,#f1f5f8); }
+  .certificate-number-label { margin:0 0 7px; color:var(--c-text-muted); font-size:var(--font-size-xs); text-transform:uppercase; }
+  .certificate-number-value { margin:0; color:var(--c-primary); font-size:var(--font-size-xl); font-weight:var(--font-weight-bold); }
+  .certificate-preview-hint { margin:6px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .certificate-preview-row { padding:12px 0; border-bottom:1px solid var(--c-border); }
+  .certificate-preview-row:last-child { border-bottom:0; }
+  .certificate-preview-row span { display:block; margin-bottom:4px; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .certificate-preview-row strong { color:var(--c-text); }
+  .certificate-issue-message { margin:14px 0; padding:11px 13px; border:1px solid #ccebdd; border-radius:7px; background:#eaf7f1; color:#176b4d; }
+  .certificate-issue-message.is-warning { border-color:#f4c7cd; background:#fff0f1; color:#b42336; }
+  .certificate-issue-footer button:disabled { cursor:not-allowed; opacity:.55; }
+  .certificate-issue-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; }
+  .certificate-issue-footer p { margin:0; color:var(--c-text-muted); font-size:var(--font-size-sm); }
+  @media (max-width:850px) { .certificate-issue-layout { grid-template-columns:1fr; } }
+  @media (max-width:560px) {
+    .certificate-issue-fields { grid-template-columns:1fr; }
+    .certificate-issue-footer { align-items:stretch; flex-direction:column; }
+    .certificate-issue-footer .cce-form-actions { justify-content:flex-end; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="certificate-issue-layout" id="issue-certificate-form">
+  <div class="certificate-issue-main">
+    <section class="cce-card certificate-issue-card">
+      <div class="cce-card-header">
+        <h2 class="cce-card-title">1. Chọn lớp và học viên</h2>
+      </div>
+      <form method="get" action="{% url 'certificate-issue' %}" id="certificate-selection-form" novalidate>
+        <div class="certificate-issue-fields">
+          <div class="cce-form-field">
+            <label for="{{ issue_form.training_class.id_for_label }}">Lớp học <span aria-hidden="true">*</span></label>
+            {{ issue_form.training_class }}
+            {% if issue_form.training_class.errors %}<div class="cce-error">{{ issue_form.training_class.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="cce-form-field">
+            <label for="{{ issue_form.learner.id_for_label }}">Học viên <span aria-hidden="true">*</span></label>
+            {{ issue_form.learner }}
+            {% if issue_form.learner.errors %}<div class="cce-error">{{ issue_form.learner.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+      </form>
+      <p class="certificate-issue-hint">
+        {% if training_class %}
+          Chỉ hiển thị học viên thuộc lớp đã chọn.
+        {% else %}
+          Chọn lớp trước để hiển thị danh sách học viên.
+        {% endif %}
+      </p>
+    </section>
+
+    <section class="cce-card certificate-issue-card">
+      <div class="cce-card-header">
+        <h2 class="cce-card-title">2. Kiểm tra điều kiện cấp</h2>
+        <span class="cce-badge {% if can_issue %}cce-badge-published{% else %}cce-badge-closed{% endif %}">{{ passed_count }}/3 điều kiện đạt</span>
+      </div>
+      <div class="certificate-check-list">
+        {% for check in checks %}
+          <div class="certificate-check {% if not check.passed %}is-failed{% endif %}">
+            <span class="certificate-check-icon" aria-hidden="true">{% if check.passed %}✓{% else %}×{% endif %}</span>
+            <div>
+              <p class="certificate-check-title">{{ check.label }}</p>
+              <p class="certificate-check-description">{{ check.description }}</p>
+            </div>
+            <span class="cce-badge certificate-check-status {% if check.passed %}cce-badge-published{% else %}cce-badge-closed{% endif %}">{% if check.passed %}Đạt{% else %}Chưa đạt{% endif %}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="cce-card certificate-issue-card">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title">3. Thông tin chứng nhận</h2>
+    </div>
+    <div class="certificate-number-preview">
+      <p class="certificate-number-label">Số chứng nhận</p>
+      <p class="certificate-number-value">{% if can_issue %}{{ certificate_number }}{% else %}Chưa được tạo{% endif %}</p>
+      <p class="certificate-preview-hint">{% if can_issue %}Số dự kiến · Tự sinh khi xác nhận cấp.{% else %}Chỉ tự sinh khi học viên đủ điều kiện.{% endif %}</p>
+    </div>
+    <div class="certificate-preview-row">
+      <span>Học viên được cấp</span>
+      <strong>{% if learner %}{{ learner.full_name }}{% else %}Chưa chọn học viên{% endif %}</strong>
+      {% if learner %}<span>HV-{{ learner.pk|stringformat:"05d" }}</span>{% endif %}
+    </div>
+    <div class="certificate-preview-row">
+      <span>Lớp học</span>
+      <strong>{% if training_class %}{{ training_class.name }}{% else %}Chưa chọn lớp{% endif %}</strong>
+    </div>
+    <div class="certificate-number-preview" style="margin-top:14px;">
+      <strong>Số chứng nhận do hệ thống quản lý</strong>
+      <p class="certificate-preview-hint">Không nhập hoặc chỉnh sửa thủ công. Hệ thống kiểm tra lại điều kiện khi xác nhận.</p>
+    </div>
+  </section>
+</div>
+
+{% if issue_form.non_field_errors %}
+  <div class="cce-error" style="margin-top:14px;">{{ issue_form.non_field_errors|join:", " }}</div>
+{% endif %}
+
+{% if can_issue %}
+  <div class="certificate-issue-message">
+    <strong>Học viên đáp ứng đủ 3 điều kiện.</strong>
+    Chứng nhận chỉ được tạo sau khi nhấn “Xác nhận cấp”.
+  </div>
+{% elif learner %}
+  <div class="certificate-issue-message is-warning">
+    <strong>Không thể cấp chứng nhận:</strong>
+    {{ blocking_reason }}
+    Hệ thống cần đủ cả 3 điều kiện trước khi xác nhận.
+  </div>
+{% endif %}
+
+<section class="cce-card certificate-issue-footer">
+  <p>Vui lòng kiểm tra thông tin trước khi xác nhận.</p>
+  <div class="cce-form-actions">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'certificate-list' %}">Hủy</a>
+    <form method="post" action="{% url 'certificate-issue' %}" style="margin:0;">
+      {% csrf_token %}
+      <input type="hidden" name="training_class" value="{{ training_class.pk }}">
+      <input type="hidden" name="learner" value="{{ learner.pk }}">
+      {% if can_issue %}
+        <button class="cce-btn cce-btn-primary" type="submit">Xác nhận cấp</button>
+      {% else %}
+        <button class="cce-btn cce-btn-primary" type="button" disabled>Xác nhận cấp</button>
+      {% endif %}
+    </form>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var form = document.getElementById("certificate-selection-form");
+    var classSelect = document.getElementById("{{ issue_form.training_class.id_for_label }}");
+    var learnerSelect = document.getElementById("{{ issue_form.learner.id_for_label }}");
+    if (!form || !classSelect || !learnerSelect) return;
+    classSelect.addEventListener("change", function () {
+      learnerSelect.value = "";
+      form.submit();
+    });
+    learnerSelect.addEventListener("change", function () {
+      form.submit();
+    });
+  })();
+</script>
+{% endblock %}

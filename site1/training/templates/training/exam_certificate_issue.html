@@ -1,0 +1,202 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Cấp chứng chỉ khảo thí{% endblock %}
+{% block breadcrumb_title %}Cấp chứng chỉ khảo thí{% endblock %}
+{% block page_title %}Cấp chứng chỉ khảo thí{% endblock %}
+{% block page_description %}Chọn thí sinh, kiểm tra điều kiện khảo thí và xác nhận cấp chứng chỉ.{% endblock %}
+
+{% block page_actions %}
+  {% if application %}
+    {% if can_issue %}
+      <span class="cce-badge cce-badge-published">Đủ điều kiện cấp</span>
+    {% else %}
+      <span class="cce-badge cce-badge-closed">Chưa đủ điều kiện</span>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .exam-issue-layout { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr); gap:16px; align-items:start; }
+  .exam-issue-main { display:grid; gap:14px; }
+  .exam-issue-card .cce-card-header { padding-bottom:12px; }
+  .exam-issue-card .cce-card-title { font-size:var(--font-size-md); }
+  .exam-issue-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+  .exam-issue-fields .cce-form-field { min-width:0; }
+  .exam-issue-hint { margin:12px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-issue-check-list { display:grid; gap:0; }
+  .exam-issue-check { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:12px; align-items:center; padding:12px; border-bottom:1px solid var(--c-border); }
+  .exam-issue-check:last-child { border-bottom:0; }
+  .exam-issue-check-icon { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:#e9f6f1; color:#11805b; font-size:15px; }
+  .exam-issue-check.is-failed { margin:4px 0; border:1px solid #f4c7cd; border-radius:7px; background:#fff0f1; }
+  .exam-issue-check.is-failed .exam-issue-check-icon { background:#ffe1e5; color:#c73546; }
+  .exam-issue-check.is-failed .exam-issue-check-title,
+  .exam-issue-check.is-failed .exam-issue-check-description { color:#b42336; }
+  .exam-issue-check-title { margin:0; color:var(--c-text); font-weight:var(--font-weight-semibold); }
+  .exam-issue-check-description { margin:3px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-issue-check-status { min-width:62px; text-align:center; }
+  .exam-issue-number-preview { padding:14px; border:1px solid var(--c-border); border-radius:8px; background:var(--c-surface-muted,#f1f5f8); }
+  .exam-issue-number-label { margin:0 0 7px; color:var(--c-text-muted); font-size:var(--font-size-xs); text-transform:uppercase; }
+  .exam-issue-number-value { margin:0; color:var(--c-primary); font-size:var(--font-size-xl); font-weight:var(--font-weight-bold); overflow-wrap:anywhere; }
+  .exam-issue-preview-hint { margin:6px 0 0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-issue-preview-row { padding:12px 0; border-bottom:1px solid var(--c-border); }
+  .exam-issue-preview-row:last-child { border-bottom:0; }
+  .exam-issue-preview-row span { display:block; margin-bottom:4px; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  .exam-issue-preview-row strong { color:var(--c-text); overflow-wrap:anywhere; }
+  .exam-issue-preview-score { color:#285f87; font-size:var(--font-size-md); font-weight:var(--font-weight-bold); }
+  .exam-issue-message { margin:14px 0; padding:11px 13px; border:1px solid #ccebdd; border-radius:7px; background:#eaf7f1; color:#176b4d; }
+  .exam-issue-message.is-warning { border-color:#f4c7cd; background:#fff0f1; color:#b42336; }
+  .exam-issue-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; }
+  .exam-issue-footer p { margin:0; color:var(--c-text-muted); font-size:var(--font-size-sm); }
+  .exam-issue-footer button:disabled { cursor:not-allowed; opacity:.55; }
+  @media (max-width:850px) { .exam-issue-layout { grid-template-columns:1fr; } }
+  @media (max-width:560px) {
+    .exam-issue-fields { grid-template-columns:1fr; }
+    .exam-issue-check { grid-template-columns:24px minmax(0,1fr); }
+    .exam-issue-check-status { grid-column:2; justify-self:start; }
+    .exam-issue-footer { align-items:stretch; flex-direction:column; }
+    .exam-issue-footer .cce-form-actions { justify-content:flex-end; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="exam-issue-layout" id="exam-certificate-issue-form">
+  <div class="exam-issue-main">
+    <section class="cce-card exam-issue-card">
+      <div class="cce-card-header">
+        <h2 class="cce-card-title">1. Chọn đợt thi và thí sinh</h2>
+      </div>
+      <form method="get" action="{% url 'exam-certificate-issue' %}" id="exam-certificate-selection-form" novalidate>
+        <div class="exam-issue-fields">
+          <div class="cce-form-field">
+            <label for="{{ issue_form.exam_period.id_for_label }}">Đợt thi <span aria-hidden="true">*</span></label>
+            {{ issue_form.exam_period }}
+            {% if issue_form.exam_period.errors %}<div class="cce-error">{{ issue_form.exam_period.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="cce-form-field">
+            <label for="{{ issue_form.application.id_for_label }}">Thí sinh <span aria-hidden="true">*</span></label>
+            {{ issue_form.application }}
+            {% if issue_form.application.errors %}<div class="cce-error">{{ issue_form.application.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+      </form>
+      <p class="exam-issue-hint">
+        {% if period %}
+          Chỉ hiển thị thí sinh có hồ sơ hợp lệ trong đợt thi đã chọn.
+        {% else %}
+          Chọn đợt thi trước để hiển thị danh sách thí sinh.
+        {% endif %}
+      </p>
+    </section>
+
+    <section class="cce-card exam-issue-card">
+      <div class="cce-card-header">
+        <h2 class="cce-card-title">2. Kiểm tra điều kiện cấp</h2>
+        <span class="cce-badge {% if can_issue %}cce-badge-published{% else %}cce-badge-closed{% endif %}">{{ passed_count }}/5 điều kiện đạt</span>
+      </div>
+      <div class="exam-issue-check-list">
+        {% for check in checks %}
+          <div class="exam-issue-check {% if not check.passed %}is-failed{% endif %}">
+            <span class="exam-issue-check-icon" aria-hidden="true">{% if check.passed %}✓{% else %}×{% endif %}</span>
+            <div>
+              <p class="exam-issue-check-title">{{ check.label }}</p>
+              <p class="exam-issue-check-description">{{ check.description }}</p>
+            </div>
+            <span class="cce-badge exam-issue-check-status {% if check.passed %}cce-badge-published{% else %}cce-badge-closed{% endif %}">{% if check.passed %}Đạt{% else %}Chưa đạt{% endif %}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="cce-card exam-issue-card">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title">3. Thông tin chứng chỉ</h2>
+    </div>
+    <div class="exam-issue-number-preview">
+      <p class="exam-issue-number-label">Số chứng chỉ</p>
+      <p class="exam-issue-number-value">{% if can_issue %}{{ certificate_number }}{% else %}Chưa được tạo{% endif %}</p>
+      <p class="exam-issue-preview-hint">{% if can_issue %}Số dự kiến · Tự sinh khi xác nhận cấp.{% else %}Chỉ tự sinh khi thí sinh đủ điều kiện.{% endif %}</p>
+    </div>
+    <div class="exam-issue-preview-row">
+      <span>Thí sinh được cấp</span>
+      <strong>{% if application %}{{ application.full_name }}{% else %}Chưa chọn thí sinh{% endif %}</strong>
+      {% if application %}<span>CCCD/CMND: {{ application.id_number|default:"—" }}</span>{% endif %}
+    </div>
+    <div class="exam-issue-preview-row">
+      <span>Đợt thi</span>
+      <strong>{% if period %}{{ period.name }}{% else %}Chưa chọn đợt thi{% endif %}</strong>
+    </div>
+    <div class="exam-issue-preview-row">
+      <span>Kết quả</span>
+      <strong>
+        {% if score %}
+          {% if score.is_absent %}Vắng thi{% elif score.score is not None %}<span class="exam-issue-preview-score">{{ score.score }}</span> điểm{% else %}Chưa có điểm{% endif %}
+        {% else %}Chưa có điểm thi{% endif %}
+      </strong>
+    </div>
+    {% if active_certificate %}
+      <div class="exam-issue-number-preview" style="margin-top:14px;">
+        <strong>Đã có chứng chỉ còn hiệu lực</strong>
+        <p class="exam-issue-preview-hint">{{ active_certificate.certificate_number }} · Không thể cấp thêm chứng chỉ trong đợt thi này.</p>
+      </div>
+    {% else %}
+      <div class="exam-issue-number-preview" style="margin-top:14px;">
+        <strong>Điều kiện riêng của chứng chỉ khảo thí</strong>
+        <p class="exam-issue-preview-hint">Hồ sơ hợp lệ, điểm tối thiểu 5, không vắng thi, điểm đã công bố và chưa có chứng chỉ hiệu lực.</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{% if issue_form.non_field_errors %}
+  <div class="cce-error" style="margin-top:14px;">{{ issue_form.non_field_errors|join:", " }}</div>
+{% endif %}
+
+{% if can_issue %}
+  <div class="exam-issue-message">
+    <strong>Thí sinh đáp ứng đủ 5 điều kiện.</strong>
+    Hệ thống sẽ kiểm tra lại trước khi ghi nhận việc cấp chứng chỉ.
+  </div>
+{% elif application %}
+  <div class="exam-issue-message is-warning">
+    <strong>Không thể cấp chứng chỉ:</strong>
+    {{ blocking_reason }}
+    Cần đáp ứng đủ cả 5 điều kiện trước khi xác nhận.
+  </div>
+{% endif %}
+
+<section class="cce-card exam-issue-footer">
+  <p>Vui lòng kiểm tra thông tin trước khi xác nhận.</p>
+  <div class="cce-form-actions">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-certificate-list' %}">Hủy</a>
+    <form method="post" action="{% url 'exam-certificate-issue' %}" style="margin:0;">
+      {% csrf_token %}
+      <input type="hidden" name="exam_period" value="{{ period.pk }}">
+      <input type="hidden" name="application" value="{{ application.pk }}">
+      {% if can_issue %}
+        <button class="cce-btn cce-btn-primary" type="submit">Xác nhận cấp</button>
+      {% else %}
+        <button class="cce-btn cce-btn-primary" type="button" disabled>Xác nhận cấp</button>
+      {% endif %}
+    </form>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var form = document.getElementById("exam-certificate-selection-form");
+    var periodSelect = document.getElementById("{{ issue_form.exam_period.id_for_label }}");
+    var applicationSelect = document.getElementById("{{ issue_form.application.id_for_label }}");
+    if (!form || !periodSelect || !applicationSelect) return;
+    periodSelect.addEventListener("change", function () {
+      applicationSelect.value = "";
+      form.submit();
+    });
+    applicationSelect.addEventListener("change", function () {
+      form.submit();
+    });
+  })();
+</script>
+{% endblock %}

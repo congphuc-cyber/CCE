@@ -244,7 +244,8 @@ class TeacherAdmin(BaseModelAdmin):
     change_list_title = "Danh sách giáo viên"
     list_display = (
         "full_name",
-        "contact_details",
+        "phone_display",
+        "email_display",
         "classes_summary",
         "edit_action",
         "delete_action",
@@ -254,9 +255,13 @@ class TeacherAdmin(BaseModelAdmin):
     search_fields = ("full_name", "phone", "email")
     ordering = ("full_name",)
 
-    @admin.display(description="Liên hệ")
-    def contact_details(self, obj):
-        return " · ".join(value for value in (obj.phone, obj.email) if value) or "Chưa cập nhật"
+    @admin.display(description="SĐT", ordering="phone")
+    def phone_display(self, obj):
+        return obj.phone or "Chưa cập nhật"
+
+    @admin.display(description="Email", ordering="email")
+    def email_display(self, obj):
+        return obj.email or "Chưa cập nhật"
 
     @admin.display(description="Các lớp phụ trách")
     def classes_summary(self, obj):

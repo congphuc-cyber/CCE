@@ -8,31 +8,36 @@
 
 {% block page_actions %}
   {% if can_manage %}
-    <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+    <div class="class-detail-actions {% if training_class.status == 'open' %}is-open{% else %}is-closed{% endif %}">
+      <div class="class-detail-actions-start">
       <a class="cce-class-action-btn cce-btn-edit-action" href="{{ class_change_url }}">
         <span class="material-symbols-outlined">edit</span>
         <span>Sửa thông tin</span>
       </a>
+      </div>
+      <div class="class-detail-actions-center">
       <a class="cce-class-action-btn cce-btn-assign-action" href="{{ assignment_url }}">
         <span class="material-symbols-outlined">badge</span>
         <span>Phân công giáo viên</span>
       </a>
       {% if training_class.enrolled_count %}
-        <a class="cce-btn cce-btn-secondary" href="{{ transfer_url }}">
+        <a class="cce-btn cce-btn-secondary class-detail-workflow-action is-transfer" href="{{ transfer_url }}">
           <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
           <span>Chuyển lớp</span>
         </a>
       {% endif %}
-      <a class="cce-btn cce-btn-secondary" href="{{ transfer_history_url }}">
+      <a class="cce-btn cce-btn-secondary class-detail-workflow-action is-history" href="{{ transfer_history_url }}">
         <span class="material-symbols-outlined" aria-hidden="true">history</span>
         <span>Lịch sử chuyển lớp</span>
       </a>
-      <a class="cce-btn cce-btn-secondary" href="{% url 'class-results' training_class.pk %}">
+      {% if training_class.status == "open" %}
+      <a class="cce-btn cce-btn-secondary class-detail-workflow-action is-results" href="{% url 'class-results' training_class.pk %}">
         <span class="material-symbols-outlined" aria-hidden="true">grading</span>
         <span>Kết quả cuối khóa</span>
       </a>
+      </div>
 
-      {% if training_class.status == "open" %}
+      <div class="class-detail-actions-end">
         {% if can_enroll %}
           <a class="cce-class-action-btn cce-btn-enroll-action" href="{{ enrollment_url }}">
             <span class="material-symbols-outlined">how_to_reg</span>
@@ -48,9 +53,58 @@
           <span class="material-symbols-outlined">lock</span>
           <span>Đóng lớp</span>
         </button>
+      </div>
+      {% else %}
+      </div>
+      <div class="class-detail-actions-end">
+        <a class="cce-btn cce-btn-secondary class-detail-workflow-action is-results" href="{% url 'class-results' training_class.pk %}">
+          <span class="material-symbols-outlined" aria-hidden="true">grading</span>
+          <span>Kết quả cuối khóa</span>
+        </a>
+      </div>
       {% endif %}
     </div>
   {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cce-page-actions { flex:1 0 100%; }
+  .class-detail-actions { display:grid; grid-template-columns:max-content minmax(0,1fr) max-content; align-items:center; gap:var(--space-2); width:100%; }
+  .class-detail-actions-start, .class-detail-actions-center, .class-detail-actions-end { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+  .class-detail-actions-start { justify-content:flex-start; }
+  .class-detail-actions-center { justify-content:center; }
+  .class-detail-actions-end { justify-content:flex-end; flex-wrap:nowrap; }
+  .class-detail-workflow-action {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:42px;
+    padding:0 14px;
+    border-radius:10px;
+    font-weight:var(--font-weight-semibold);
+    box-shadow:0 2px 5px rgb(22 53 73 / 6%);
+    transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease,transform .15s ease;
+  }
+  .class-detail-workflow-action .material-symbols-outlined { font-size:18px; }
+  .class-detail-workflow-action:hover { transform:translateY(-1px); box-shadow:0 4px 10px rgb(22 53 73 / 10%); }
+  .class-detail-workflow-action.is-transfer { border-color:#c2410c; background:#c2410c; color:#fff; }
+  .class-detail-workflow-action.is-transfer:hover { border-color:#9a3412; background:#9a3412; color:#fff; }
+  .class-detail-workflow-action.is-history { border-color:#0e7490; background:#0e7490; color:#fff; }
+  .class-detail-workflow-action.is-history:hover { border-color:#155e75; background:#155e75; color:#fff; }
+  .class-detail-workflow-action.is-results { border-color:#be185d; background:#be185d; color:#fff; }
+  .class-detail-workflow-action.is-results:hover { border-color:#9d174d; background:#9d174d; color:#fff; }
+  .class-detail-workflow-action:focus-visible { outline:2px solid var(--c-primary); outline-offset:2px; }
+  @media (max-width:1200px) {
+    .class-detail-actions { grid-template-columns:1fr; }
+    .class-detail-actions-center { justify-content:flex-start; }
+  }
+  @media (max-width:640px) {
+    .class-detail-actions-start, .class-detail-actions-center, .class-detail-actions-end { justify-content:flex-start; }
+    .class-detail-workflow-action { flex:1 1 100%; }
+  }
+</style>
 {% endblock %}
 
 {% block content %}

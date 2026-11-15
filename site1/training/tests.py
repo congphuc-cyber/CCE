@@ -597,6 +597,23 @@ class PhaseFourTests(TestCase):
                 self.assertContains(second_page, 'class="cce-page-link is-active">2</span>')
                 self.assertContains(second_page, "p=1")
 
+    def test_teacher_list_displays_phone_and_email_in_separate_columns(self):
+        Teacher.objects.create(
+            full_name="Giáo viên mẫu",
+            phone="0901234567",
+            email="teacher@example.test",
+        )
+        self.client.force_login(self.education_user)
+
+        response = self.client.get(reverse("admin:training_teacher_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "SĐT")
+        self.assertContains(response, "Email")
+        self.assertContains(response, "0901234567")
+        self.assertContains(response, "teacher@example.test")
+        self.assertNotContains(response, "Liên hệ")
+
     def test_education_dashboard_sidebar_shows_only_education_groups(self):
         self.client.force_login(self.education_user)
         response = self.client.get(reverse("dashboard"))
@@ -667,6 +684,10 @@ class PhaseFourTests(TestCase):
         self.client.force_login(self.education_user)
         detail_url = reverse("class-detail", args=(self.training_class.pk,))
         response = self.client.get(detail_url)
+        self.assertContains(response, 'class-detail-actions is-open')
+        self.assertContains(response, 'class-detail-actions-start')
+        self.assertContains(response, 'class-detail-actions-center')
+        self.assertContains(response, 'class-detail-actions-end')
         self.assertContains(response, "Ghi danh")
         self.assertContains(response, "Đóng lớp")
         self.assertContains(response, "required")
@@ -688,6 +709,7 @@ class PhaseFourTests(TestCase):
         self.assertEqual(self.training_class.close_reason, "Hoàn thành kế hoạch đào tạo")
 
         response = self.client.get(detail_url)
+        self.assertContains(response, 'class-detail-actions is-closed')
         self.assertNotContains(response, "Ghi danh")
         self.assertNotContains(response, "Đóng lớp")
         self.assertContains(response, "Hoàn thành kế hoạch đào tạo")
@@ -864,7 +886,10 @@ class ClassTransferTests(TestCase):
 
         self.assertContains(response, "Tìm học viên theo họ tên hoặc số CCCD")
         self.assertContains(response, f"{learner.full_name} — {learner.id_number}")
-        self.assertContains(response, 'aria-controls="id_learner"')
+        self.assertContains(response, 'aria-controls="learner-suggestions"')
+        self.assertContains(response, 'role="listbox"')
+        self.assertContains(response, 'aria-autocomplete="list"')
+        self.assertContains(response, "learner-suggestion-id")
         self.assertContains(response, "filterLearners")
 
     def test_transfer_moves_enrollment_and_records_history_and_audit(self):
@@ -873,6 +898,9 @@ class ClassTransferTests(TestCase):
         class_detail = self.client.get(reverse("class-detail", args=(self.source_class.pk,)))
         self.assertContains(class_detail, "Chuyển lớp")
         self.assertContains(class_detail, "Lịch sử chuyển lớp")
+        self.assertContains(class_detail, "class-detail-workflow-action is-transfer")
+        self.assertContains(class_detail, "class-detail-workflow-action is-history")
+        self.assertContains(class_detail, "class-detail-workflow-action is-results")
         transfer_page = self.client.get(
             reverse("class-transfer"),
             {"source_class": self.source_class.pk},
@@ -1471,6 +1499,22 @@ class FinalCourseResultTests(TestCase):
         )
         return teacher_user
 
+    def test_score_input_uses_vietnamese_popup_for_out_of_range_values(self):
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'max="100"')
+        self.assertContains(
+            response,
+            "Điểm phải nằm trong khoảng 0 đến 100.",
+        )
+        self.assertContains(response, 'class="score-validation-dialog"')
+        self.assertContains(response, 'class="score-edit-dialog"')
+        self.assertContains(response, 'data-score-input')
+        self.assertContains(response, "dialog.showModal()")
+
     def test_manual_scores_use_threshold_and_blank_values_do_not_change_saved_scores(self):
         existing = FinalCourseResult.objects.create(
             training_class=self.training_class,
@@ -1505,14 +1549,32 @@ class FinalCourseResultTests(TestCase):
         )
         self.assertEqual(create_audit.actor, self.manager)
         self.assertEqual(Decimal(create_audit.new_values["score"]), Decimal("75"))
+        self.assertEqual(create_audit.reason, "Đã hoàn thành khóa học")
 
-        self.client.post(
+        locked_edit = self.client.post(
             reverse("class-results", args=(self.training_class.pk,)),
             {
                 "action": "save",
                 f"score_{self.learners[1].pk}": "76",
             },
         )
+        self.assertEqual(locked_edit.status_code, 200)
+        self.assertContains(locked_edit, "Điểm đã lưu đang bị khóa.")
+        created_result.refresh_from_db()
+        self.assertEqual(created_result.score, Decimal("75"))
+
+        edit_response = self.client.post(
+            reverse("class-results", args=(self.training_class.pk,)),
+            {
+                "action": "edit_score",
+                "learner_id": str(self.learners[1].pk),
+                "reason": "Điều chỉnh theo biên bản đối soát",
+                "score": "76",
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+        created_result.refresh_from_db()
+        self.assertEqual(created_result.score, Decimal("76"))
         update_audit = AuditLog.objects.get(
             action=AuditLog.Action.EDIT,
             object_type="training.FinalCourseResult",
@@ -1520,6 +1582,19 @@ class FinalCourseResultTests(TestCase):
         )
         self.assertEqual(Decimal(update_audit.old_values["score"]), Decimal("75"))
         self.assertEqual(Decimal(update_audit.new_values["score"]), Decimal("76"))
+        self.assertEqual(update_audit.reason, "Điều chỉnh theo biên bản đối soát")
+
+        history_response = self.client.get(
+            reverse(
+                "class-results-history",
+                args=(self.training_class.pk, self.learners[1].pk),
+            )
+        )
+        self.assertEqual(history_response.status_code, 200)
+        self.assertContains(history_response, "Lịch sử sửa điểm")
+        self.assertContains(history_response, "Điều chỉnh theo biên bản đối soát")
+        self.assertContains(history_response, "75")
+        self.assertContains(history_response, "76")
 
     def test_manual_score_outside_range_is_rejected_without_saving(self):
         response = self.client.post(
@@ -1581,21 +1656,25 @@ class FinalCourseResultTests(TestCase):
         response = self.client.post(
             results_url,
             {
-                "action": "save_locked",
-                f"score_{self.learners[0].pk}": "80",
+                "action": "edit_score",
+                "learner_id": str(self.learners[0].pk),
+                "score": "80",
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Vui lòng nhập lý do sửa điểm sau khi chốt.")
+        self.assertContains(response, "Vui lòng nhập lý do sửa điểm.")
+        self.assertContains(response, 'data-open-on-load="true"')
+        self.assertContains(response, 'name="score"')
         result.refresh_from_db()
         self.assertEqual(result.score, Decimal("65"))
 
         response = self.client.post(
             results_url,
             {
-                "action": "save_locked",
+                "action": "edit_score",
+                "learner_id": str(self.learners[0].pk),
                 "reason": "Sửa theo biên bản đối soát",
-                f"score_{self.learners[0].pk}": "80",
+                "score": "80",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -1607,6 +1686,33 @@ class FinalCourseResultTests(TestCase):
                 object_id=str(result.pk),
                 reason="Sửa theo biên bản đối soát",
             ).exists()
+        )
+
+    def test_saved_scores_are_read_only_with_edit_and_history_actions(self):
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("65"),
+        )
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sửa điểm")
+        self.assertContains(response, "Xem lịch sử sửa đổi")
+        self.assertContains(response, 'class="score-edit-dialog"')
+        self.assertContains(response, 'data-edit-score')
+        self.assertContains(response, 'class="cce-btn cce-btn-primary cce-btn-sm"')
+        self.assertContains(response, 'readonly aria-readonly="true"')
+        self.assertContains(response, "grid-template-columns:1fr")
+        self.assertContains(
+            response,
+            f'href="{reverse("class-results-history", args=(self.training_class.pk, self.learners[0].pk))}"',
+        )
+        self.assertContains(
+            response,
+            f'id="score-{self.learners[0].pk}" name="score_{self.learners[0].pk}"',
         )
 
     def test_upload_preview_and_invalid_file_never_save_any_rows(self):
@@ -1680,7 +1786,7 @@ class FinalCourseResultTests(TestCase):
             FinalCourseResult.objects.filter(training_class=self.training_class).exists()
         )
 
-    def test_locked_upload_requires_reason_and_audits_successful_changes(self):
+    def test_locked_upload_assigns_default_reason_and_rejects_existing_score_changes(self):
         self.training_class.final_results_locked_at = timezone.now()
         self.training_class.final_results_locked_by = self.manager
         self.training_class.save(
@@ -1695,21 +1801,9 @@ class FinalCourseResultTests(TestCase):
             self.learners[0].id_number,
             "80",
         ]]
-        missing_reason = self.client.post(
-            upload_url,
-            {"file": self.score_file(rows)},
-        )
-        self.assertFalse(missing_reason.json()["ok"])
-        self.assertFalse(
-            FinalCourseResult.objects.filter(learner=self.learners[0]).exists()
-        )
-
         saved = self.client.post(
             upload_url,
-            {
-                "file": self.score_file(rows),
-                "reason": "Điều chỉnh theo biên bản",
-            },
+            {"file": self.score_file(rows)},
         )
         self.assertTrue(saved.json()["ok"])
         self.assertEqual(saved.json()["saved"], 1)
@@ -1718,9 +1812,24 @@ class FinalCourseResultTests(TestCase):
             AuditLog.objects.filter(
                 object_type="training.FinalCourseResult",
                 object_id=str(result.pk),
-                reason="Điều chỉnh theo biên bản",
+                reason="Đã hoàn thành khóa học",
             ).exists()
         )
+        changed_existing_score = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[0].full_name,
+                    self.learners[0].id_number,
+                    "81",
+                ]]),
+                "reason": "Sửa qua upload",
+            },
+        )
+        self.assertFalse(changed_existing_score.json()["ok"])
+        self.assertIn("dùng nút Sửa điểm", changed_existing_score.json()["message"])
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("80"))
 
     def test_results_and_upload_pages_render_and_respect_role_permissions(self):
         results_url = reverse("class-results", args=(self.training_class.pk,))
@@ -1883,12 +1992,13 @@ class FinalCourseResultTests(TestCase):
         self.assertNotContains(response, "Lưu điểm")
         self.assertNotContains(response, "Upload file điểm")
 
-        for action in ("finalize", "save", "save_locked"):
+        for action in ("finalize", "save", "save_locked", "edit_score"):
             with self.subTest(action=action):
                 response = self.client.post(
                     results_url,
                     {
                         "action": action,
+                        "learner_id": str(self.learners[0].pk),
                         "reason": "Không được phép",
                         f"score_{self.learners[0].pk}": "90",
                     },
@@ -2345,6 +2455,31 @@ class ExamModuleUrlTests(TestCase):
 
     def test_exam_score_list_200(self):
         self.assertEqual(self.client.get(reverse("exam-score-list")).status_code, 200)
+
+    def test_publish_shortcut_is_only_on_unfiltered_exam_score_list(self):
+        score_list_url = reverse("exam-score-list")
+        unfiltered = self.client.get(score_list_url)
+        self.assertContains(unfiltered, "Kiểm tra / Công bố thêm điểm")
+        self.assertContains(
+            unfiltered,
+            f'href="{reverse("exam-score-publish")}"',
+        )
+
+        for filters in (
+            {"period": str(self.period.pk)},
+            {"room": str(self.room.pk)},
+        ):
+            with self.subTest(filters=filters):
+                filtered = self.client.get(score_list_url, filters)
+                self.assertEqual(filtered.status_code, 200)
+                self.assertNotContains(filtered, "Kiểm tra / Công bố thêm điểm")
+                self.assertNotContains(filtered, "Công bố điểm đợt này")
+
+        mybk_page = self.client.get(
+            reverse("mybk-export"),
+            {"period": str(self.period.pk)},
+        )
+        self.assertNotContains(mybk_page, "Kiểm tra / Công bố thêm điểm")
 
     def test_exam_score_upload_get_200(self):
         self.assertEqual(self.client.get(reverse("exam-score-upload")).status_code, 200)
@@ -4040,6 +4175,320 @@ class CertificateWorkflowTests(TestCase):
                 status=Certificate.Status.ISSUED,
             ).clean()
 
+    def test_certificate_list_shows_eligible_learner_without_certificate_and_allows_issuing(self):
+        learner = Learner.objects.create(
+            full_name="Trần Thị B",
+            date_of_birth="2001-02-02",
+            id_number="123456789013",
+            phone="0909123457",
+            email="b@example.com",
+        )
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=learner,
+            score=85,
+            modified_by=self.user,
+        )
+
+        response = self.client.get(reverse("certificate-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Trần Thị B")
+        self.assertContains(response, "Chờ cấp")
+        result = FinalCourseResult.objects.get(learner=learner)
+        self.assertContains(
+            response,
+            f"{reverse('certificate-issue')}?training_class={self.training_class.pk}&amp;learner={learner.pk}",
+        )
+        self.assertContains(response, reverse("certificate-issue"))
+
+        issue_url = reverse("certificate-issue-candidate", args=[result.pk])
+        issue_page = self.client.get(issue_url)
+        self.assertEqual(issue_page.status_code, 200)
+        self.assertContains(issue_page, "Đủ điều kiện cấp")
+        self.assertContains(issue_page, "3/3 điều kiện đạt")
+        self.assertContains(issue_page, "Trần Thị B")
+        self.assertEqual(
+            str(issue_page.context["issue_form"]["training_class"].value()),
+            str(self.training_class.pk),
+        )
+        self.assertEqual(
+            str(issue_page.context["issue_form"]["learner"].value()),
+            str(learner.pk),
+        )
+
+        class_selection_page = self.client.get(
+            reverse("certificate-issue"),
+            {"training_class": self.training_class.pk},
+        )
+        self.assertEqual(class_selection_page.status_code, 200)
+        self.assertGreater(
+            class_selection_page.context["issue_form"].fields["learner"].queryset.count(),
+            0,
+        )
+
+        response = self.client.post(
+            issue_url,
+            {
+                "training_class": self.training_class.pk,
+                "learner": learner.pk,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        issued = Certificate.objects.get(learner=learner)
+        self.assertEqual(issued.status, Certificate.Status.ISSUED)
+        self.assertTrue(issued.history.filter(new_status=Certificate.Status.ISSUED).exists())
+
+    def test_issue_screen_blocks_confirmation_when_result_does_not_pass(self):
+        learner = Learner.objects.create(
+            full_name="Trần Thị E",
+            date_of_birth="2001-02-02",
+            id_number="123456789016",
+            phone="0909123460",
+            email="e@example.com",
+        )
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=learner,
+            score=0,
+            modified_by=self.user,
+        )
+        issue_url = reverse("certificate-issue-candidate", args=[result.pk])
+
+        response = self.client.get(issue_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Không thể cấp chứng nhận")
+        self.assertContains(
+            response,
+            'type="button" disabled>Xác nhận cấp</button>',
+        )
+        self.assertContains(response, "certificate-check is-failed")
+        self.assertContains(response, "Điểm 0.00 chưa đạt ngưỡng")
+
+        response = self.client.post(
+            issue_url,
+            {"training_class": self.training_class.pk, "learner": learner.pk},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Certificate.objects.filter(learner=learner).exists())
+
+    def test_issue_screen_highlights_existing_active_certificate(self):
+        response = self.client.get(
+            reverse("certificate-issue-candidate", args=[self.result.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "certificate-check is-failed")
+        self.assertContains(response, self.certificate.certificate_number)
+        self.assertContains(
+            response,
+            'type="button" disabled>Xác nhận cấp</button>',
+        )
+
+    def test_certificate_list_includes_enrolled_learner_without_final_result(self):
+        active_class = TrainingClass.objects.create(
+            name="Lớp đang học 02",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ 3, 5",
+            max_students=30,
+            status=TrainingClass.Status.OPEN,
+        )
+        learner = Learner.objects.create(
+            full_name="Nguyễn Thị F",
+            date_of_birth="2004-05-05",
+            id_number="123456789017",
+            phone="0909123461",
+            email="f@example.com",
+        )
+        Enrollment.objects.create(training_class=active_class, learner=learner)
+
+        response = self.client.get(
+            reverse("certificate-list"),
+            {"class_id": active_class.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nguyễn Thị F")
+        self.assertContains(response, "Chờ cấp")
+        self.assertNotContains(response, "Chưa đủ điều kiện")
+        self.assertContains(
+            response,
+            reverse(
+                "certificate-candidate-detail",
+                args=[active_class.pk, learner.pk],
+            ),
+        )
+        self.assertContains(
+            response,
+            f"{reverse('certificate-issue')}?training_class={active_class.pk}&amp;learner={learner.pk}",
+        )
+
+    def test_revoked_and_replaced_certificates_show_disabled_download_button(self):
+        for state in (Certificate.Status.REVOKED, Certificate.Status.REPLACED):
+            with self.subTest(status=state):
+                self.certificate.status = state
+                self.certificate.save(update_fields=["status"])
+                response = self.client.get(reverse("certificate-list"))
+                self.assertContains(response, "Tải")
+                self.assertContains(
+                    response,
+                    'disabled title="Chứng nhận đã thu hồi hoặc bị thay thế nên không thể tải."',
+                )
+                self.assertEqual(
+                    self.client.get(
+                        reverse("certificate-pdf", args=[self.certificate.pk])
+                    ).status_code,
+                    404,
+                )
+
+    def test_certificate_detail_explains_when_no_certificate_exists(self):
+        learner = Learner.objects.create(
+            full_name="Lê Thị C",
+            date_of_birth="2002-03-03",
+            id_number="123456789014",
+            phone="0909123458",
+            email="c@example.com",
+        )
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=learner,
+            score=82,
+            modified_by=self.user,
+        )
+
+        response = self.client.get(reverse("certificate-detail", args=[result.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chưa có chứng nhận được cấp")
+
+    def test_certificate_list_renders_status_and_history_dialogs(self):
+        CertificateHistory.objects.create(
+            certificate=self.certificate,
+            old_status=Certificate.Status.ISSUED,
+            new_status=Certificate.Status.ISSUED,
+            reason="Cấp chứng nhận theo kết quả cuối khóa.",
+            changed_by=self.user,
+        )
+        CertificateHistory.objects.create(
+            certificate=self.certificate,
+            old_status=Certificate.Status.ISSUED,
+            new_status=Certificate.Status.REVOKED,
+            reason="Thông tin chứng nhận cần điều chỉnh.",
+            changed_by=self.user,
+        )
+
+        response = self.client.get(reverse("certificate-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Đổi trạng thái chứng nhận")
+        self.assertContains(response, "Lịch sử đổi trạng thái")
+        self.assertContains(response, "Thông tin chứng nhận cần điều chỉnh.")
+        self.assertContains(response, "certificate-status-modal-")
+        self.assertContains(response, "certificate-history-modal-")
+        self.assertContains(response, "certificate-action-option-icon")
+        self.assertContains(response, "Chờ cấp")
+        self.assertNotContains(response, "Cấp chứng nhận theo kết quả cuối khóa.")
+        self.assertContains(
+            response,
+            "Đã hoàn thành khóa học và đủ điều kiện để cấp chứng nhận.",
+        )
+        self.assertContains(response, 'for="course_id">Khóa học</label>')
+        self.assertNotContains(response, 'for="learner_id">Học viên</label>')
+        self.assertContains(response, "certificate-history-flow")
+
+    def test_certificate_list_can_filter_by_course(self):
+        another_course = Course.objects.create(
+            name="Khóa học khác",
+            pass_threshold=70,
+        )
+        another_class = TrainingClass.objects.create(
+            name="Lớp khóa học khác",
+            course=another_course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ 3, 5",
+            max_students=30,
+            status=TrainingClass.Status.OPEN,
+        )
+        another_learner = Learner.objects.create(
+            full_name="Học viên khóa khác",
+            date_of_birth="2004-06-06",
+            id_number="123456789018",
+            phone="0909123462",
+            email="other-course@example.com",
+        )
+        Enrollment.objects.create(training_class=another_class, learner=another_learner)
+
+        response = self.client.get(
+            reverse("certificate-list"),
+            {"course_id": self.course.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.learner.full_name)
+        self.assertNotContains(response, another_learner.full_name)
+        self.assertEqual(
+            list(response.context["classes"].values_list("pk", flat=True)),
+            [self.training_class.pk],
+        )
+        self.assertContains(response, "data-course-filter")
+        self.assertContains(response, "certificate-action-view")
+        self.assertContains(response, "certificate-action-download")
+        self.assertContains(response, "certificate-action-edit")
+
+    def test_certificate_record_detail_has_no_history_action(self):
+        response = self.client.get(
+            reverse("certificate-record-detail", args=[self.certificate.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "certificate-detail-hero")
+        self.assertContains(response, "certificate-detail-status-container")
+        self.assertContains(response, "certificate-detail-seal")
+        self.assertContains(response, "CHỨNG NHẬN CÒN HIỆU LỰC")
+        self.assertContains(response, "Tải file PDF")
+        self.assertNotContains(response, "Đạt kết quả cuối khóa.")
+        self.assertNotContains(response, "Xem lịch sử sửa đổi")
+
+    def test_certificate_detail_shows_reason_after_status_change(self):
+        reason = "Thu hồi do thông tin cần cập nhật."
+        self.client.post(
+            reverse("certificate-status-change", args=[self.certificate.pk]),
+            {"status": Certificate.Status.REVOKED, "reason": reason},
+        )
+        response = self.client.get(
+            reverse("certificate-record-detail", args=[self.certificate.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lý do")
+        self.assertContains(response, reason)
+        self.assertContains(response, "CHỨNG NHẬN ĐÃ THU HỒI")
+
+    def test_existing_certificate_remains_visible_without_a_passing_result(self):
+        learner = Learner.objects.create(
+            full_name="Phạm Văn D",
+            date_of_birth="2003-04-04",
+            id_number="123456789015",
+            phone="0909123459",
+            email="d@example.com",
+        )
+        certificate = Certificate.objects.create(
+            training_class=self.training_class,
+            learner=learner,
+            certificate_number="CCE-2026-0002",
+            status=Certificate.Status.REVOKED,
+        )
+
+        list_response = self.client.get(reverse("certificate-list"))
+        detail_response = self.client.get(
+            reverse("certificate-record-detail", args=[certificate.pk])
+        )
+        self.assertContains(list_response, "Phạm Văn D")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "CCE-2026-0002")
+
+    def test_issued_certificate_pdf_download_returns_pdf(self):
+        response = self.client.get(reverse("certificate-pdf", args=[self.certificate.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF-"))
+
     def test_certificate_status_change_requires_reason(self):
         response = self.client.post(
             reverse("certificate-status-change", args=[self.certificate.pk]),
@@ -4048,6 +4497,31 @@ class CertificateWorkflowTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Vui lòng nhập lý do bắt buộc.")
+
+    def test_non_issued_certificate_cannot_change_status(self):
+        for status in (Certificate.Status.REVOKED, Certificate.Status.REPLACED):
+            with self.subTest(status=status):
+                self.certificate.status = status
+                self.certificate.save(update_fields=["status"])
+                history_count = self.certificate.history.count()
+                response = self.client.post(
+                    reverse("certificate-status-change", args=[self.certificate.pk]),
+                    {"status": Certificate.Status.ISSUED, "reason": "Thử đổi lại."},
+                    follow=True,
+                )
+
+                self.certificate.refresh_from_db()
+                self.assertEqual(self.certificate.status, status)
+                self.assertEqual(self.certificate.history.count(), history_count)
+                self.assertContains(response, "Chỉ chứng nhận đã cấp mới được thay đổi trạng thái.")
+                self.assertNotContains(
+                    response,
+                    f'data-open-dialog="certificate-status-modal-{self.certificate.pk}"',
+                )
+                self.assertContains(
+                    response,
+                    f'data-open-dialog="certificate-history-modal-{self.certificate.pk}"',
+                )
 
     def test_replacement_marks_original_certificate_as_replaced(self):
         reason = "Thay thế do sai thông tin."
@@ -4065,6 +4539,13 @@ class CertificateWorkflowTests(TestCase):
         self.assertEqual(history.old_status, Certificate.Status.ISSUED)
         self.assertEqual(history.new_status, Certificate.Status.REPLACED)
         self.assertEqual(history.reason, reason)
+        replacement_history = self.certificate.replaced_by.history.get()
+        self.assertEqual(replacement_history.reason, reason)
+        legacy_replacement_reason = (
+            f"Cấp thay thế chứng nhận {self.certificate.certificate_number}."
+        )
+        replacement_history.reason = legacy_replacement_reason
+        replacement_history.save(update_fields=["reason"])
         audit_entry = AuditLog.objects.get(
             action=AuditLog.Action.REPLACE,
             object_id=str(self.certificate.pk),
@@ -4073,6 +4554,16 @@ class CertificateWorkflowTests(TestCase):
         self.assertEqual(audit_entry.reason, reason)
         self.assertEqual(audit_entry.old_values["status"], Certificate.Status.ISSUED)
         self.assertEqual(audit_entry.new_values["status"], Certificate.Status.REPLACED)
+        list_response = self.client.get(reverse("certificate-list"))
+        self.assertContains(list_response, "Chờ thay thế")
+        self.assertContains(list_response, reason)
+        self.assertNotContains(list_response, legacy_replacement_reason)
+        replacement_history_response = self.client.get(
+            reverse("certificate-history", args=[self.certificate.replaced_by.pk])
+        )
+        self.assertContains(replacement_history_response, "Chờ thay thế")
+        self.assertContains(replacement_history_response, reason)
+        self.assertNotContains(replacement_history_response, legacy_replacement_reason)
 
     def test_certificate_history_renders_system_actor_when_changed_by_is_null(self):
         CertificateHistory.objects.create(
@@ -4089,6 +4580,11 @@ class CertificateWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Người thực hiện:")
         self.assertContains(response, "Hệ thống")
+        self.assertContains(
+            response,
+            "Đã hoàn thành khóa học và đủ điều kiện để cấp chứng nhận.",
+        )
+        self.assertNotContains(response, "Dữ liệu nhập ban đầu.")
 
 
 class ExamCertificateWorkflowTests(TestCase):
@@ -4128,11 +4624,40 @@ class ExamCertificateWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Vui lòng nhập lý do bắt buộc.")
 
+    def test_non_issued_exam_certificate_cannot_change_status(self):
+        for status in (ExamCertificate.Status.REVOKED, ExamCertificate.Status.REPLACED):
+            with self.subTest(status=status):
+                certificate = ExamCertificate.objects.create(
+                    exam_period=self.period,
+                    application=self.app,
+                    certificate_number=f"EXC-2026-{status.upper()}",
+                    status=status,
+                    issued_by=self.user,
+                )
+                history_count = certificate.history.count()
+                response = self.client.post(
+                    reverse("exam-certificate-status-change", args=(certificate.pk,)),
+                    {"status": ExamCertificate.Status.ISSUED, "reason": "Thử đổi lại."},
+                    follow=True,
+                )
+
+                certificate.refresh_from_db()
+                self.assertEqual(certificate.status, status)
+                self.assertEqual(certificate.history.count(), history_count)
+                self.assertContains(response, "Chỉ chứng chỉ đã cấp mới được thay đổi trạng thái.")
+                self.assertNotContains(
+                    response,
+                    f'data-open-dialog="exam-certificate-status-modal-{certificate.pk}"',
+                )
+                self.assertContains(
+                    response,
+                    f'data-open-dialog="exam-certificate-history-modal-{certificate.pk}"',
+                )
+
     def test_exam_certificate_issue_creates_record_from_published_score(self):
         response = self.client.post(
-            reverse("exam-certificate-list"),
+            reverse("exam-certificate-issue"),
             {
-                "issue_exam_certificate": "1",
                 "exam_period": self.period.pk,
                 "application": self.app.pk,
             },
@@ -4155,6 +4680,171 @@ class ExamCertificateWorkflowTests(TestCase):
         self.assertEqual(audit_entry.actor, self.user)
         self.assertEqual(audit_entry.new_values["status"], ExamCertificate.Status.ISSUED)
 
+    def test_issue_page_only_lists_periods_with_a_candidate_passing_at_least_two_checks(self):
+        no_score_period = _make_exam_period(name="Đợt thi chỉ đạt hồ sơ và chưa có chứng chỉ")
+        no_score_application = _make_application(
+            no_score_period,
+            full_name="Thí sinh chưa có điểm",
+            id_number="987654321013",
+        )
+
+        one_check_period = _make_exam_period(name="Đợt thi chỉ đạt hồ sơ")
+        one_check_application = _make_application(
+            one_check_period,
+            full_name="Thí sinh đã có chứng chỉ",
+            id_number="987654321014",
+        )
+        ExamCertificate.objects.create(
+            exam_period=one_check_period,
+            application=one_check_application,
+            certificate_number="EXC-2026-ONE-CHECK",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+
+        scored_period = _make_exam_period(name="Đợt thi đạt điểm nhưng đã có chứng chỉ")
+        scored_application = _make_application(
+            scored_period,
+            full_name="Thí sinh có điểm",
+            id_number="987654321015",
+        )
+        scored_room = _make_exam_room(scored_period, name="A202")
+        scored_assignment = _make_assignment(scored_room, scored_application)
+        ExamScore.objects.create(
+            assignment=scored_assignment,
+            score=Decimal("8.50"),
+            is_published=True,
+        )
+        ExamCertificate.objects.create(
+            exam_period=scored_period,
+            application=scored_application,
+            certificate_number="EXC-2026-FOUR-CHECKS",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+
+        response = self.client.get(reverse("exam-certificate-issue"))
+
+        self.assertEqual(response.status_code, 200)
+        period_ids = set(
+            response.context["issue_form"]
+            .fields["exam_period"]
+            .queryset.values_list("pk", flat=True)
+        )
+        self.assertIn(self.period.pk, period_ids)
+        self.assertIn(no_score_period.pk, period_ids)
+        self.assertNotIn(one_check_period.pk, period_ids)
+        self.assertIn(scored_period.pk, period_ids)
+
+    def test_exam_certificate_list_shows_eligible_pending_candidate_and_prefills_issue_form(self):
+        issue_page = self.client.get(reverse("exam-certificate-issue"))
+        self.assertEqual(issue_page.status_code, 200)
+        self.assertContains(issue_page, "Chọn đợt thi trước")
+
+        response = self.client.get(reverse("exam-certificate-list"))
+
+        self.assertEqual(response.status_code, 200)
+        pending_rows = [
+            row for row in response.context["page_obj"]
+            if row["is_pending"]
+        ]
+        self.assertEqual(len(pending_rows), 1)
+        self.assertEqual(pending_rows[0]["application"], self.app)
+        self.assertContains(response, "8,50")
+        self.assertNotContains(response, "8,50 / 100")
+        self.assertContains(
+            response,
+            reverse(
+                "exam-certificate-candidate-detail",
+                args=(self.period.pk, self.app.pk),
+            ),
+        )
+        self.assertContains(
+            response,
+            f'{reverse("exam-certificate-issue")}?issue_period={self.period.pk}&amp;issue_application={self.app.pk}',
+        )
+        self.assertContains(response, "Chưa có chứng chỉ để chỉnh sửa")
+
+        candidate_detail = self.client.get(
+            reverse(
+                "exam-certificate-candidate-detail",
+                args=(self.period.pk, self.app.pk),
+            )
+        )
+        self.assertEqual(candidate_detail.status_code, 200)
+        self.assertTrue(candidate_detail.context["can_issue"])
+        self.assertContains(candidate_detail, "Đạt điểm tối thiểu 5")
+
+        prefilled = self.client.get(
+            reverse("exam-certificate-issue"),
+            {"issue_period": self.period.pk, "issue_application": self.app.pk},
+        )
+        self.assertEqual(
+            prefilled.context["issue_form"]["exam_period"].value(),
+            str(self.period.pk),
+        )
+        self.assertEqual(
+            prefilled.context["issue_form"]["application"].value(),
+            str(self.app.pk),
+        )
+
+    def test_exam_certificate_detail_and_pdf_are_available_for_issued_certificate(self):
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-DETAIL",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+
+        detail = self.client.get(
+            reverse("exam-certificate-record-detail", args=(certificate.pk,))
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Thông tin thí sinh")
+        self.assertContains(detail, certificate.certificate_number)
+        self.assertContains(detail, "8,50")
+        self.assertNotContains(detail, "8,50 / 100")
+        self.assertContains(detail, "CHỨNG CHỈ CÒN HIỆU LỰC")
+
+        pdf = self.client.get(reverse("exam-certificate-pdf", args=(certificate.pk,)))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        self.assertIn(certificate.certificate_number, pdf["Content-Disposition"])
+
+    def test_exam_certificate_replacement_creates_history_with_shared_reason(self):
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-REPLACE",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+        reason = "Thông tin trên chứng chỉ cần được điều chỉnh."
+
+        response = self.client.post(
+            reverse("exam-certificate-status-change", args=(certificate.pk,)),
+            {"status": ExamCertificate.Status.REPLACED, "reason": reason},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        certificate.refresh_from_db()
+        replacement = certificate.replaced_by
+        self.assertIsNotNone(replacement)
+        self.assertEqual(certificate.status, ExamCertificate.Status.REPLACED)
+        self.assertEqual(replacement.status, ExamCertificate.Status.ISSUED)
+        self.assertEqual(replacement.reason, reason)
+        replacement_history = replacement.history.get()
+        self.assertEqual(replacement_history.reason, reason)
+        self.assertContains(response, "Chờ thay thế")
+        replacement_detail = self.client.get(
+            reverse("exam-certificate-record-detail", args=(replacement.pk,))
+        )
+        self.assertContains(replacement_detail, "Lý do thay thế")
+        self.assertContains(replacement_detail, reason)
+
     def test_certificate_menus_and_direct_views_follow_role_permissions(self):
         response = self.client.get(reverse("exam-certificate-list"))
         self.assertEqual(response.status_code, 200)
@@ -4171,6 +4861,10 @@ class ExamCertificateWorkflowTests(TestCase):
         self.assertNotIn("exam-certificates", education_menu_keys)
         self.assertEqual(
             self.client.get(reverse("exam-certificate-list")).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(reverse("exam-certificate-issue")).status_code,
             403,
         )
 

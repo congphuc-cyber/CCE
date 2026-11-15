@@ -1,0 +1,210 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Thông tin chi tiết chứng chỉ{% endblock %}
+{% block breadcrumb_title %}Chứng chỉ khảo thí{% endblock %}
+{% block page_title %}Thông tin chi tiết chứng chỉ{% endblock %}
+{% block page_description %}Thông tin thí sinh, kết quả thi và trạng thái chứng chỉ khảo thí.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cce-page-header { justify-content:center; }
+  .cce-page-title-block { flex:1 1 100%; text-align:center; }
+  .cce-page-title-block h1, .cce-page-subtitle { text-align:center; }
+  .cce-page-actions { display:none; }
+  .exam-certificate-detail { display:grid; width:min(100%,1040px); gap:16px; margin:0 auto; }
+  .exam-certificate-detail-hero { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:19px 22px; border:1px solid #dce8f0; border-radius:12px; background:linear-gradient(115deg,#f3f8fc,#fff 72%); box-shadow:0 3px 12px rgb(22 53 73 / 5%); }
+  .exam-certificate-detail-identity { display:flex; align-items:center; gap:13px; min-width:0; text-align:left; }
+  .exam-certificate-detail-icon { display:grid; place-items:center; flex:0 0 46px; width:46px; height:46px; border-radius:11px; background:#e2eef9; color:#2d6592; }
+  .exam-certificate-detail-icon .material-symbols-outlined { font-size:26px; }
+  .exam-certificate-detail-eyebrow { margin:0 0 4px; color:var(--c-text-muted); font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); letter-spacing:.08em; text-transform:uppercase; }
+  .exam-certificate-detail-number { margin:0; color:var(--c-text); font-size:clamp(1.05rem,2vw,1.35rem); font-weight:var(--font-weight-bold); overflow-wrap:anywhere; }
+  .exam-certificate-detail-period { margin:5px 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm); }
+  .exam-certificate-detail-status { margin-left:auto; padding:7px 11px; border:1px solid transparent; border-radius:999px; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); white-space:nowrap; }
+  .exam-certificate-detail-status.is-issued { border-color:#bde4ce; background:#e8f6ee; color:#17643e; }
+  .exam-certificate-detail-status.is-revoked { border-color:#f0c5ca; background:#fff0f1; color:#ad3440; }
+  .exam-certificate-detail-status.is-replaced { border-color:#efd09b; background:#fff4df; color:#875511; }
+  .exam-certificate-detail-status.is-pending { border-color:#dbe5ed; background:#f2f6f9; color:#516779; }
+  .exam-certificate-detail-columns { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:stretch; }
+  .exam-certificate-detail-card { min-width:0; margin-bottom:0; padding:20px; }
+  .exam-certificate-detail-heading { display:flex; align-items:center; justify-content:center; gap:9px; min-height:48px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--c-border); text-align:center; }
+  .exam-certificate-detail-heading .material-symbols-outlined { color:var(--c-primary); font-size:21px; }
+  .exam-certificate-detail-heading h2 { margin:0; color:var(--c-text); font-size:var(--font-size-md); font-weight:var(--font-weight-bold); }
+  .exam-certificate-detail-fields { display:grid; grid-template-columns:1fr 1fr; gap:15px 18px; margin:0; }
+  .exam-certificate-detail-field { min-width:0; }
+  .exam-certificate-detail-field.is-full { grid-column:1/-1; }
+  .exam-certificate-detail-field dt { margin-bottom:5px; color:var(--c-text-muted); font-size:var(--font-size-xs); font-weight:var(--font-weight-medium); }
+  .exam-certificate-detail-field dd { margin:0; color:var(--c-text); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); overflow-wrap:anywhere; }
+  .exam-certificate-detail-score { display:inline-flex; padding:5px 9px; border:1px solid #dceaf5; border-radius:7px; background:#eff6fb; color:#285f87; }
+  .exam-certificate-eligibility { display:grid; gap:9px; margin:0; padding:0; list-style:none; }
+  .exam-certificate-eligibility li { display:flex; align-items:flex-start; gap:8px; color:var(--c-text); font-size:var(--font-size-sm); }
+  .exam-certificate-eligibility .material-symbols-outlined { color:#b14650; font-size:18px; }
+  .exam-certificate-eligibility li.is-passed .material-symbols-outlined { color:#278252; }
+  .exam-certificate-eligibility small { display:block; margin-top:3px; color:var(--c-text-muted); font-size:var(--font-size-xs); line-height:1.45; }
+  .exam-certificate-detail-link { color:var(--c-primary); text-decoration:none; }
+  .exam-certificate-detail-link:hover { text-decoration:underline; }
+  .exam-certificate-seal { position:relative; display:flex; align-items:center; gap:15px; min-height:104px; margin-top:20px; padding:16px 18px; overflow:hidden; border:1px dashed #bbd9cc; border-radius:12px; background:linear-gradient(115deg,#f1faf5,#fbfefc); }
+  .exam-certificate-seal::after { position:absolute; top:-28px; right:-20px; width:150px; height:150px; border:1px solid rgb(38 122 82 / 8%); border-radius:50%; content:""; box-shadow:0 0 0 12px rgb(38 122 82 / 3%),0 0 0 26px rgb(38 122 82 / 2%); }
+  .exam-certificate-seal-mark { position:relative; z-index:1; display:grid; place-items:center; flex:0 0 62px; width:62px; height:62px; border:2px solid #78b899; border-radius:50%; background:#e4f5eb; color:#23764b; box-shadow:inset 0 0 0 4px #f7fcf9; }
+  .exam-certificate-seal-mark .material-symbols-outlined { font-size:30px; }
+  .exam-certificate-seal-copy { position:relative; z-index:1; min-width:0; transform:translateY(-16px); }
+  .exam-certificate-seal-copy p { margin:0 0 4px; color:#43815f; font-size:10px; font-weight:var(--font-weight-bold); letter-spacing:.12em; text-transform:uppercase; }
+  .exam-certificate-seal-copy strong { display:block; color:#24593d; font-size:var(--font-size-sm); letter-spacing:.03em; }
+  .exam-certificate-seal-copy small { display:block; margin-top:5px; color:#5f7c6b; font-size:var(--font-size-xs); line-height:1.45; }
+  .exam-certificate-seal.is-revoked { border-color:#efc4c9; background:linear-gradient(115deg,#fff5f5,#fffdfd); }
+  .exam-certificate-seal.is-revoked .exam-certificate-seal-mark { border-color:#d58b93; background:#fff0f1; color:#aa3c48; }
+  .exam-certificate-seal.is-revoked .exam-certificate-seal-copy p,
+  .exam-certificate-seal.is-revoked .exam-certificate-seal-copy strong { color:#9c3842; }
+  .exam-certificate-seal.is-revoked .exam-certificate-seal-copy small { color:#846267; }
+  .exam-certificate-seal.is-replaced { border-color:#ebd39e; background:linear-gradient(115deg,#fff9ec,#fffefd); }
+  .exam-certificate-seal.is-replaced .exam-certificate-seal-mark { border-color:#d4ad58; background:#fff4db; color:#8d6315; }
+  .exam-certificate-seal.is-replaced .exam-certificate-seal-copy p,
+  .exam-certificate-seal.is-replaced .exam-certificate-seal-copy strong { color:#795617; }
+  .exam-certificate-seal.is-replaced .exam-certificate-seal-copy small { color:#887858; }
+  .exam-certificate-detail-actions { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  @media (max-width:760px) { .exam-certificate-detail-columns { grid-template-columns:1fr; } }
+  @media (max-width:560px) {
+    .exam-certificate-detail-hero { align-items:flex-start; flex-direction:column; padding:17px; }
+    .exam-certificate-detail-card { padding:17px; }
+    .exam-certificate-seal { align-items:flex-start; flex-direction:column; }
+    .exam-certificate-detail-actions { flex-direction:column-reverse; }
+    .exam-certificate-detail-actions .cce-btn { justify-content:center; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="exam-certificate-detail">
+  <header class="exam-certificate-detail-hero">
+    <div class="exam-certificate-detail-identity">
+      <span class="exam-certificate-detail-icon" aria-hidden="true"><span class="material-symbols-outlined">workspace_premium</span></span>
+      <div>
+        <p class="exam-certificate-detail-eyebrow">{% if certificate %}Hồ sơ chứng chỉ{% else %}Thí sinh đủ điều kiện{% endif %}</p>
+        <h2 class="exam-certificate-detail-number">{% if certificate %}{{ certificate.certificate_number }}{% else %}{{ application.full_name }}{% endif %}</h2>
+        <p class="exam-certificate-detail-period">{{ period.name }} · {{ period.exam_date|date:"d/m/Y" }}</p>
+      </div>
+    </div>
+    {% if certificate.status == 'issued' %}
+      <span class="exam-certificate-detail-status is-issued">Đã cấp</span>
+    {% elif certificate.status == 'revoked' %}
+      <span class="exam-certificate-detail-status is-revoked">Đã thu hồi</span>
+    {% elif certificate.status == 'replaced' %}
+      <span class="exam-certificate-detail-status is-replaced">Đã thay thế</span>
+    {% elif can_issue %}
+      <span class="exam-certificate-detail-status is-pending">Chờ cấp</span>
+    {% else %}
+      <span class="exam-certificate-detail-status is-pending">Chưa đủ điều kiện</span>
+    {% endif %}
+  </header>
+
+  <div class="exam-certificate-detail-columns">
+    <section class="cce-card exam-certificate-detail-card">
+      <div class="exam-certificate-detail-heading">
+        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+        <h2>Thông tin thí sinh</h2>
+      </div>
+      <dl class="exam-certificate-detail-fields">
+        <div class="exam-certificate-detail-field is-full"><dt>Họ và tên</dt><dd>{{ application.full_name }}</dd></div>
+        <div class="exam-certificate-detail-field"><dt>Số CCCD / CMND</dt><dd>{{ application.id_number }}</dd></div>
+        <div class="exam-certificate-detail-field"><dt>Đợt thi</dt><dd>{{ period.name }}</dd></div>
+        <div class="exam-certificate-detail-field"><dt>Ngày thi</dt><dd>{{ period.exam_date|date:"d/m/Y" }}</dd></div>
+        {% if score %}
+          <div class="exam-certificate-detail-field">
+            <dt>Điểm thi</dt>
+            <dd>{% if score.is_absent %}Vắng thi{% elif score.score is not None %}<span class="exam-certificate-detail-score">{{ score.score }}</span>{% else %}Chưa có điểm{% endif %}</dd>
+          </div>
+          <div class="exam-certificate-detail-field">
+            <dt>Công bố điểm</dt>
+            <dd>{% if score.is_published %}Đã công bố{% else %}Chưa công bố{% endif %}</dd>
+          </div>
+        {% else %}
+          <div class="exam-certificate-detail-field is-full"><dt>Kết quả</dt><dd>Chưa có điểm thi</dd></div>
+        {% endif %}
+      </dl>
+    </section>
+
+    <section class="cce-card exam-certificate-detail-card">
+      <div class="exam-certificate-detail-heading">
+        <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+        <h2>Thông tin chứng chỉ</h2>
+      </div>
+      {% if certificate %}
+        <dl class="exam-certificate-detail-fields">
+          <div class="exam-certificate-detail-field"><dt>Số chứng chỉ</dt><dd>{{ certificate.certificate_number }}</dd></div>
+          <div class="exam-certificate-detail-field"><dt>Ngày cấp</dt><dd>{{ certificate.issued_at|date:"d/m/Y H:i" }}</dd></div>
+          <div class="exam-certificate-detail-field"><dt>Người cấp</dt><dd>{% if certificate.issued_by %}{{ certificate.issued_by.get_full_name|default:certificate.issued_by.username }}{% else %}Hệ thống{% endif %}</dd></div>
+          <div class="exam-certificate-detail-field"><dt>Hiệu lực</dt><dd>{{ certificate.get_status_display }}</dd></div>
+          {% if reason_to_display %}
+            <div class="exam-certificate-detail-field is-full"><dt>{% if has_status_change %}Lý do thay đổi{% else %}Lý do thay thế{% endif %}</dt><dd>{{ reason_to_display }}</dd></div>
+          {% endif %}
+          {% if certificate.replaced_by %}
+            <div class="exam-certificate-detail-field is-full"><dt>Chứng chỉ thay thế</dt><dd><a class="exam-certificate-detail-link" href="{% url 'exam-certificate-record-detail' certificate.replaced_by.pk %}">{{ certificate.replaced_by.certificate_number }}</a></dd></div>
+          {% endif %}
+          {% if replaces_certificate %}
+            <div class="exam-certificate-detail-field is-full"><dt>Chứng chỉ được thay thế</dt><dd><a class="exam-certificate-detail-link" href="{% url 'exam-certificate-record-detail' replaces_certificate.pk %}">{{ replaces_certificate.certificate_number }}</a></dd></div>
+          {% endif %}
+        </dl>
+        <div class="exam-certificate-seal {% if certificate.status == 'revoked' %}is-revoked{% elif certificate.status == 'replaced' %}is-replaced{% endif %}">
+          <span class="exam-certificate-seal-mark" aria-hidden="true">
+            <span class="material-symbols-outlined">{% if certificate.status == 'issued' %}verified{% elif certificate.status == 'revoked' %}block{% else %}sync_alt{% endif %}</span>
+          </span>
+          <div class="exam-certificate-seal-copy">
+            <p>Xác nhận trạng thái hệ thống</p>
+            <strong>
+              {% if certificate.status == 'issued' %}
+                CHỨNG CHỈ CÒN HIỆU LỰC
+              {% elif certificate.status == 'revoked' %}
+                CHỨNG CHỈ ĐÃ THU HỒI
+              {% else %}
+                CHỨNG CHỈ ĐÃ ĐƯỢC THAY THẾ
+              {% endif %}
+            </strong>
+            <small>
+              {% if certificate.status == 'issued' %}
+                Thông tin chứng chỉ đã được ghi nhận trong hệ thống khảo thí.
+              {% elif certificate.status == 'revoked' %}
+                Chứng chỉ này không còn hiệu lực và không thể tải bản PDF.
+              {% else %}
+                Vui lòng xem số chứng chỉ thay thế ở phần thông tin phía trên.
+              {% endif %}
+            </small>
+          </div>
+        </div>
+      {% else %}
+        <div class="exam-certificate-detail-fields">
+          <div class="exam-certificate-detail-field is-full">
+            <dt>Điều kiện cấp chứng chỉ khảo thí</dt>
+            <dd>
+              <ul class="exam-certificate-eligibility">
+                {% for check in eligibility_checks %}
+                  <li class="{% if check.passed %}is-passed{% endif %}">
+                    <span class="material-symbols-outlined" aria-hidden="true">{% if check.passed %}check_circle{% else %}cancel{% endif %}</span>
+                    <span>{{ check.label }}{% if check.description %}<small>{{ check.description }}</small>{% endif %}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            </dd>
+          </div>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="exam-certificate-detail-actions">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'exam-certificate-list' %}">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      Quay lại danh sách
+    </a>
+    {% if certificate.status == 'issued' %}
+      <a class="cce-btn cce-btn-primary" href="{% url 'exam-certificate-pdf' certificate.pk %}">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        Tải file PDF
+      </a>
+    {% elif can_issue %}
+      <a class="cce-btn cce-btn-primary" href="{% url 'exam-certificate-issue' %}?issue_period={{ period.pk }}&amp;issue_application={{ application.pk }}#exam-certificate-issue-form">
+        <span class="material-symbols-outlined" aria-hidden="true">workspace_premium</span>
+        Cấp chứng chỉ
+      </a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

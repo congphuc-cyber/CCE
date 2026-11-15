@@ -14,7 +14,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Q
 from django.db.models.functions import TruncDate
-from django.http import HttpResponseNotFound
+from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -35,6 +35,7 @@ from training.models import (
     Certificate,
     CertificateHistory,
     ClassAssignment,
+    Course,
     Enrollment,
     EnrollmentTransferHistory,
     ExamApplication,
@@ -490,7 +491,16 @@ class CertificateIssueForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["training_class"].queryset = TrainingClass.objects.select_related("course").order_by("-name")
-        self.fields["learner"].queryset = Learner.objects.order_by("full_name")
+        class_id = self.data.get("training_class") or self.initial.get("training_class")
+        if class_id:
+            self.fields["learner"].queryset = Learner.objects.filter(
+                Q(final_course_results__training_class_id=class_id)
+                | Q(enrollments__training_class_id=class_id)
+            ).distinct().order_by("full_name")
+        else:
+            self.fields["learner"].queryset = Learner.objects.none()
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "cce-select"
 
     def clean(self):
         cleaned = super().clean()
@@ -505,6 +515,43 @@ class CertificateIssueForm(forms.Form):
             if Certificate.objects.filter(training_class=training_class, learner=learner, status=Certificate.Status.ISSUED).exists():
                 raise forms.ValidationError("Học viên này đã có chứng nhận còn hiệu lực trong lớp.")
         return cleaned
+
+
+CERTIFICATE_ISSUE_REASON = "Đã hoàn thành khóa học và đủ điều kiện để cấp chứng nhận."
+
+
+def _issue_certificate_for_learner(request, training_class, learner):
+    with transaction.atomic():
+        certificate = Certificate.objects.create(
+            training_class=training_class,
+            learner=learner,
+            certificate_number=_generate_certificate_number(),
+            status=Certificate.Status.ISSUED,
+            issued_by=request.user,
+            reason=CERTIFICATE_ISSUE_REASON,
+        )
+        record_audit(
+            request.user,
+            AuditLog.Action.ISSUE,
+            certificate,
+            old_values={},
+            new_values={
+                "training_class_id": training_class.pk,
+                "learner_id": learner.pk,
+                "certificate_number": certificate.certificate_number,
+                "status": certificate.status,
+            },
+            reason=CERTIFICATE_ISSUE_REASON,
+            object_label=f"{certificate.certificate_number} — {learner.full_name}",
+        )
+        CertificateHistory.objects.create(
+            certificate=certificate,
+            old_status=Certificate.Status.ISSUED,
+            new_status=Certificate.Status.ISSUED,
+            reason=CERTIFICATE_ISSUE_REASON,
+            changed_by=request.user,
+        )
+    return certificate
 
 
 class CertificateStatusForm(forms.Form):
@@ -524,93 +571,486 @@ def certificate_list(request):
     if not user_has_feature(request.user, "certificates"):
         raise PermissionDenied
 
-    issue_form = CertificateIssueForm(request.POST if request.method == "POST" and "issue_certificate" in request.POST else None)
-    if request.method == "POST" and "issue_certificate" in request.POST:
+    issue_requested = request.method == "POST" and (
+        "issue_candidate" in request.POST or "issue_certificate" in request.POST
+    )
+    issue_form = CertificateIssueForm(request.POST if issue_requested else None)
+    if issue_requested:
         if issue_form.is_valid():
             training_class = issue_form.cleaned_data["training_class"]
             learner = issue_form.cleaned_data["learner"]
-            certificate = Certificate.objects.create(
-                training_class=training_class,
-                learner=learner,
-                certificate_number=_generate_certificate_number(),
-                status=Certificate.Status.ISSUED,
-                issued_by=request.user,
-                reason="Cấp chứng nhận theo kết quả cuối khóa.",
-            )
-            record_audit(
-                request.user,
-                AuditLog.Action.ISSUE,
-                certificate,
-                old_values={},
-                new_values={
-                    "training_class_id": training_class.pk,
-                    "learner_id": learner.pk,
-                    "certificate_number": certificate.certificate_number,
-                    "status": certificate.status,
-                },
-                reason="Cấp chứng nhận theo kết quả cuối khóa.",
-                object_label=f"{certificate.certificate_number} — {learner.full_name}",
-            )
-            CertificateHistory.objects.create(
-                certificate=certificate,
-                old_status=Certificate.Status.ISSUED,
-                new_status=Certificate.Status.ISSUED,
-                reason="Cấp chứng nhận theo kết quả cuối khóa.",
-                changed_by=request.user,
-            )
+            certificate = _issue_certificate_for_learner(request, training_class, learner)
             messages.success(request, f"Đã cấp chứng nhận {certificate.certificate_number} cho {learner.full_name}.")
-            return redirect("certificate-list")
-        messages.error(request, "Không thể cấp chứng nhận. Vui lòng kiểm tra lại thông tin và điều kiện.")
-
-    qs = Certificate.objects.select_related("training_class__course", "learner", "issued_by")
-    keyword = (request.GET.get("keyword") or "").strip()
-    class_id = request.GET.get("class_id")
-    learner_id = request.GET.get("learner_id")
-    status = request.GET.get("status")
-
-    if keyword:
-        qs = qs.filter(
-            Q(
-                learner__full_name__icontains=keyword
-            )
-            | Q(training_class__name__icontains=keyword)
-            | Q(certificate_number__icontains=keyword)
+            return redirect(f"{reverse('certificate-list')}?{request.GET.urlencode()}")
+        errors = "; ".join(
+            error
+            for field_errors in issue_form.errors.values()
+            for error in field_errors
         )
+        messages.error(request, f"Không thể cấp chứng nhận: {errors}")
+
+    results = FinalCourseResult.objects.select_related("training_class__course", "learner")
+    enrollments = Enrollment.objects.filter(
+        training_class__status=TrainingClass.Status.OPEN
+    ).select_related("training_class__course", "learner")
+    keyword = (request.GET.get("keyword") or "").strip()
+    course_id = request.GET.get("course_id")
+    class_id = request.GET.get("class_id")
+    status = request.GET.get("status")
+    if course_id:
+        results = results.filter(training_class__course_id=course_id)
+        enrollments = enrollments.filter(training_class__course_id=course_id)
     if class_id:
-        qs = qs.filter(training_class_id=class_id)
-    if learner_id:
-        qs = qs.filter(learner_id=learner_id)
-    if status:
-        qs = qs.filter(status=status)
+        results = results.filter(training_class_id=class_id)
+        enrollments = enrollments.filter(training_class_id=class_id)
 
-    page_obj = Paginator(qs.order_by("-issued_at", "-pk"), PAGE_SIZE).get_page(request.GET.get("page"))
+    candidates = {}
+    for result in results.order_by("-updated_at", "-pk"):
+        key = (result.training_class_id, result.learner_id)
+        candidates.setdefault(
+            key,
+            {
+                "result": result,
+                "learner": result.learner,
+                "training_class": result.training_class,
+                "sort_date": result.updated_at,
+                "sort_id": result.pk,
+            },
+        )
+    for enrollment in enrollments.order_by("-created_at", "-pk"):
+        key = (enrollment.training_class_id, enrollment.learner_id)
+        candidates.setdefault(
+            key,
+            {
+                "result": None,
+                "learner": enrollment.learner,
+                "training_class": enrollment.training_class,
+                "sort_date": enrollment.created_at,
+                "sort_id": enrollment.pk,
+            },
+        )
 
+    certificates = Certificate.objects.select_related(
+        "issued_by", "training_class__course", "learner"
+    ).prefetch_related(
+        "history__changed_by__groups",
+        "replaced_certificate",
+    ).order_by("-issued_at", "-pk")
+    if course_id:
+        certificates = certificates.filter(training_class__course_id=course_id)
+    if class_id:
+        certificates = certificates.filter(training_class_id=class_id)
+    certificates_by_pair = {}
+    for certificate in certificates:
+        key = (certificate.training_class_id, certificate.learner_id)
+        if key not in candidates:
+            result = FinalCourseResult.objects.filter(
+                training_class_id=certificate.training_class_id,
+                learner_id=certificate.learner_id,
+            ).select_related("training_class__course", "learner").first()
+            candidates[key] = {
+                "result": result,
+                "learner": certificate.learner,
+                "training_class": certificate.training_class,
+                "sort_date": certificate.issued_at,
+                "sort_id": certificate.pk,
+            }
+        certificates_by_pair.setdefault(key, []).append(certificate)
+
+    rows = []
+    for pair, candidate in candidates.items():
+        candidate_certificates = certificates_by_pair.get(pair, [])
+        if candidate_certificates:
+            for certificate in candidate_certificates:
+                if status and status != certificate.status:
+                    continue
+                if keyword and not any(
+                    keyword.casefold() in value.casefold()
+                    for value in (
+                        candidate["learner"].full_name,
+                        candidate["training_class"].name,
+                        certificate.certificate_number,
+                    )
+                ):
+                    continue
+                rows.append({
+                    **candidate,
+                    "certificate": certificate,
+                    "status": certificate.status,
+                    "sort_date": certificate.issued_at,
+                    "sort_id": certificate.pk,
+                })
+            continue
+
+        row_status = "pending"
+        if status and status != row_status:
+            continue
+        if keyword and not any(
+            keyword.casefold() in value.casefold()
+            for value in (
+                candidate["learner"].full_name,
+                candidate["training_class"].name,
+            )
+        ):
+            continue
+        rows.append({
+            **candidate,
+            "certificate": None,
+            "status": row_status,
+        })
+
+    rows.sort(
+        key=lambda row: (row["sort_date"], row["sort_id"]),
+        reverse=True,
+    )
+    page_obj = Paginator(rows, PAGE_SIZE).get_page(request.GET.get("page"))
+
+    courses = Course.objects.order_by("name")
     classes = TrainingClass.objects.select_related("course").order_by("name")
-    learners = Learner.objects.order_by("full_name")
+    if course_id:
+        classes = classes.filter(course_id=course_id)
 
     return render(
         request,
         "training/certificate_list.html",
         {
             "active_menu": "certificates",
-            "page_title": "Chứng nhận",
+            "page_title": "Danh sách chứng nhận",
             "page_description": "Quản lý cấp, thu hồi và thay thế chứng nhận cho học viên đủ điều kiện.",
             "breadcrumbs": [{"label": "Chứng nhận"}],
             "page_obj": page_obj,
-            "issue_form": issue_form,
-            "status_choices": Certificate.Status.choices,
+            "status_choices": (
+                ("pending", "Chờ cấp"),
+                *Certificate.Status.choices,
+            ),
+            "certificate_status_choices": Certificate.Status.choices,
+            "courses": courses,
             "classes": classes,
-            "learners": learners,
             "keyword": keyword,
+            "course_id": course_id,
             "class_id": class_id,
-            "learner_id": learner_id,
             "status": status,
-            "total_eligible": FinalCourseResult.objects.filter(score__gte=F("training_class__course__pass_threshold")).count(),
+            "total_eligible": len(rows),
             "total_issued": Certificate.objects.filter(status=Certificate.Status.ISSUED).count(),
-            "pending_paper": 0,
-            "graduation_rate": "0%",
         },
     )
+
+
+@login_required
+def certificate_issue(request, result_id=None):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    candidate_result = None
+    initial = {}
+    if result_id is not None:
+        candidate_result = get_object_or_404(
+            FinalCourseResult.objects.select_related("training_class", "learner"),
+            pk=result_id,
+        )
+        initial = {
+            "training_class": candidate_result.training_class_id,
+            "learner": candidate_result.learner_id,
+        }
+    if request.method == "GET":
+        initial = {
+            "training_class": request.GET.get("training_class") or initial.get("training_class"),
+            "learner": request.GET.get("learner") or initial.get("learner"),
+        }
+
+    issue_form = CertificateIssueForm(
+        request.POST if request.method == "POST" else None,
+        initial=initial,
+    )
+    if request.method == "POST" and issue_form.is_valid():
+        training_class = issue_form.cleaned_data["training_class"]
+        learner = issue_form.cleaned_data["learner"]
+        certificate = _issue_certificate_for_learner(request, training_class, learner)
+        messages.success(
+            request,
+            f"Đã cấp chứng nhận {certificate.certificate_number} cho {learner.full_name}.",
+        )
+        return redirect("certificate-list")
+
+    selection = request.POST if request.method == "POST" else request.GET
+    class_id = selection.get("training_class") or initial.get("training_class")
+    learner_id = selection.get("learner") or initial.get("learner")
+    training_class = issue_form.fields["training_class"].queryset.filter(pk=class_id).first() if class_id else None
+    learner = issue_form.fields["learner"].queryset.filter(pk=learner_id).first() if learner_id else None
+
+    result = None
+    active_certificate = None
+    if training_class and learner:
+        result = FinalCourseResult.objects.filter(
+            training_class=training_class,
+            learner=learner,
+        ).first()
+        active_certificate = Certificate.objects.filter(
+            training_class=training_class,
+            learner=learner,
+            status=Certificate.Status.ISSUED,
+        ).order_by("-issued_at", "-pk").first()
+
+    has_passing_result = bool(
+        result and result.score >= training_class.course.pass_threshold
+    )
+    checks = [
+        {
+            "label": "Kết quả đã chốt",
+            "description": (
+                "Bảng điểm đã được chốt; kết quả đủ cơ sở xét cấp."
+                if result
+                else "Chưa có kết quả cuối khóa trong lớp này."
+            ),
+            "passed": bool(result),
+        },
+        {
+            "label": "Kết quả học tập đạt",
+            "description": (
+                f"Điểm {result.score} đạt ngưỡng {training_class.course.pass_threshold}."
+                if has_passing_result
+                else (
+                    f"Điểm {result.score} chưa đạt ngưỡng {training_class.course.pass_threshold}."
+                    if result
+                    else "Chưa có điểm để đối chiếu điều kiện."
+                )
+            ),
+            "passed": has_passing_result,
+        },
+        {
+            "label": "Chưa có chứng nhận còn hiệu lực",
+            "description": (
+                f"{active_certificate.certificate_number} đang còn hiệu lực."
+                if active_certificate
+                else (
+                    "Không có chứng nhận còn hiệu lực cho lớp học này."
+                    if learner
+                    else "Chọn học viên để kiểm tra chứng nhận hiện có."
+                )
+            ),
+            "passed": bool(learner and not active_certificate),
+        },
+    ]
+    passed_count = sum(check["passed"] for check in checks)
+    can_issue = bool(training_class and learner and passed_count == len(checks))
+    blocking_reason = next(
+        (check["description"] for check in checks if not check["passed"]),
+        "",
+    )
+
+    return render(
+        request,
+        "training/certificate_issue.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Cấp chứng nhận",
+            "page_description": "Chọn học viên, kiểm tra điều kiện và xác nhận cấp chứng nhận.",
+            "breadcrumbs": [
+                {"label": "Chứng nhận", "url": reverse("certificate-list")},
+                {"label": "Cấp chứng nhận"},
+            ],
+            "issue_form": issue_form,
+            "training_class": training_class,
+            "learner": learner,
+            "result": result,
+            "checks": checks,
+            "passed_count": passed_count,
+            "can_issue": can_issue,
+            "blocking_reason": blocking_reason,
+            "certificate_number": _generate_certificate_number(),
+        },
+    )
+
+
+@login_required
+def certificate_detail(request, result_id):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    result = get_object_or_404(
+        FinalCourseResult.objects.select_related("training_class__course", "learner"),
+        pk=result_id,
+        score__gte=F("training_class__course__pass_threshold"),
+    )
+    certificate = Certificate.objects.select_related("issued_by", "replaced_by").filter(
+        training_class=result.training_class,
+        learner=result.learner,
+    ).order_by("-issued_at", "-pk").first()
+    replaces_certificate = certificate.replaced_certificate.order_by("-replaced_at", "-pk").first() if certificate else None
+    return render(
+        request,
+        "training/certificate_detail.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Thông tin chi tiết chứng nhận",
+            "breadcrumbs": [
+                {"label": "Chứng nhận", "url": reverse("certificate-list")},
+                {"label": "Thông tin chi tiết"},
+            ],
+            "result": result,
+            "learner": result.learner,
+            "training_class": result.training_class,
+            "certificate": certificate,
+            "replaces_certificate": replaces_certificate,
+        },
+    )
+
+
+@login_required
+def certificate_candidate_detail(request, class_id, learner_id):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    training_class = get_object_or_404(
+        TrainingClass.objects.select_related("course"),
+        pk=class_id,
+    )
+    learner = get_object_or_404(Learner, pk=learner_id)
+    if not (
+        Enrollment.objects.filter(training_class=training_class, learner=learner).exists()
+        or FinalCourseResult.objects.filter(training_class=training_class, learner=learner).exists()
+        or Certificate.objects.filter(training_class=training_class, learner=learner).exists()
+    ):
+        return HttpResponseNotFound("Học viên không thuộc lớp này.")
+
+    result = FinalCourseResult.objects.filter(
+        training_class=training_class,
+        learner=learner,
+    ).first()
+    certificate = Certificate.objects.filter(
+        training_class=training_class,
+        learner=learner,
+    ).order_by("-issued_at", "-pk").first()
+    replaces_certificate = certificate.replaced_certificate.order_by("-replaced_at", "-pk").first() if certificate else None
+    return render(
+        request,
+        "training/certificate_detail.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Thông tin chi tiết chứng nhận",
+            "breadcrumbs": [
+                {"label": "Chứng nhận", "url": reverse("certificate-list")},
+                {"label": "Thông tin chi tiết"},
+            ],
+            "result": result,
+            "learner": learner,
+            "training_class": training_class,
+            "certificate": certificate,
+            "replaces_certificate": replaces_certificate,
+        },
+    )
+
+
+@login_required
+def certificate_record_detail(request, pk):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    certificate = get_object_or_404(
+        Certificate.objects.select_related("training_class__course", "learner", "issued_by", "replaced_by"),
+        pk=pk,
+    )
+    result = FinalCourseResult.objects.filter(
+        training_class=certificate.training_class,
+        learner=certificate.learner,
+    ).first()
+    replaces_certificate = certificate.replaced_certificate.order_by("-replaced_at", "-pk").first()
+    has_status_change = certificate.history.exclude(old_status=F("new_status")).exists()
+    return render(
+        request,
+        "training/certificate_detail.html",
+        {
+            "active_menu": "certificates",
+            "page_title": "Thông tin chi tiết chứng nhận",
+            "breadcrumbs": [
+                {"label": "Chứng nhận", "url": reverse("certificate-list")},
+                {"label": "Thông tin chi tiết"},
+            ],
+            "result": result,
+            "learner": certificate.learner,
+            "training_class": certificate.training_class,
+            "certificate": certificate,
+            "replaces_certificate": replaces_certificate,
+            "has_status_change": has_status_change,
+        },
+    )
+
+
+@login_required
+def certificate_pdf(request, pk):
+    if not user_has_feature(request.user, "certificates"):
+        raise PermissionDenied
+
+    certificate = get_object_or_404(
+        Certificate.objects.select_related("training_class__course", "learner", "issued_by"),
+        pk=pk,
+        status=Certificate.Status.ISSUED,
+    )
+    from io import BytesIO
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from training.public_exam_views import _register_public_pdf_font
+
+    font_name = _register_public_pdf_font()
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CertificatePdfTitle",
+        parent=styles["Title"],
+        fontName="PublicExamSans-Bold",
+        fontSize=22,
+        leading=28,
+        textColor=colors.HexColor("#183d57"),
+        alignment=TA_CENTER,
+        spaceAfter=12 * mm,
+    )
+    body_style = ParagraphStyle(
+        "CertificatePdfBody",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=13,
+        leading=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#19344a"),
+        spaceAfter=4 * mm,
+    )
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        rightMargin=24 * mm,
+        leftMargin=24 * mm,
+        topMargin=30 * mm,
+        bottomMargin=24 * mm,
+        title=f"Chứng nhận {certificate.certificate_number}",
+        author="Trung tâm Kỹ thuật Điện toán",
+    )
+    story = [
+        Spacer(1, 16 * mm),
+        Paragraph("TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN", body_style),
+        Paragraph("CHỨNG NHẬN HOÀN THÀNH KHÓA HỌC", title_style),
+        Paragraph("Trân trọng chứng nhận", body_style),
+        Paragraph(escape(certificate.learner.full_name), title_style),
+        Paragraph(
+            f"đã hoàn thành khóa học <b>{escape(certificate.training_class.course.name)}</b>",
+            body_style,
+        ),
+        Paragraph(f"Lớp: {escape(certificate.training_class.name)}", body_style),
+        Paragraph(f"Số chứng nhận: {escape(certificate.certificate_number)}", body_style),
+        Paragraph(f"Ngày cấp: {timezone.localtime(certificate.issued_at).strftime('%d/%m/%Y')}", body_style),
+    ]
+    document.build(story)
+
+    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{certificate.certificate_number}.pdf"'
+    response["Cache-Control"] = "no-store, private"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @login_required
@@ -619,6 +1059,10 @@ def certificate_status_change(request, pk):
         raise PermissionDenied
 
     certificate = get_object_or_404(Certificate.objects.select_related("training_class__course", "learner"), pk=pk)
+    if certificate.status != Certificate.Status.ISSUED:
+        messages.error(request, "Chỉ chứng nhận đã cấp mới được thay đổi trạng thái.")
+        return redirect("certificate-list")
+
     form = CertificateStatusForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         new_status = form.cleaned_data["status"]
@@ -628,35 +1072,43 @@ def certificate_status_change(request, pk):
             messages.error(request, "Trạng thái mới phải khác trạng thái hiện tại.")
         else:
             if new_status == Certificate.Status.REPLACED:
-                replacement = Certificate.objects.create(
-                    training_class=certificate.training_class,
-                    learner=certificate.learner,
-                    certificate_number=_generate_certificate_number(),
-                    status=Certificate.Status.ISSUED,
-                    issued_by=request.user,
-                    reason=f"Thay thế chứng nhận gốc {certificate.certificate_number}.",
-                )
-                certificate.status = Certificate.Status.REPLACED
-                certificate.reason = reason
-                certificate.replaced_by = replacement
-                certificate.replaced_at = timezone.now()
-                certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
-                CertificateHistory.objects.create(
-                    certificate=certificate,
-                    old_status=old_status,
-                    new_status=Certificate.Status.REPLACED,
-                    reason=reason,
-                    changed_by=request.user,
-                )
-                record_audit(
-                    request.user,
-                    AuditLog.Action.REPLACE,
-                    certificate,
-                    old_values={"status": old_status},
-                    new_values={"status": Certificate.Status.REPLACED, "replaced_by_id": replacement.pk},
-                    reason=reason,
-                    object_label=f"{certificate.certificate_number} — {certificate.learner.full_name}",
-                )
+                with transaction.atomic():
+                    replacement = Certificate.objects.create(
+                        training_class=certificate.training_class,
+                        learner=certificate.learner,
+                        certificate_number=_generate_certificate_number(),
+                        status=Certificate.Status.ISSUED,
+                        issued_by=request.user,
+                        reason=reason,
+                    )
+                    CertificateHistory.objects.create(
+                        certificate=replacement,
+                        old_status=Certificate.Status.ISSUED,
+                        new_status=Certificate.Status.ISSUED,
+                        reason=reason,
+                        changed_by=request.user,
+                    )
+                    certificate.status = Certificate.Status.REPLACED
+                    certificate.reason = reason
+                    certificate.replaced_by = replacement
+                    certificate.replaced_at = timezone.now()
+                    certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
+                    CertificateHistory.objects.create(
+                        certificate=certificate,
+                        old_status=old_status,
+                        new_status=Certificate.Status.REPLACED,
+                        reason=reason,
+                        changed_by=request.user,
+                    )
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.REPLACE,
+                        certificate,
+                        old_values={"status": old_status},
+                        new_values={"status": Certificate.Status.REPLACED, "replaced_by_id": replacement.pk},
+                        reason=reason,
+                        object_label=f"{certificate.certificate_number} — {certificate.learner.full_name}",
+                    )
                 messages.success(request, f"Đã thay thế chứng nhận {certificate.certificate_number} bằng {replacement.certificate_number}.")
             else:
                 certificate.status = new_status
@@ -700,8 +1152,14 @@ def certificate_history(request, pk):
     if not user_has_feature(request.user, "certificates"):
         raise PermissionDenied
 
-    certificate = get_object_or_404(Certificate.objects.select_related("training_class__course", "learner"), pk=pk)
+    certificate = get_object_or_404(
+        Certificate.objects.select_related("training_class__course", "learner").prefetch_related(
+            "replaced_certificate"
+        ),
+        pk=pk,
+    )
     history = certificate.history.select_related("changed_by").all()
+    replacement_sources = list(certificate.replaced_certificate.all())
     return render(
         request,
         "training/certificate_history.html",
@@ -711,6 +1169,8 @@ def certificate_history(request, pk):
             "breadcrumbs": [{"label": "Chứng nhận", "url": reverse("certificate-list")}, {"label": certificate.certificate_number}],
             "certificate": certificate,
             "history": history,
+            "is_replacement_certificate": bool(replacement_sources),
+            "replacement_reason": replacement_sources[0].reason if replacement_sources else "",
         },
     )
 
@@ -729,6 +1189,63 @@ def _generate_exam_certificate_number():
     return f"{prefix}{seq:05d}"
 
 
+def _exam_certificate_period_ids_with_candidates_meeting_two_conditions():
+    from training.models import ExamApplication, ExamCertificate, ExamScore
+
+    applications = ExamApplication.objects.filter(
+        status=ExamApplication.Status.VALID
+    ).values_list("pk", "exam_period_id")
+    latest_scores = {}
+    scores = ExamScore.objects.filter(
+        assignment__application__status=ExamApplication.Status.VALID,
+        assignment__exam_room__exam_period_id=F(
+            "assignment__application__exam_period_id"
+        ),
+    ).order_by("-published_at", "-pk").values(
+        "assignment__application_id",
+        "assignment__exam_room__exam_period_id",
+        "score",
+        "is_absent",
+        "is_published",
+    )
+    for score in scores:
+        pair = (
+            score["assignment__exam_room__exam_period_id"],
+            score["assignment__application_id"],
+        )
+        latest_scores.setdefault(pair, score)
+
+    active_pairs = set(
+        ExamCertificate.objects.filter(
+            status=ExamCertificate.Status.ISSUED
+        ).values_list("exam_period_id", "application_id")
+    )
+    period_ids = set()
+    for application_id, period_id in applications:
+        pair = (period_id, application_id)
+        score = latest_scores.get(pair)
+        has_valid_score = bool(
+            score and not score["is_absent"] and score["score"] is not None
+        )
+        has_passing_score = bool(
+            has_valid_score and score["score"] >= 5
+        )
+        score_is_published = bool(score and score["is_published"])
+        has_no_active_certificate = pair not in active_pairs
+        passed_conditions = sum(
+            (
+                True,
+                has_valid_score,
+                has_passing_score,
+                score_is_published,
+                has_no_active_certificate,
+            )
+        )
+        if passed_conditions >= 2:
+            period_ids.add(period_id)
+    return period_ids
+
+
 class ExamCertificateIssueForm(forms.Form):
     exam_period = forms.ModelChoiceField(
         label="Đợt thi",
@@ -745,8 +1262,29 @@ class ExamCertificateIssueForm(forms.Form):
         super().__init__(*args, **kwargs)
         from training.models import ExamApplication, ExamPeriod
 
-        self.fields["exam_period"].queryset = ExamPeriod.objects.order_by("-exam_date")
-        self.fields["application"].queryset = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).order_by("full_name")
+        eligible_period_ids = (
+            _exam_certificate_period_ids_with_candidates_meeting_two_conditions()
+        )
+        self.fields["exam_period"].queryset = ExamPeriod.objects.filter(
+            pk__in=eligible_period_ids
+        ).order_by("-exam_date")
+        applications = ExamApplication.objects.filter(
+            status=ExamApplication.Status.VALID
+        ).order_by("full_name")
+        period_id = (
+            self.data.get("exam_period")
+            if self.is_bound
+            else self.initial.get("exam_period")
+        )
+        if period_id and self.fields["exam_period"].queryset.filter(
+            pk=period_id
+        ).exists():
+            applications = applications.filter(exam_period_id=period_id)
+        else:
+            applications = applications.none()
+        self.fields["application"].queryset = applications
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "cce-select"
 
     def clean(self):
         cleaned = super().clean()
@@ -761,6 +1299,7 @@ class ExamCertificateIssueForm(forms.Form):
                     assignment__application=application,
                 )
                 .select_related("assignment__exam_room__exam_period", "assignment__application")
+                .order_by("-published_at", "-pk")
                 .first()
             )
             if score is None:
@@ -788,33 +1327,159 @@ class ExamCertificateStatusForm(forms.Form):
         return cleaned
 
 
+def _exam_certificate_issue_checks(period, application):
+    from training.models import ExamApplication, ExamCertificate, ExamScore
+
+    if not period or not application:
+        checks = [
+            {
+                "label": "Hồ sơ thí sinh hợp lệ",
+                "description": "Chọn đợt thi và thí sinh để kiểm tra hồ sơ.",
+                "passed": False,
+            },
+            {
+                "label": "Có điểm thi hợp lệ và không vắng thi",
+                "description": "Chọn thí sinh để kiểm tra kết quả trong đợt thi.",
+                "passed": False,
+            },
+            {
+                "label": "Đạt điểm tối thiểu 5",
+                "description": "Điểm thi phải đạt từ 5 trở lên.",
+                "passed": False,
+            },
+            {
+                "label": "Điểm đã được công bố",
+                "description": "Điểm phải được công bố trước khi cấp chứng chỉ.",
+                "passed": False,
+            },
+            {
+                "label": "Chưa có chứng chỉ còn hiệu lực",
+                "description": "Mỗi thí sinh chỉ có một chứng chỉ còn hiệu lực trong đợt thi.",
+                "passed": False,
+            },
+        ]
+        return None, None, checks, False
+
+    score = ExamScore.objects.filter(
+        assignment__exam_room__exam_period=period,
+        assignment__application=application,
+    ).select_related(
+        "assignment__exam_room__exam_period",
+        "assignment__application",
+    ).order_by("-published_at", "-pk").first()
+    active_certificate = ExamCertificate.objects.filter(
+        exam_period=period,
+        application=application,
+        status=ExamCertificate.Status.ISSUED,
+    ).order_by("-issued_at", "-pk").first()
+    has_valid_score = bool(
+        score and not score.is_absent and score.score is not None
+    )
+    checks = [
+        {
+            "label": "Hồ sơ thí sinh hợp lệ",
+            "description": (
+                "Hồ sơ đã được xác nhận hợp lệ."
+                if application.status == ExamApplication.Status.VALID
+                else "Hồ sơ thí sinh chưa hợp lệ."
+            ),
+            "passed": application.status == ExamApplication.Status.VALID,
+        },
+        {
+            "label": "Có điểm thi hợp lệ và không vắng thi",
+            "description": (
+                "Đã có điểm thi hợp lệ trong đợt thi này."
+                if has_valid_score
+                else (
+                    "Thí sinh vắng thi."
+                    if score and score.is_absent
+                    else "Chưa có điểm thi hợp lệ trong đợt thi này."
+                )
+            ),
+            "passed": has_valid_score,
+        },
+        {
+            "label": "Đạt điểm tối thiểu 5",
+            "description": (
+                f"Điểm {score.score} đạt ngưỡng tối thiểu 5."
+                if has_valid_score and score.score >= 5
+                else (
+                    f"Điểm {score.score} chưa đạt ngưỡng tối thiểu 5."
+                    if has_valid_score
+                    else "Chưa có điểm hợp lệ để đối chiếu."
+                )
+            ),
+            "passed": bool(has_valid_score and score.score >= 5),
+        },
+        {
+            "label": "Điểm đã được công bố",
+            "description": (
+                "Kết quả thi đã được công bố."
+                if score.is_published
+                else "Điểm thi chưa được công bố."
+            ) if score else "Chưa có điểm để kiểm tra trạng thái công bố.",
+            "passed": bool(score and score.is_published),
+        },
+        {
+            "label": "Chưa có chứng chỉ còn hiệu lực",
+            "description": (
+                f"Chứng chỉ {active_certificate.certificate_number} đang còn hiệu lực."
+                if active_certificate
+                else "Thí sinh chưa có chứng chỉ còn hiệu lực trong đợt thi này."
+            ),
+            "passed": not active_certificate,
+        },
+    ]
+    passed_count = sum(check["passed"] for check in checks)
+    return score, active_certificate, checks, passed_count == len(checks)
+
+
 @login_required
-def exam_certificate_list(request):
+def exam_certificate_issue(request):
     if not user_has_feature(request.user, "exam-certificates"):
         raise PermissionDenied
 
-    from training.models import ExamApplication, ExamCertificate, ExamCertificateHistory, ExamPeriod, ExamScore
+    from training.models import ExamCertificate, ExamCertificateHistory
 
+    selection = request.POST if request.method == "POST" else request.GET
+    initial = {
+        "exam_period": selection.get("issue_period") or selection.get("exam_period") or "",
+        "application": selection.get("issue_application") or selection.get("application") or "",
+    }
     issue_form = ExamCertificateIssueForm(
-        request.POST if request.method == "POST" and "issue_exam_certificate" in request.POST else None,
+        request.POST if request.method == "POST" else None,
+        initial=initial if request.method == "GET" else None,
     )
-    if request.method == "POST" and "issue_exam_certificate" in request.POST:
-        if issue_form.is_valid():
-            period = issue_form.cleaned_data["exam_period"]
-            application = issue_form.cleaned_data["application"]
+    period_id = initial["exam_period"]
+    application_id = initial["application"]
+    period = (
+        issue_form.fields["exam_period"].queryset.filter(pk=period_id).first()
+        if period_id
+        else None
+    )
+    application = (
+        issue_form.fields["application"].queryset.filter(pk=application_id).first()
+        if application_id
+        else None
+    )
+    if request.method == "POST" and issue_form.is_valid():
+        period = issue_form.cleaned_data["exam_period"]
+        application = issue_form.cleaned_data["application"]
+        issue_reason = "Đã đạt kỳ thi và điểm đã được công bố."
+        with transaction.atomic():
             certificate = ExamCertificate.objects.create(
                 exam_period=period,
                 application=application,
                 certificate_number=_generate_exam_certificate_number(),
                 status=ExamCertificate.Status.ISSUED,
                 issued_by=request.user,
-                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+                reason=issue_reason,
             )
             ExamCertificateHistory.objects.create(
                 certificate=certificate,
                 old_status=ExamCertificate.Status.ISSUED,
                 new_status=ExamCertificate.Status.ISSUED,
-                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+                reason=issue_reason,
                 changed_by=request.user,
             )
             record_audit(
@@ -828,18 +1493,63 @@ def exam_certificate_list(request):
                     "certificate_number": certificate.certificate_number,
                     "status": certificate.status,
                 },
-                reason="Cấp chứng chỉ theo điểm thi đã công bố.",
+                reason=issue_reason,
                 object_label=f"{certificate.certificate_number} — {application.full_name}",
             )
-            messages.success(request, f"Đã cấp chứng chỉ {certificate.certificate_number} cho {application.full_name}.")
-            return redirect("exam-certificate-list")
-        messages.error(request, "Không thể cấp chứng chỉ. Vui lòng kiểm tra thông tin và điều kiện.")
+        messages.success(
+            request,
+            f"Đã cấp chứng chỉ {certificate.certificate_number} cho {application.full_name}.",
+        )
+        return redirect("exam-certificate-list")
 
-    qs = ExamCertificate.objects.select_related("exam_period", "application", "issued_by")
-    keyword = (request.GET.get("keyword") or "").strip()
-    period_id = request.GET.get("period_id")
+    score, active_certificate, checks, can_issue = _exam_certificate_issue_checks(
+        period,
+        application,
+    )
+    passed_count = sum(check["passed"] for check in checks)
+    blocking_reason = next(
+        (check["description"] for check in checks if not check["passed"]),
+        "",
+    )
+    return render(
+        request,
+        "training/exam_certificate_issue.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Cấp chứng chỉ khảo thí",
+            "page_description": "Chọn thí sinh, kiểm tra điều kiện khảo thí và xác nhận cấp chứng chỉ.",
+            "breadcrumbs": [
+                {"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")},
+                {"label": "Cấp chứng chỉ"},
+            ],
+            "issue_form": issue_form,
+            "period": period,
+            "application": application,
+            "score": score,
+            "active_certificate": active_certificate,
+            "checks": checks,
+            "passed_count": passed_count,
+            "can_issue": can_issue,
+            "blocking_reason": blocking_reason,
+            "certificate_number": _generate_exam_certificate_number(),
+        },
+    )
+
+
+@login_required
+def exam_certificate_list(request):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamApplication, ExamCertificate, ExamPeriod, ExamScore
+
+    qs = ExamCertificate.objects.select_related(
+        "exam_period", "application", "issued_by"
+    ).prefetch_related("history__changed_by__groups", "replaced_certificate")
+    keyword = (request.GET.get("q") or request.GET.get("keyword") or "").strip()
+    period_id = request.GET.get("period") or request.GET.get("period_id")
     application_id = request.GET.get("application_id")
-    status = request.GET.get("status")
+    status = request.GET.get("status") or ""
 
     if keyword:
         qs = qs.filter(
@@ -852,13 +1562,80 @@ def exam_certificate_list(request):
         qs = qs.filter(exam_period_id=period_id)
     if application_id:
         qs = qs.filter(application_id=application_id)
-    if status:
+    if status and status != "pending":
         qs = qs.filter(status=status)
 
-    page_obj = Paginator(qs.order_by("-issued_at", "-pk"), PAGE_SIZE).get_page(request.GET.get("page"))
+    certificates = list(qs.order_by("-issued_at", "-pk")) if status != "pending" else []
+    rows = [
+        {
+            "certificate": certificate,
+            "application": certificate.application,
+            "period": certificate.exam_period,
+            "status": certificate.status,
+            "is_pending": False,
+            "score": None,
+            "sort_date": certificate.issued_at,
+            "sort_id": certificate.pk,
+        }
+        for certificate in certificates
+    ]
+
+    scores = ExamScore.objects.filter(
+        assignment__application__status=ExamApplication.Status.VALID,
+        assignment__exam_room__exam_period_id=F("assignment__application__exam_period_id"),
+        score__isnull=False,
+        is_absent=False,
+        is_published=True,
+    ).select_related(
+        "assignment__application__exam_period",
+        "assignment__application",
+        "assignment__exam_room__exam_period",
+    ).order_by("-published_at", "-pk")
+    if period_id:
+        scores = scores.filter(assignment__exam_room__exam_period_id=period_id)
+    if application_id:
+        scores = scores.filter(assignment__application_id=application_id)
+    if keyword:
+        scores = scores.filter(
+            Q(assignment__application__full_name__icontains=keyword)
+            | Q(assignment__application__id_number__icontains=keyword)
+            | Q(assignment__exam_room__exam_period__name__icontains=keyword)
+        )
+
+    eligible_scores = {}
+    for score in scores:
+        pair = (score.assignment.exam_room.exam_period_id, score.assignment.application_id)
+        if score.score >= 5:
+            eligible_scores.setdefault(pair, score)
+
+    active_pairs = set(
+        ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).values_list(
+            "exam_period_id", "application_id"
+        )
+    )
+    if status in ("", "pending"):
+        for (candidate_period_id, candidate_application_id), score in eligible_scores.items():
+            if (candidate_period_id, candidate_application_id) in active_pairs:
+                continue
+            application = score.assignment.application
+            period = score.assignment.exam_room.exam_period
+            rows.append(
+                {
+                    "certificate": None,
+                    "application": application,
+                    "period": period,
+                    "status": "pending",
+                    "is_pending": True,
+                    "score": score,
+                    "sort_date": score.published_at or score.entered_at or application.registered_at,
+                    "sort_id": application.pk,
+                }
+            )
+
+    rows.sort(key=lambda row: (row["sort_date"], row["sort_id"]), reverse=True)
+    page_obj = Paginator(rows, PAGE_SIZE).get_page(request.GET.get("page"))
 
     periods = ExamPeriod.objects.order_by("-exam_date")
-    applications = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).order_by("full_name")
     published_scores = ExamScore.objects.filter(is_published=True, is_absent=False, score__isnull=False, score__gte=5)
     total_eligible = published_scores.count()
     total_issued = ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).count()
@@ -877,14 +1654,14 @@ def exam_certificate_list(request):
             "page_description": "Quản lý cấp, thu hồi và theo dõi chứng chỉ khảo thí theo từng đợt thi.",
             "breadcrumbs": [{"label": "Chứng chỉ khảo thí"}],
             "page_obj": page_obj,
-            "issue_form": issue_form,
-            "status_choices": ExamCertificate.Status.choices,
             "periods": periods,
-            "applications": applications,
             "keyword": keyword,
+            "search_query": keyword,
             "period_id": period_id,
+            "selected_period": period_id or "",
             "application_id": application_id,
             "status": status,
+            "selected_status": status,
             "total_eligible": total_eligible,
             "total_issued": total_issued,
             "total_revoked": total_revoked,
@@ -894,13 +1671,194 @@ def exam_certificate_list(request):
 
 
 @login_required
+def exam_certificate_record_detail(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamCertificate, ExamScore
+
+    certificate = get_object_or_404(
+        ExamCertificate.objects.select_related("exam_period", "application", "issued_by", "replaced_by").prefetch_related(
+            "replaced_certificate"
+        ),
+        pk=pk,
+    )
+    score = ExamScore.objects.filter(
+        assignment__exam_room__exam_period=certificate.exam_period,
+        assignment__application=certificate.application,
+    ).order_by("-published_at", "-pk").first()
+    replaces_certificate = certificate.replaced_certificate.order_by("-replaced_at", "-pk").first()
+    has_status_change = certificate.history.exclude(old_status=F("new_status")).exists()
+    reason_to_display = ""
+    if has_status_change:
+        reason_to_display = certificate.reason
+    elif replaces_certificate:
+        reason_to_display = replaces_certificate.reason
+    return render(
+        request,
+        "training/exam_certificate_detail.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Thông tin chi tiết chứng chỉ",
+            "breadcrumbs": [
+                {"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")},
+                {"label": "Thông tin chi tiết"},
+            ],
+            "certificate": certificate,
+            "application": certificate.application,
+            "period": certificate.exam_period,
+            "score": score,
+            "replaces_certificate": replaces_certificate,
+            "has_status_change": has_status_change,
+            "reason_to_display": reason_to_display,
+        },
+    )
+
+
+@login_required
+def exam_certificate_candidate_detail(request, period_id, application_id):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamApplication, ExamPeriod
+
+    period = get_object_or_404(ExamPeriod, pk=period_id)
+    application = get_object_or_404(
+        ExamApplication.objects.select_related("exam_period"),
+        pk=application_id,
+        exam_period=period,
+    )
+    score, _, eligibility_checks, can_issue = _exam_certificate_issue_checks(
+        period,
+        application,
+    )
+    return render(
+        request,
+        "training/exam_certificate_detail.html",
+        {
+            "active_menu": "exam-certificates",
+            "page_title": "Thông tin thí sinh",
+            "breadcrumbs": [
+                {"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")},
+                {"label": "Thông tin thí sinh"},
+            ],
+            "certificate": None,
+            "application": application,
+            "period": period,
+            "score": score,
+            "has_status_change": False,
+            "eligibility_checks": eligibility_checks,
+            "can_issue": can_issue,
+        },
+    )
+
+
+@login_required
+def exam_certificate_pdf(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from io import BytesIO
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from training.models import ExamCertificate, ExamScore
+    from training.public_exam_views import _register_public_pdf_font
+
+    certificate = get_object_or_404(
+        ExamCertificate.objects.select_related("exam_period", "application", "issued_by"),
+        pk=pk,
+        status=ExamCertificate.Status.ISSUED,
+    )
+    score = ExamScore.objects.filter(
+        assignment__exam_room__exam_period=certificate.exam_period,
+        assignment__application=certificate.application,
+        is_published=True,
+        is_absent=False,
+        score__isnull=False,
+    ).order_by("-published_at", "-pk").first()
+    font_name = _register_public_pdf_font()
+    styles = getSampleStyleSheet()
+    body_style = ParagraphStyle(
+        "ExamCertificatePdfBody",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=13,
+        leading=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#19344a"),
+        spaceAfter=4 * mm,
+    )
+    title_style = ParagraphStyle(
+        "ExamCertificatePdfTitle",
+        parent=styles["Title"],
+        fontName="PublicExamSans-Bold",
+        fontSize=22,
+        leading=28,
+        textColor=colors.HexColor("#183d57"),
+        alignment=TA_CENTER,
+        spaceAfter=12 * mm,
+    )
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        rightMargin=24 * mm,
+        leftMargin=24 * mm,
+        topMargin=30 * mm,
+        bottomMargin=24 * mm,
+        title=f"Chứng chỉ {certificate.certificate_number}",
+        author="Trung tâm Kỹ thuật Điện toán",
+    )
+    story = [
+        Spacer(1, 16 * mm),
+        Paragraph("TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN", body_style),
+        Paragraph("CHỨNG CHỈ KHẢO THÍ", title_style),
+        Paragraph("Trân trọng chứng nhận", body_style),
+        Paragraph(escape(certificate.application.full_name), title_style),
+        Paragraph(
+            f"đã đạt yêu cầu trong đợt thi <b>{escape(certificate.exam_period.name)}</b>",
+            body_style,
+        ),
+        Paragraph(
+            f"Số chứng chỉ: {escape(certificate.certificate_number)}",
+            body_style,
+        ),
+    ]
+    if score and score.score is not None:
+        story.append(Paragraph(f"Điểm thi: {escape(str(score.score))}", body_style))
+    story.append(
+        Paragraph(
+            f"Ngày cấp: {timezone.localtime(certificate.issued_at).strftime('%d/%m/%Y')}",
+            body_style,
+        )
+    )
+    document.build(story)
+
+    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{certificate.certificate_number}.pdf"'
+    response["Cache-Control"] = "no-store, private"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
 def exam_certificate_status_change(request, pk):
     if not user_has_feature(request.user, "exam-certificates"):
         raise PermissionDenied
 
-    from training.models import ExamCertificate
+    from training.models import ExamCertificate, ExamCertificateHistory
 
     certificate = get_object_or_404(ExamCertificate.objects.select_related("exam_period", "application"), pk=pk)
+    if certificate.status != ExamCertificate.Status.ISSUED:
+        messages.error(request, "Chỉ chứng chỉ đã cấp mới được thay đổi trạng thái.")
+        return redirect("exam-certificate-list")
+
     form = ExamCertificateStatusForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         new_status = form.cleaned_data["status"]
@@ -908,37 +1866,57 @@ def exam_certificate_status_change(request, pk):
         old_status = certificate.status
         if new_status == old_status:
             messages.error(request, "Trạng thái mới phải khác trạng thái hiện tại.")
+        elif (
+            new_status == ExamCertificate.Status.ISSUED
+            and ExamCertificate.objects.filter(
+                exam_period=certificate.exam_period,
+                application=certificate.application,
+                status=ExamCertificate.Status.ISSUED,
+            ).exclude(pk=certificate.pk).exists()
+        ):
+            messages.error(
+                request,
+                "Thí sinh đã có chứng chỉ còn hiệu lực trong đợt thi này.",
+            )
         else:
             if new_status == ExamCertificate.Status.REPLACED:
-                replacement = ExamCertificate.objects.create(
-                    exam_period=certificate.exam_period,
-                    application=certificate.application,
-                    certificate_number=_generate_exam_certificate_number(),
-                    status=ExamCertificate.Status.ISSUED,
-                    issued_by=request.user,
-                    reason=f"Thay thế chứng chỉ gốc {certificate.certificate_number}.",
-                )
-                certificate.status = ExamCertificate.Status.REPLACED
-                certificate.reason = reason
-                certificate.replaced_by = replacement
-                certificate.replaced_at = timezone.now()
-                certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
-                ExamCertificateHistory.objects.create(
-                    certificate=certificate,
-                    old_status=old_status,
-                    new_status=ExamCertificate.Status.REPLACED,
-                    reason=reason,
-                    changed_by=request.user,
-                )
-                record_audit(
-                    request.user,
-                    AuditLog.Action.REPLACE,
-                    certificate,
-                    old_values={"status": old_status},
-                    new_values={"status": ExamCertificate.Status.REPLACED, "replaced_by_id": replacement.pk},
-                    reason=reason,
-                    object_label=f"{certificate.certificate_number} — {certificate.application.full_name}",
-                )
+                with transaction.atomic():
+                    replacement = ExamCertificate.objects.create(
+                        exam_period=certificate.exam_period,
+                        application=certificate.application,
+                        certificate_number=_generate_exam_certificate_number(),
+                        status=ExamCertificate.Status.ISSUED,
+                        issued_by=request.user,
+                        reason=reason,
+                    )
+                    ExamCertificateHistory.objects.create(
+                        certificate=replacement,
+                        old_status=ExamCertificate.Status.ISSUED,
+                        new_status=ExamCertificate.Status.ISSUED,
+                        reason=reason,
+                        changed_by=request.user,
+                    )
+                    certificate.status = ExamCertificate.Status.REPLACED
+                    certificate.reason = reason
+                    certificate.replaced_by = replacement
+                    certificate.replaced_at = timezone.now()
+                    certificate.save(update_fields=["status", "reason", "replaced_by", "replaced_at"])
+                    ExamCertificateHistory.objects.create(
+                        certificate=certificate,
+                        old_status=old_status,
+                        new_status=ExamCertificate.Status.REPLACED,
+                        reason=reason,
+                        changed_by=request.user,
+                    )
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.REPLACE,
+                        certificate,
+                        old_values={"status": old_status},
+                        new_values={"status": ExamCertificate.Status.REPLACED, "replaced_by_id": replacement.pk},
+                        reason=reason,
+                        object_label=f"{certificate.certificate_number} — {certificate.application.full_name}",
+                    )
                 messages.success(request, f"Đã thay thế chứng chỉ {certificate.certificate_number} bằng {replacement.certificate_number}.")
             else:
                 certificate.status = new_status
@@ -984,8 +1962,14 @@ def exam_certificate_history(request, pk):
 
     from training.models import ExamCertificate
 
-    certificate = get_object_or_404(ExamCertificate.objects.select_related("exam_period", "application"), pk=pk)
+    certificate = get_object_or_404(
+        ExamCertificate.objects.select_related("exam_period", "application").prefetch_related(
+            "replaced_certificate"
+        ),
+        pk=pk,
+    )
     history = certificate.history.select_related("changed_by").all()
+    replacement_sources = list(certificate.replaced_certificate.all())
     return render(
         request,
         "training/exam_certificate_history.html",
@@ -995,6 +1979,8 @@ def exam_certificate_history(request, pk):
             "breadcrumbs": [{"label": "Chứng chỉ khảo thí", "url": reverse("exam-certificate-list")}, {"label": certificate.certificate_number}],
             "certificate": certificate,
             "history": history,
+            "is_replacement_certificate": bool(replacement_sources),
+            "replacement_reason": replacement_sources[0].reason if replacement_sources else "",
         },
     )
 
