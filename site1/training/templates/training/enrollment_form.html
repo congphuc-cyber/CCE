@@ -5,6 +5,23 @@
 {% block page_title %}Ghi danh học viên vào lớp{% endblock %}
 {% block page_description %}Lớp học: {{ training_class.name }} (Khóa học: {{ training_class.course.name }}). Sĩ số: {{ training_class.enrolled_count }} / {{ training_class.max_students }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .learner-search-wrap { display:grid; gap:6px; }
+  .learner-suggestions { max-height:240px; overflow-y:auto; padding:5px; border:1px solid var(--c-border); border-radius:10px; background:var(--c-surface,#fff); box-shadow:0 5px 14px rgb(20 48 69 / 8%); }
+  .learner-suggestions[hidden] { display:none; }
+  .learner-suggestion { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; width:100%; gap:12px; padding:10px 12px; border:0; border-radius:7px; background:transparent; color:var(--c-text); text-align:left; cursor:pointer; transition:background-color .15s ease; }
+  .learner-suggestion:hover, .learner-suggestion.is-active { background:#edf5fb; }
+  .learner-suggestion:focus-visible { outline:2px solid var(--c-primary); outline-offset:-2px; }
+  .learner-suggestion-name { font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); }
+  .learner-suggestion-id { padding:4px 8px; border-radius:999px; background:#f1f5f9; color:#526779; font-size:var(--font-size-xs); white-space:nowrap; }
+  @media (max-width:560px) {
+    .learner-suggestion { grid-template-columns:1fr; gap:5px; }
+    .learner-suggestion-id { justify-self:start; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="cce-card">
   <div class="cce-card-header">
@@ -24,10 +41,14 @@
   {% if has_learners and show_enrollment_form %}
     <div class="cce-form-group">
       <label class="cce-label" for="learner-search">Tìm học viên theo họ tên hoặc số CCCD</label>
-      <input class="cce-input" id="learner-search" type="search"
-             placeholder="Nhập họ tên hoặc số CCCD"
-             aria-controls="id_learner" autocomplete="off">
-      <div class="cce-form-help" id="learner-search-result" aria-live="polite"></div>
+      <div class="learner-search-wrap">
+        <input class="cce-input" id="learner-search" type="search"
+               placeholder="Nhập họ tên hoặc số CCCD"
+               role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="learner-suggestions" aria-haspopup="listbox" autocomplete="off">
+        <div class="cce-form-help" id="learner-search-result" aria-live="polite"></div>
+        <div class="learner-suggestions" id="learner-suggestions" role="listbox" aria-label="Học viên phù hợp" hidden></div>
+      </div>
     </div>
     {% include "training/partials/form_fields.html" with form=form submit_label="Xác nhận ghi danh" cancel_url=class_detail_url|default:"../" %}
   {% elif not has_learners %}
@@ -43,7 +64,10 @@
       var search = document.getElementById("learner-search");
       var select = document.getElementById("id_learner");
       var result = document.getElementById("learner-search-result");
-      if (!search || !select || !result) return;
+      var suggestions = document.getElementById("learner-suggestions");
+      if (!search || !select || !result || !suggestions) return;
+      var suggestionOptions = [];
+      var activeSuggestion = -1;
 
       function normalize(value) {
         return String(value || "")
@@ -51,6 +75,122 @@
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .replace(/đ/g, "d");
+      }
+
+      function getLearnerIdNumber(option) {
+        var separator = " — ";
+        var separatorIndex = option.textContent.lastIndexOf(separator);
+        if (separatorIndex === -1) return "";
+        var idNumber = option.textContent.slice(separatorIndex + separator.length).trim();
+        return idNumber === "Chưa có CCCD" ? "" : idNumber;
+      }
+
+      function getLearnerName(option) {
+        var separatorIndex = option.textContent.lastIndexOf(" — ");
+        return separatorIndex === -1
+          ? option.textContent.trim()
+          : option.textContent.slice(0, separatorIndex).trim();
+      }
+
+      function selectLearnerByIdNumber(idNumber) {
+        if (!idNumber) return;
+        Array.prototype.some.call(select.options, function(option) {
+          if (option.value && normalize(getLearnerIdNumber(option)) === normalize(idNumber)) {
+            select.value = option.value;
+            return true;
+          }
+          return false;
+        });
+      }
+
+      function closeSuggestions() {
+        suggestions.hidden = true;
+        search.setAttribute("aria-expanded", "false");
+        search.removeAttribute("aria-activedescendant");
+        suggestionOptions = [];
+        activeSuggestion = -1;
+      }
+
+      function chooseLearner(option) {
+        select.value = option.value;
+        search.value = getLearnerIdNumber(option) || getLearnerName(option);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        closeSuggestions();
+        search.focus();
+      }
+
+      function setActiveSuggestion(index) {
+        if (!suggestionOptions.length) return;
+        activeSuggestion = (index + suggestionOptions.length) % suggestionOptions.length;
+        Array.prototype.forEach.call(suggestions.children, function(button, buttonIndex) {
+          var isActive = buttonIndex === activeSuggestion;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-selected", String(isActive));
+        });
+        search.setAttribute("aria-activedescendant", suggestions.children[activeSuggestion].id);
+        suggestions.children[activeSuggestion].scrollIntoView({ block: "nearest" });
+      }
+
+      function renderSuggestions() {
+        while (suggestions.firstChild) suggestions.removeChild(suggestions.firstChild);
+        suggestionOptions = [];
+        activeSuggestion = -1;
+        search.removeAttribute("aria-activedescendant");
+
+        var term = normalize(search.value.trim());
+        var tokens = term.split(/\s+/).filter(Boolean);
+        if (!tokens.length) {
+          closeSuggestions();
+          return;
+        }
+
+        suggestionOptions = Array.prototype.filter.call(select.options, function(option) {
+          if (!option.value) return false;
+          var normalizedLabel = normalize(option.textContent);
+          return tokens.every(function(token) {
+            return normalizedLabel.indexOf(token) !== -1;
+          });
+        }).sort(function(first, second) {
+          var firstId = normalize(getLearnerIdNumber(first));
+          var secondId = normalize(getLearnerIdNumber(second));
+          var firstName = normalize(getLearnerName(first));
+          var secondName = normalize(getLearnerName(second));
+          var firstRank = firstId === term ? 0 : firstId.indexOf(term) === 0 ? 1 : firstName.indexOf(term) === 0 ? 2 : 3;
+          var secondRank = secondId === term ? 0 : secondId.indexOf(term) === 0 ? 1 : secondName.indexOf(term) === 0 ? 2 : 3;
+          return firstRank - secondRank || first.textContent.localeCompare(second.textContent, "vi");
+        }).slice(0, 8);
+
+        if (!suggestionOptions.length) {
+          closeSuggestions();
+          return;
+        }
+
+        suggestionOptions.forEach(function(option, index) {
+          var button = document.createElement("button");
+          var name = document.createElement("span");
+          var idNumber = document.createElement("span");
+          button.type = "button";
+          button.id = "learner-suggestion-" + index;
+          button.className = "learner-suggestion";
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-selected", "false");
+          name.className = "learner-suggestion-name";
+          name.textContent = getLearnerName(option);
+          idNumber.className = "learner-suggestion-id";
+          idNumber.textContent = getLearnerIdNumber(option) || "Chưa có CCCD";
+          button.appendChild(name);
+          button.appendChild(idNumber);
+          button.addEventListener("mousedown", function(event) {
+            event.preventDefault();
+          });
+          button.addEventListener("click", function() {
+            chooseLearner(option);
+          });
+          suggestions.appendChild(button);
+        });
+
+        suggestions.hidden = false;
+        search.setAttribute("aria-expanded", "true");
       }
 
       function filterLearners() {
@@ -68,7 +208,39 @@
           : visibleCount+" học viên trong danh sách";
       }
 
-      search.addEventListener("input", filterLearners);
+      search.addEventListener("input", function() {
+        selectLearnerByIdNumber(search.value.trim());
+        filterLearners();
+        renderSuggestions();
+      });
+      select.addEventListener("change", function() {
+        var selectedOption = select.options[select.selectedIndex];
+        search.value = selectedOption
+          ? getLearnerIdNumber(selectedOption) || getLearnerName(selectedOption)
+          : "";
+        filterLearners();
+        closeSuggestions();
+      });
+      search.addEventListener("keydown", function(event) {
+        if (event.key === "ArrowDown" && suggestionOptions.length) {
+          event.preventDefault();
+          setActiveSuggestion(activeSuggestion + 1);
+        } else if (event.key === "ArrowUp" && suggestionOptions.length) {
+          event.preventDefault();
+          setActiveSuggestion(activeSuggestion === -1 ? suggestionOptions.length - 1 : activeSuggestion - 1);
+        } else if (event.key === "Enter" && suggestionOptions.length) {
+          event.preventDefault();
+          chooseLearner(suggestionOptions[activeSuggestion === -1 ? 0 : activeSuggestion]);
+        } else if (event.key === "Escape" && !suggestions.hidden) {
+          event.preventDefault();
+          closeSuggestions();
+        }
+      });
+
+      var selectedOption = select.options[select.selectedIndex];
+      if (selectedOption && selectedOption.value) {
+        search.value = getLearnerIdNumber(selectedOption);
+      }
       filterLearners();
     }());
   </script>

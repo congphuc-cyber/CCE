@@ -1,0 +1,262 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Thông tin chi tiết chứng nhận{% endblock %}
+{% block breadcrumb_title %}Chứng nhận{% endblock %}
+{% block page_title %}Thông tin chi tiết chứng nhận{% endblock %}
+{% block page_description %}Thông tin học viên, kết quả khóa học và trạng thái cấp chứng nhận.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cce-page-header { justify-content:center; }
+  .cce-page-title-block { flex:1 1 100%; text-align:center; }
+  .cce-page-title-block h1, .cce-page-subtitle { text-align:center; }
+  .cce-page-actions { display:none; }
+  .certificate-detail-page { display:grid; width:min(100%,1040px); gap:16px; margin:0 auto; }
+  .certificate-detail-hero {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    padding:20px 22px;
+    border:1px solid #dce8f0;
+    border-radius:12px;
+    background:linear-gradient(115deg,#f3f8fc 0%,#fff 72%);
+    box-shadow:0 3px 12px rgb(22 53 73 / 5%);
+  }
+  .certificate-detail-identity { display:flex; align-items:center; gap:14px; min-width:0; }
+  .certificate-detail-icon { display:grid; place-items:center; flex:0 0 48px; width:48px; height:48px; border-radius:12px; background:#e2eef9; color:#2d6592; }
+  .certificate-detail-icon .material-symbols-outlined { font-size:27px; }
+  .certificate-detail-eyebrow { margin:0 0 4px; color:var(--c-text-muted); font-size:var(--font-size-xs); font-weight:var(--font-weight-bold); letter-spacing:.08em; text-transform:uppercase; }
+  .certificate-detail-number { margin:0; color:var(--c-text); font-size:clamp(1.1rem,2vw,1.4rem); font-weight:var(--font-weight-bold); overflow-wrap:anywhere; }
+  .certificate-detail-course { margin:5px 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm); }
+  .certificate-detail-status { flex:0 0 auto; padding:7px 11px; border:1px solid transparent; border-radius:999px; font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); white-space:nowrap; }
+  .certificate-detail-status.is-issued { border-color:#bde4ce; background:#e8f6ee; color:#17643e; }
+  .certificate-detail-status.is-revoked { border-color:#f0c5ca; background:#fff0f1; color:#ad3440; }
+  .certificate-detail-status.is-replaced { border-color:#efd09b; background:#fff4df; color:#875511; }
+  .certificate-detail-columns { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:minmax(0,1fr); gap:16px; align-items:stretch; }
+  .certificate-detail-card { box-sizing:border-box; height:100%; min-width:0; margin-bottom:0; padding:20px; }
+  .certificate-detail-card-header { box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:9px; height:62px; min-height:62px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--c-border); text-align:center; }
+  .certificate-detail-card-header .material-symbols-outlined { color:var(--c-primary); font-size:21px; }
+  .certificate-detail-card-title { margin:0; color:var(--c-text); font-size:var(--font-size-md); font-weight:var(--font-weight-bold); }
+  .certificate-detail-heading { display:flex; align-items:center; justify-content:center; gap:9px; min-width:0; }
+  .certificate-detail-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px 18px; margin:0; }
+  .certificate-detail-field { min-width:0; padding:2px 0; }
+  .certificate-detail-field.is-full { grid-column:1/-1; }
+  .certificate-detail-field dt { margin-bottom:5px; color:var(--c-text-muted); font-size:var(--font-size-xs); font-weight:var(--font-weight-medium); }
+  .certificate-detail-field dd { margin:0; color:var(--c-text); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); overflow-wrap:anywhere; }
+  .certificate-detail-field dd a { color:var(--c-primary); text-decoration:none; }
+  .certificate-detail-field dd a:hover { text-decoration:underline; }
+  .certificate-detail-score { display:inline-flex; align-items:center; gap:5px; padding:5px 9px; border:1px solid #dceaf5; border-radius:7px; background:#eff6fb; color:#285f87; }
+  .certificate-detail-reason { white-space:pre-line; font-weight:var(--font-weight-normal) !important; line-height:1.5; }
+  .certificate-detail-validity { display:inline-flex; align-items:center; gap:6px; color:#26715f; }
+  .certificate-detail-validity .material-symbols-outlined { font-size:17px; }
+  .certificate-detail-empty { margin:0; padding:16px; border:1px dashed var(--c-border); border-radius:8px; color:var(--c-text-muted); background:#fafcfd; }
+  .certificate-detail-seal { position:relative; display:flex; align-items:center; gap:15px; min-height:104px; margin-top:20px; padding:16px 18px; overflow:hidden; border:1px dashed #bbd9cc; border-radius:12px; background:linear-gradient(115deg,#f1faf5,#fbfefc); }
+  .certificate-detail-status-container { display:flex; justify-content:center; }
+  .certificate-detail-status-container .certificate-detail-seal { box-sizing:border-box; width:100%; max-width:640px; min-height:104px; margin-top:0; }
+  .certificate-detail-seal::after { position:absolute; top:-28px; right:-20px; width:150px; height:150px; border:1px solid rgb(38 122 82 / 8%); border-radius:50%; content:""; box-shadow:0 0 0 12px rgb(38 122 82 / 3%),0 0 0 26px rgb(38 122 82 / 2%); }
+  .certificate-detail-seal-mark { position:absolute; z-index:1; left:18px; display:grid; place-items:center; flex:0 0 62px; width:62px; height:62px; border:2px solid #78b899; border-radius:50%; background:#e4f5eb; color:#23764b; box-shadow:inset 0 0 0 4px #f7fcf9; }
+  .certificate-detail-seal-mark .material-symbols-outlined { font-size:30px; }
+  .certificate-detail-seal-copy { position:relative; z-index:1; width:100%; min-width:0; text-align:center; }
+  .certificate-detail-seal-copy p { margin:0 0 4px; color:#43815f; font-size:10px; font-weight:var(--font-weight-bold); letter-spacing:.12em; text-transform:uppercase; }
+  .certificate-detail-seal-copy strong { display:block; color:#24593d; font-size:var(--font-size-sm); letter-spacing:.03em; }
+  .certificate-detail-seal-copy small { display:block; margin-top:5px; color:#5f7c6b; font-size:var(--font-size-xs); line-height:1.45; }
+  .certificate-detail-seal.is-revoked { border-color:#efc4c9; background:linear-gradient(115deg,#fff5f5,#fffdfd); }
+  .certificate-detail-seal.is-revoked .certificate-detail-seal-mark { border-color:#d58b93; background:#fff0f1; color:#aa3c48; }
+  .certificate-detail-seal.is-revoked .certificate-detail-seal-copy p,
+  .certificate-detail-seal.is-revoked .certificate-detail-seal-copy strong { color:#9c3842; }
+  .certificate-detail-seal.is-revoked .certificate-detail-seal-copy small { color:#846267; }
+  .certificate-detail-seal.is-replaced { border-color:#ebd39e; background:linear-gradient(115deg,#fff9ec,#fffefd); }
+  .certificate-detail-seal.is-replaced .certificate-detail-seal-mark { border-color:#d4ad58; background:#fff4db; color:#8d6315; }
+  .certificate-detail-seal.is-replaced .certificate-detail-seal-copy p,
+  .certificate-detail-seal.is-replaced .certificate-detail-seal-copy strong { color:#795617; }
+  .certificate-detail-seal.is-replaced .certificate-detail-seal-copy small { color:#887858; }
+  .certificate-detail-actions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .certificate-detail-actions-primary { display:flex; flex-wrap:wrap; gap:8px; }
+  .certificate-detail-note { margin:0; color:var(--c-text-muted); font-size:var(--font-size-xs); }
+  @media (max-width:760px) {
+    .certificate-detail-columns { grid-template-columns:1fr; }
+    .certificate-detail-columns { grid-auto-rows:auto; }
+    .certificate-detail-card { height:auto; }
+  }
+  @media (max-width:560px) {
+    .certificate-detail-hero { align-items:flex-start; flex-direction:column; padding:17px; }
+    .certificate-detail-card { padding:17px; }
+    .certificate-detail-seal { align-items:center; flex-direction:column; }
+    .certificate-detail-seal-mark { position:relative; left:auto; }
+    .certificate-detail-actions { align-items:stretch; flex-direction:column-reverse; }
+    .certificate-detail-actions-primary { flex-direction:column; }
+    .certificate-detail-actions .cce-btn { justify-content:center; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="certificate-detail-page">
+  {% if certificate %}
+    <header class="certificate-detail-hero">
+      <div class="certificate-detail-identity">
+        <span class="certificate-detail-icon" aria-hidden="true">
+          <span class="material-symbols-outlined">workspace_premium</span>
+        </span>
+        <div>
+          <p class="certificate-detail-eyebrow">Hồ sơ chứng nhận</p>
+          <h2 class="certificate-detail-number">{{ certificate.certificate_number }}</h2>
+          <p class="certificate-detail-course">{{ training_class.course.name }} <span aria-hidden="true">·</span> {{ training_class.name }}</p>
+        </div>
+      </div>
+      {% if certificate.status == 'issued' %}
+        <span class="certificate-detail-status is-issued">Đã cấp</span>
+      {% elif certificate.status == 'revoked' %}
+        <span class="certificate-detail-status is-revoked">Đã thu hồi</span>
+      {% else %}
+        <span class="certificate-detail-status is-replaced">Đã thay thế</span>
+      {% endif %}
+    </header>
+  {% endif %}
+
+  <div class="certificate-detail-columns">
+    <section class="cce-card certificate-detail-card">
+      <div class="certificate-detail-card-header">
+        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+        <h2 class="certificate-detail-card-title">Thông tin học viên</h2>
+      </div>
+      <dl class="certificate-detail-fields">
+        <div class="certificate-detail-field is-full">
+          <dt>Họ và tên</dt>
+          <dd>{{ learner.full_name }}</dd>
+        </div>
+        <div class="certificate-detail-field">
+          <dt>Mã học viên</dt>
+          <dd>HV-{{ learner.pk|stringformat:"05d" }}</dd>
+        </div>
+        <div class="certificate-detail-field">
+          <dt>Lớp học</dt>
+          <dd>{{ training_class.name }}</dd>
+        </div>
+        <div class="certificate-detail-field">
+          <dt>Khóa học</dt>
+          <dd>{{ training_class.course.name }}</dd>
+        </div>
+        {% if result %}
+          <div class="certificate-detail-field">
+            <dt>Điểm cuối khóa</dt>
+            <dd><span class="certificate-detail-score">{{ result.score }}</span></dd>
+          </div>
+        {% endif %}
+      </dl>
+    </section>
+
+    <section class="cce-card certificate-detail-card">
+      <div class="certificate-detail-card-header">
+        <div class="certificate-detail-heading">
+          <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+          <h2 class="certificate-detail-card-title">Thông tin chứng nhận</h2>
+        </div>
+      </div>
+      {% if certificate %}
+        <dl class="certificate-detail-fields">
+          <div class="certificate-detail-field">
+            <dt>Số chứng nhận</dt>
+            <dd>{{ certificate.certificate_number }}</dd>
+          </div>
+          <div class="certificate-detail-field">
+            <dt>Ngày cấp</dt>
+            <dd>{{ certificate.issued_at|date:"d/m/Y H:i" }}</dd>
+          </div>
+          <div class="certificate-detail-field">
+            <dt>Người cấp</dt>
+            <dd>
+              {% if certificate.issued_by %}
+                {{ certificate.issued_by.get_full_name|default:certificate.issued_by.username }}
+              {% else %}
+                Hệ thống
+              {% endif %}
+            </dd>
+          </div>
+          <div class="certificate-detail-field">
+            <dt>Hiệu lực</dt>
+            <dd>
+              {% if certificate.status == 'issued' %}
+                <span class="certificate-detail-validity"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span>Còn hiệu lực</span>
+              {% else %}
+                {{ certificate.get_status_display }}
+              {% endif %}
+            </dd>
+          </div>
+          {% if has_status_change and certificate.reason %}
+            <div class="certificate-detail-field is-full">
+              <dt>Lý do thay đổi</dt>
+              <dd class="certificate-detail-reason">{{ certificate.reason }}</dd>
+            </div>
+          {% endif %}
+          {% if certificate.replaced_by %}
+            <div class="certificate-detail-field is-full">
+              <dt>Chứng nhận thay thế</dt>
+              <dd><a href="{% url 'certificate-record-detail' certificate.replaced_by.pk %}">{{ certificate.replaced_by.certificate_number }}</a></dd>
+            </div>
+          {% endif %}
+          {% if replaces_certificate %}
+            <div class="certificate-detail-field is-full">
+              <dt>Chứng nhận được thay thế</dt>
+              <dd><a href="{% url 'certificate-record-detail' replaces_certificate.pk %}">{{ replaces_certificate.certificate_number }}</a></dd>
+            </div>
+          {% endif %}
+        </dl>
+      {% else %}
+        <p class="certificate-detail-empty">Chưa có chứng nhận được cấp cho học viên này.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  {% if certificate %}
+    <div class="certificate-detail-status-container">
+      <div class="certificate-detail-seal {% if certificate.status == 'revoked' %}is-revoked{% elif certificate.status == 'replaced' %}is-replaced{% endif %}">
+        <span class="certificate-detail-seal-mark" aria-hidden="true">
+          <span class="material-symbols-outlined">{% if certificate.status == 'issued' %}verified{% elif certificate.status == 'revoked' %}block{% else %}sync_alt{% endif %}</span>
+        </span>
+        <div class="certificate-detail-seal-copy">
+          <p>Xác nhận trạng thái hệ thống</p>
+          <strong>
+            {% if certificate.status == 'issued' %}
+              CHỨNG NHẬN CÒN HIỆU LỰC
+            {% elif certificate.status == 'revoked' %}
+              CHỨNG NHẬN ĐÃ THU HỒI
+            {% else %}
+              CHỨNG NHẬN ĐÃ ĐƯỢC THAY THẾ
+            {% endif %}
+          </strong>
+          <small>
+            {% if certificate.status == 'issued' %}
+              Thông tin chứng nhận đã được ghi nhận trong hệ thống đào tạo.
+            {% elif certificate.status == 'revoked' %}
+              Chứng nhận đã bị thu hồi theo cập nhật của hệ thống.
+            {% else %}
+              Chứng nhận cũ được lưu để tra cứu thông tin thay thế.
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="certificate-detail-actions">
+    <a class="cce-btn cce-btn-secondary" href="{% url 'certificate-list' %}">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      Quay lại danh sách
+    </a>
+    {% if certificate %}
+      <div class="certificate-detail-actions-primary">
+        {% if certificate.status == 'issued' %}
+          <a class="cce-btn cce-btn-primary" href="{% url 'certificate-pdf' certificate.pk %}">
+            <span class="material-symbols-outlined" aria-hidden="true">download</span>
+            Tải file PDF
+          </a>
+        {% else %}
+          <p class="certificate-detail-note">Không thể tải PDF vì chứng nhận này không còn hiệu lực.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -140,7 +140,15 @@
                       <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                       <span>Nhập kết quả</span>
                     </button>
-                  {% else %}
+                  {% endif %}
+                  {% if row.result %}
+                    <a class="cce-table-btn cce-table-btn-outline"
+                       href="{% url 'class-results-history' training_class.pk row.learner.pk %}"
+                       title="Xem nhật ký sửa điểm của {{ row.learner.full_name }}">
+                      <span class="material-symbols-outlined" aria-hidden="true">history</span>
+                      <span>Xem lịch sử</span>
+                    </a>
+                  {% elif not can_edit_scores %}
                     <span style="color:var(--c-text-muted);">—</span>
                   {% endif %}
                   {% if row.error %}

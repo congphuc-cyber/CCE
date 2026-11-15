@@ -1,0 +1,66 @@
+{% extends "training/base_internal.html" %}
+
+{% block title %}Lịch sử sửa điểm — {{ result.learner.full_name }}{% endblock %}
+{% block breadcrumb_title %}Lịch sử sửa điểm{% endblock %}
+{% block page_title %}Lịch sử sửa điểm{% endblock %}
+{% block page_description %}Nhật ký thao tác của điểm cuối khóa trong lớp {{ training_class.name }}.{% endblock %}
+
+{% block content %}
+  <section class="cce-card" style="margin-bottom:var(--space-4);">
+    <div class="cce-card-header">
+      <div>
+        <h2 class="cce-card-title">{{ result.learner.full_name }}</h2>
+        <p style="margin:var(--space-1) 0 0; color:var(--c-text-muted);">
+          Lớp {{ training_class.name }} · Điểm hiện tại: <strong>{{ result.score }}</strong>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cce-card" aria-labelledby="score-history-heading">
+    <div class="cce-card-header">
+      <h2 class="cce-card-title" id="score-history-heading">Nhật ký thao tác</h2>
+    </div>
+    {% if history %}
+      <div class="cce-table-wrap">
+        <table class="cce-table">
+          <thead>
+            <tr>
+              <th scope="col">Thời điểm</th>
+              <th scope="col">Thao tác</th>
+              <th scope="col">Điểm cũ</th>
+              <th scope="col">Điểm mới</th>
+              <th scope="col">Người thực hiện</th>
+              <th scope="col">Lý do</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in history %}
+              <tr>
+                <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ item.get_action_display }}</td>
+                <td>{{ item.old_values.score|default:"—" }}</td>
+                <td>{{ item.new_values.score|default:"—" }}</td>
+                <td>
+                  {% if item.actor %}
+                    {{ item.actor.get_full_name|default:item.actor_username }}
+                  {% else %}
+                    {{ item.actor_username|default:"Hệ thống" }}
+                  {% endif %}
+                </td>
+                <td>{{ item.reason|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-6);">
+        <p>Chưa có nhật ký thao tác cho điểm này.</p>
+      </div>
+    {% endif %}
+    <div class="cce-form-actions" style="margin-top:var(--space-4);">
+      <a class="cce-btn cce-btn-secondary" href="{{ results_url }}">Quay lại bảng điểm</a>
+    </div>
+  </section>
+{% endblock %}

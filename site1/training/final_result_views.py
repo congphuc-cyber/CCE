@@ -287,6 +287,7 @@ def _render_results(
         )
         rows.append({
             "learner": learner,
+            "result": result,
             "score_value": score_value,
             "outcome": _outcome(
                 score,
@@ -718,6 +719,38 @@ def _save_single_final_result(request, training_class, can_manage_results):
         else "Không có thay đổi kết quả cần lưu.",
     )
     return _redirect_to_results(request, training_class)
+
+
+@login_required
+def class_final_result_history(request, class_id, learner_id):
+    training_class = get_object_or_404(
+        TrainingClass.objects.select_related("course"),
+        pk=class_id,
+    )
+    if not _can_access_final_results(request.user, training_class):
+        raise PermissionDenied
+
+    result = get_object_or_404(
+        FinalCourseResult.objects.select_related("learner", "training_class"),
+        training_class=training_class,
+        learner_id=learner_id,
+    )
+    history = AuditLog.objects.filter(
+        object_type=FinalCourseResult._meta.label,
+        object_id=str(result.pk),
+    )
+    return render(
+        request,
+        "training/class_final_result_history.html",
+        {
+            "active_menu": "classes",
+            "page_title": "Lịch sử sửa điểm",
+            "training_class": training_class,
+            "result": result,
+            "history": history,
+            "results_url": reverse("class-results", args=(training_class.pk,)),
+        },
+    )
 
 
 @login_required

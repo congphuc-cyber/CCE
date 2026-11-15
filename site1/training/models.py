@@ -478,6 +478,12 @@ class CertificateHistory(models.Model):
     def certificate_number(self):
         return self.certificate.certificate_number
 
+    @property
+    def previous_status_display(self):
+        if self.old_status == self.new_status == Certificate.Status.ISSUED:
+            return "Chờ cấp"
+        return self.get_old_status_display()
+
 
 class RoleFeaturePermission(models.Model):
     group = models.ForeignKey(

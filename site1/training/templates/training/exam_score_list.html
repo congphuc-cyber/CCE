@@ -7,23 +7,21 @@
 
 {% block page_actions %}
   <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+    {% if not has_active_score_filters %}
+      <a class="cce-btn cce-btn-accent" href="{% url 'exam-score-publish' %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
+        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">campaign</span>
+        <span>Kiểm tra / Công bố thêm điểm</span>
+      </a>
+    {% endif %}
     {% if selected_room %}
       <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}?period={{ selected_room.exam_period.pk }}&room={{ selected_room.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
         <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
         <span>Nhập từ file</span>
       </a>
-      <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-publish' %}?period={{ selected_room.exam_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
-        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">campaign</span>
-        <span>Công bố điểm</span>
-      </a>
     {% elif selected_period %}
       <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}?period={{ selected_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
         <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">upload_file</span>
         <span>Nhập điểm từ file</span>
-      </a>
-      <a class="cce-btn cce-btn-accent" href="{% url 'exam-score-publish' %}?period={{ selected_period.pk }}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
-        <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">campaign</span>
-        <span>Công bố điểm đợt này</span>
       </a>
     {% else %}
       <a class="cce-btn cce-btn-secondary" href="{% url 'exam-score-upload' %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">

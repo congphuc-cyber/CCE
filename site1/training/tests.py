@@ -1008,7 +1008,7 @@ class ClassTransferTests(TestCase):
 
         self.assertContains(response, "Tìm học viên theo họ tên hoặc số CCCD")
         self.assertContains(response, f"{learner.full_name} — {learner.id_number}")
-        self.assertContains(response, 'aria-controls="id_learner"')
+        self.assertContains(response, 'aria-controls="learner-suggestions"')
         self.assertContains(response, "filterLearners")
 
     def test_transfer_moves_enrollment_and_records_history_and_audit(self):
@@ -1831,6 +1831,26 @@ class FinalCourseResultTests(TestCase):
             update_fields=("final_results_locked_at", "final_results_locked_by")
         )
         return results
+
+    def test_saved_result_has_history_link_and_history_page(self):
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("80"),
+        )
+        history_url = reverse(
+            "class-results-history",
+            args=(self.training_class.pk, self.learners[0].pk),
+        )
+
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+        self.assertContains(response, history_url)
+
+        history_response = self.client.get(history_url)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertContains(history_response, "Nhật ký thao tác")
 
     def test_final_result_actions_use_exam_entry_modal(self):
         response = self.client.get(
@@ -5356,9 +5376,8 @@ class ExamCertificateWorkflowTests(TestCase):
 
     def test_exam_certificate_issue_creates_record_from_published_score(self):
         response = self.client.post(
-            reverse("exam-certificate-list"),
+            reverse("exam-certificate-issue"),
             {
-                "issue_exam_certificate": "1",
                 "exam_period": self.period.pk,
                 "application": self.app.pk,
             },
