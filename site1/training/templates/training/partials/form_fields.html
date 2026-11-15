@@ -25,7 +25,11 @@
       {% endif %}
 
       {% for error in field.errors %}
-        <div class="cce-form-error" id="{{ field.auto_id }}_error" role="alert">{{ error }}</div>
+        {% if hide_capacity_error and field.name == "destination_class" and error == "Lớp mới đã đạt sĩ số tối đa." %}
+          <div class="cce-form-error cce-visually-hidden" id="{{ field.auto_id }}_error">{{ error }}</div>
+        {% else %}
+          <div class="cce-form-error" id="{{ field.auto_id }}_error" role="alert">{{ error }}</div>
+        {% endif %}
       {% endfor %}
     </div>
   {% endfor %}

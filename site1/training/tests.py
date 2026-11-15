@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, time
 from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -19,7 +19,12 @@ from django.utils import timezone
 from captcha.models import CaptchaStore
 from reportlab.pdfbase import pdfmetrics
 
-from training.access import all_features, default_features_for_role
+from training.access import (
+    REQUIRED_ADMIN_FEATURES,
+    all_features,
+    default_features_for_role,
+    user_has_feature,
+)
 from training.admin import BaseModelAdmin
 from training.context_processors import ui_navigation
 from training.forms import CourseAdminForm, LearnerAdminForm, TrainingClassAdminForm
@@ -646,13 +651,134 @@ class PhaseFourTests(TestCase):
                 "name": self.training_class.name,
                 "course": self.course.pk,
                 "learning_format": TrainingClass.LearningFormat.ONLINE,
-                "schedule": "",
+                "weekdays": [],
+                "class_session": "",
                 "max_students": 0,
             },
         )
         self.assertFalse(class_form.is_valid())
-        self.assertIn("schedule", class_form.errors)
+        self.assertIn("weekdays", class_form.errors)
+        self.assertIn("class_session", class_form.errors)
         self.assertIn("max_students", class_form.errors)
+
+    def test_training_class_form_limits_weekdays_and_saves_selected_session(self):
+        form_data = {
+            "name": self.training_class.name,
+            "course": self.course.pk,
+            "learning_format": TrainingClass.LearningFormat.ONLINE,
+            "weekdays": ["mon", "wed", "fri"],
+            "class_session": "Ca 5 — Tối (18:00–20:00)",
+            "max_students": 2,
+        }
+        form = TrainingClassAdminForm(instance=self.training_class, data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        saved_class = form.save()
+        self.assertEqual(
+            saved_class.schedule,
+            "Thứ 2, Thứ 4, Thứ 6 — Ca 5 — Tối (18:00–20:00)",
+        )
+
+        form_data["weekdays"] = ["mon", "tue", "wed", "thu"]
+        form = TrainingClassAdminForm(instance=self.training_class, data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn("weekdays", form.errors)
+
+    def test_training_class_form_preserves_unmatched_legacy_session(self):
+        legacy_schedule = "Thứ 2, Thứ 4 & Thứ 6, 17:30–19:30 (tối)"
+        training_class = TrainingClass.objects.create(
+            name="ATD-legacy",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule=legacy_schedule,
+            max_students=2,
+        )
+        initial_form = TrainingClassAdminForm(instance=training_class)
+        self.assertEqual(initial_form.initial["weekdays"], ["mon", "wed", "fri"])
+        self.assertEqual(
+            initial_form.initial["class_session"],
+            TrainingClassAdminForm.LEGACY_SESSION_VALUE,
+        )
+        form = TrainingClassAdminForm(
+            instance=training_class,
+            data={
+                "name": training_class.name,
+                "course": self.course.pk,
+                "learning_format": training_class.learning_format,
+                "weekdays": ["mon", "thu"],
+                "class_session": TrainingClassAdminForm.LEGACY_SESSION_VALUE,
+                "max_students": 2,
+            },
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        saved_class = form.save()
+        self.assertEqual(
+            saved_class.schedule,
+            "Thứ 2, Thứ 5 — 17:30–19:30 (tối)",
+        )
+
+    def test_training_class_admin_renders_schedule_selectors(self):
+        self.client.force_login(self.education_user)
+        response = self.client.get(
+            reverse("admin:training_trainingclass_change", args=(self.training_class.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Thứ học")
+        self.assertContains(response, "Ca học")
+        self.assertContains(response, "Chọn từ 1 đến 3 thứ.")
+        self.assertContains(response, "Ca 1 — Sáng (07:30–09:30)")
+        self.assertContains(response, 'class="cce-weekday-grid"')
+        self.assertContains(response, "cce-admin-datepicker.js")
+        self.assertNotContains(response, 'name="schedule"')
+
+    def test_teacher_assignment_page_styles_native_teacher_select(self):
+        teacher = Teacher.objects.create(full_name="Nguyễn Văn An")
+        self.client.force_login(self.education_user)
+
+        response = self.client.get(
+            reverse("class-assignments", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="cce-select cce-teacher-select"')
+        self.assertContains(response, "Chọn giáo viên")
+        self.assertContains(response, "teacher-select-20261115")
+        self.assertContains(response, teacher.full_name)
+        self.assertNotContains(response, "teacher-search")
+
+    def test_training_class_changelist_formats_schedule_and_start_date(self):
+        self.training_class.schedule = "Thứ 2 & Thứ 4, 07:30–09:30"
+        self.training_class.start_date = date(2026, 9, 15)
+        self.training_class.save()
+        self.client.force_login(self.education_user)
+
+        response = self.client.get(reverse("admin:training_trainingclass_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Thứ 2, Thứ 4 — Ca 1 — Sáng (07:30–09:30)",
+        )
+        self.assertContains(response, "15/09/2026")
+
+    def test_schedule_display_removes_non_session_annotations(self):
+        self.assertEqual(
+            TrainingClassAdminForm.format_schedule_for_display(
+                "Thứ 2, Thứ 4 & Thứ 6, 17:30–19:30 (tối)"
+            ),
+            "Thứ 2, Thứ 4, Thứ 6 — 17:30–19:30",
+        )
+        self.assertEqual(
+            TrainingClassAdminForm.format_schedule_for_display(
+                "Thứ 7 & Chủ nhật, 07:30–10:30 (tập trung)"
+            ),
+            "Thứ 7, Chủ nhật — 07:30–10:30",
+        )
+        self.assertEqual(
+            TrainingClassAdminForm.format_schedule_for_display(
+                "Thứ 2 & Thứ 4, 18:00–20:00"
+            ),
+            "Thứ 2, Thứ 4 — Ca 5 — Tối (18:00–20:00)",
+        )
 
     def test_course_and_class_admin_lists_link_to_expected_actions(self):
         self.client.force_login(self.education_user)
@@ -667,6 +793,7 @@ class PhaseFourTests(TestCase):
         self.client.force_login(self.education_user)
         detail_url = reverse("class-detail", args=(self.training_class.pk,))
         response = self.client.get(detail_url)
+        self.assertContains(response, "teacher-select-20261115")
         self.assertContains(response, "Ghi danh")
         self.assertContains(response, "Đóng lớp")
         self.assertContains(response, "required")
@@ -677,6 +804,11 @@ class PhaseFourTests(TestCase):
         )
         self.assertRedirects(response, detail_url)
         self.assertEqual(self.training_class.enrolled_count, 1)
+
+        response = self.client.get(detail_url)
+        self.assertContains(response, "cce-btn-transfer-action")
+        self.assertContains(response, "cce-btn-history-action")
+        self.assertContains(response, "cce-btn-results-action")
 
         response = self.client.post(
             reverse("class-close", args=(self.training_class.pk,)),
@@ -869,7 +1001,19 @@ class ClassTransferTests(TestCase):
 
     def test_transfer_moves_enrollment_and_records_history_and_audit(self):
         learner = self.create_learner("Trần Bình", "112345678901")
+        unrelated_learner = self.create_learner("Học viên lớp khác", "212345678901")
+        unrelated_class = TrainingClass.objects.create(
+            name="Dien-03",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ Tư",
+            max_students=4,
+        )
         Enrollment.objects.create(learner=learner, training_class=self.source_class)
+        Enrollment.objects.create(
+            learner=unrelated_learner,
+            training_class=unrelated_class,
+        )
         class_detail = self.client.get(reverse("class-detail", args=(self.source_class.pk,)))
         self.assertContains(class_detail, "Chuyển lớp")
         self.assertContains(class_detail, "Lịch sử chuyển lớp")
@@ -880,6 +1024,9 @@ class ClassTransferTests(TestCase):
         self.assertContains(transfer_page, self.source_class.name)
         self.assertContains(transfer_page, self.destination_class.name)
         self.assertContains(transfer_page, "0/4")
+        self.assertContains(transfer_page, learner.full_name)
+        self.assertNotContains(transfer_page, unrelated_learner.full_name)
+        self.assertContains(transfer_page, "window.location.search")
 
         response = self.submit_transfer(learner)
 
@@ -949,10 +1096,20 @@ class ClassTransferTests(TestCase):
         )
         Enrollment.objects.create(learner=occupant, training_class=full_class)
 
+        transfer_page = self.client.get(reverse("class-transfer"))
+        self.assertIn(
+            str(full_class.pk),
+            transfer_page.context["full_destination_class_ids"],
+        )
+
         response = self.submit_transfer(learner, full_class)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lớp mới đã đạt sĩ số tối đa.")
+        self.assertTrue(response.context["show_full_capacity_popup"])
+        self.assertContains(response, 'class="cce-modal-backdrop is-open"')
+        self.assertContains(response, 'role="alertdialog"')
+        self.assertContains(response, 'class="cce-form-error cce-visually-hidden"')
         self.assertTrue(
             Enrollment.objects.filter(
                 learner=learner,
@@ -1274,6 +1431,180 @@ class PhaseFiveTests(TestCase):
         navigation = ui_navigation(request)
         self.assertNotIn("courses", [item["key"] for item in navigation["sidebar_items"]])
 
+    def test_explicit_role_denial_overrides_another_role_grant(self):
+        exam_group = self.groups["Cán bộ thi"]
+        multi_role_user = User.objects.create_user(username="phase-five-multi-role")
+        multi_role_user.groups.add(self.groups["Giáo vụ"], exam_group)
+
+        selected = [
+            f"{group.pk}:{feature['key']}"
+            for role_name, group in self.groups.items()
+            for feature in all_features()
+            if feature["key"] in default_features_for_role(role_name)
+        ]
+        selected.append(f"{exam_group.pk}:courses")
+        self.client.force_login(self.admin_user)
+        response = self.client.post(
+            reverse("role-permissions"),
+            {"permissions": selected},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(user_has_feature(multi_role_user, "courses"))
+
+        selected.remove(f"{self.groups['Giáo vụ'].pk}:courses")
+        response = self.client.post(
+            reverse("role-permissions"),
+            {"permissions": selected},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(user_has_feature(multi_role_user, "courses"))
+        self.assertTrue(
+            RoleFeaturePermission.objects.get(
+                group=self.groups["Giáo vụ"],
+                feature="courses",
+            ).deny_overrides
+        )
+        self.assertTrue(
+            RoleFeaturePermission.objects.get(
+                group=exam_group,
+                feature="courses",
+            ).allowed
+        )
+
+        self.client.force_login(multi_role_user)
+        response = self.client.get(reverse("admin:training_course_changelist"))
+        self.assertEqual(response.status_code, 403)
+
+        selected.append(f"{self.groups['Giáo vụ'].pk}:courses")
+        self.client.force_login(self.admin_user)
+        response = self.client.post(
+            reverse("role-permissions"),
+            {"permissions": selected},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(user_has_feature(multi_role_user, "courses"))
+        self.assertFalse(
+            RoleFeaturePermission.objects.get(
+                group=self.groups["Giáo vụ"],
+                feature="courses",
+            ).deny_overrides
+        )
+
+    def test_superuser_is_blocked_by_disabled_role_features(self):
+        admin_group = self.groups["Quản trị viên"]
+        superuser = User.objects.create_superuser(
+            username="phase-five-restricted-superuser",
+            password="Admin-pass-9518#",
+        )
+        revoked_features = {"classes", "exam-scores"}
+        selected = [
+            f"{group.pk}:{feature['key']}"
+            for role_name, group in self.groups.items()
+            for feature in all_features()
+            if (
+                feature["key"] in default_features_for_role(role_name)
+                and not (
+                    role_name == "Quản trị viên"
+                    and feature["key"] in revoked_features
+                )
+            )
+        ]
+
+        self.client.force_login(self.admin_user)
+        response = self.client.post(
+            reverse("role-permissions"),
+            {"permissions": selected},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        for feature in revoked_features:
+            with self.subTest(feature=feature):
+                self.assertFalse(user_has_feature(superuser, feature))
+        for feature in REQUIRED_ADMIN_FEATURES:
+            with self.subTest(required_feature=feature):
+                self.assertTrue(user_has_feature(superuser, feature))
+
+        self.client.force_login(superuser)
+        self.assertEqual(self.client.get(reverse("role-permissions")).status_code, 200)
+        self.assertEqual(
+            self.client.get(reverse("admin:auth_user_changelist")).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(reverse("admin:training_examscore_changelist")).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(reverse("admin:training_trainingclass_changelist")).status_code,
+            403,
+        )
+        self.assertEqual(self.client.get(reverse("class-transfer")).status_code, 403)
+        course = Course.objects.create(name="Superuser denied class", pass_threshold=50)
+        training_class = TrainingClass.objects.create(
+            name="SUPERUSER-DENIED-CLASS",
+            course=course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ 2, 8:00-10:00",
+            max_students=20,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("class-results-upload", args=(training_class.pk,))
+            ).status_code,
+            403,
+        )
+        request = RequestFactory().get("/")
+        request.user = superuser
+        visible_features = [item["key"] for item in ui_navigation(request)["sidebar_items"]]
+        self.assertTrue(revoked_features.isdisjoint(visible_features))
+
+    def test_required_administrator_features_cannot_be_unchecked(self):
+        admin_group = self.groups["Quản trị viên"]
+        for feature in REQUIRED_ADMIN_FEATURES:
+            RoleFeaturePermission.objects.update_or_create(
+                group=admin_group,
+                feature=feature,
+                defaults={"allowed": False, "deny_overrides": True},
+            )
+
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("role-permissions"))
+        self.assertEqual(response.status_code, 200)
+        for row in response.context["matrix_rows"]:
+            for cell in row["roles"]:
+                if cell["group"] == admin_group and row["feature"]["key"] in REQUIRED_ADMIN_FEATURES:
+                    self.assertTrue(cell["allowed"])
+                    self.assertTrue(cell["locked"])
+        self.assertContains(response, 'disabled aria-disabled="true"')
+
+        selected = [
+            f"{group.pk}:{feature['key']}"
+            for role_name, group in self.groups.items()
+            for feature in all_features()
+            if (
+                feature["key"] in default_features_for_role(role_name)
+                and not (
+                    role_name == "Quản trị viên"
+                    and feature["key"] in REQUIRED_ADMIN_FEATURES
+                )
+            )
+        ]
+        response = self.client.post(
+            reverse("role-permissions"),
+            {"permissions": selected},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        for feature in REQUIRED_ADMIN_FEATURES:
+            with self.subTest(feature=feature):
+                permission = RoleFeaturePermission.objects.get(
+                    group=admin_group,
+                    feature=feature,
+                )
+                self.assertTrue(permission.allowed)
+                self.assertFalse(permission.deny_overrides)
+                self.assertTrue(user_has_feature(self.admin_user, feature))
+
     def test_admin_course_changes_and_class_closing_are_logged_with_snapshots(self):
         self.client.force_login(self.education_user)
         response = self.client.post(
@@ -1471,6 +1802,110 @@ class FinalCourseResultTests(TestCase):
         )
         return teacher_user
 
+    def _complete_and_lock_results(self):
+        results = [
+            FinalCourseResult.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+                score=Decimal("80") if index < 2 else None,
+                is_absent=index == 2,
+            )
+            for index, learner in enumerate(self.learners)
+        ]
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        return results
+
+    def test_final_result_actions_use_exam_entry_modal(self):
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            '<table class="cce-table cce-final-results-table">',
+        )
+        self.assertContains(response, 'style="min-width:120px; text-align:right;">Thao tác</th>')
+        self.assertContains(response, "openFinalResultModal(this)")
+        self.assertContains(response, "<span>Nhập kết quả</span>")
+        self.assertNotContains(response, "Sửa kết quả")
+        self.assertContains(response, 'name="score"')
+        self.assertContains(response, 'name="is_absent"')
+        self.assertNotContains(
+            response,
+            '<th scope="col" style="width:80px; text-align:center;">Vắng</th>',
+        )
+        self.assertContains(
+            response,
+            '<th scope="col" style="min-width:120px; text-align:center;">Công bố</th>',
+        )
+        self.assertContains(
+            response,
+            '<th scope="col" style="min-width:120px; text-align:center;">Chốt kết quả</th>',
+        )
+
+    def test_final_result_outcomes_use_exam_assessment_badges(self):
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("80"),
+        )
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[1],
+            score=Decimal("74"),
+        )
+
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            '<th scope="col" style="min-width:120px; text-align:center;">Kết quả</th>',
+        )
+        self.assertContains(response, '<span class="cce-badge cce-badge-valid">Đạt</span>')
+        self.assertContains(
+            response,
+            '<span class="cce-badge cce-badge-duplicate">Không đạt</span>',
+        )
+        self.assertContains(
+            response,
+            '<span class="cce-badge cce-badge-new">Chưa nhập</span>',
+        )
+
+    def test_finalization_status_column_shows_both_class_states(self):
+        for learner in self.learners:
+            FinalCourseResult.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+                score=Decimal("80"),
+            )
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+
+        before_finalization = self.client.get(results_url)
+        self.assertContains(
+            before_finalization,
+            '<span class="cce-badge cce-badge-draft">Chưa chốt</span>',
+        )
+
+        self.client.post(results_url, {"action": "finalize"})
+
+        after_finalization = self.client.get(results_url)
+        self.assertContains(
+            after_finalization,
+            '<span class="cce-badge cce-badge-closed">Đã chốt</span>',
+        )
+        self.assertNotContains(
+            after_finalization,
+            '<span class="cce-badge cce-badge-draft">Chưa chốt</span>',
+        )
+
     def test_manual_scores_use_threshold_and_blank_values_do_not_change_saved_scores(self):
         existing = FinalCourseResult.objects.create(
             training_class=self.training_class,
@@ -1521,6 +1956,161 @@ class FinalCourseResultTests(TestCase):
         self.assertEqual(Decimal(update_audit.old_values["score"]), Decimal("75"))
         self.assertEqual(Decimal(update_audit.new_values["score"]), Decimal("76"))
 
+    def test_manual_absence_is_saved_and_counts_toward_finalization(self):
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        response = self.client.post(
+            results_url,
+            {
+                "action": "save",
+                f"absent_{self.learners[0].pk}": "1",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        absent_result = FinalCourseResult.objects.get(learner=self.learners[0])
+        self.assertTrue(absent_result.is_absent)
+        self.assertIsNone(absent_result.score)
+        self.assertEqual(absent_result.outcome, "Vắng")
+
+        results_page = self.client.get(results_url)
+        self.assertContains(
+            results_page,
+            '<span class="cce-badge cce-badge-duplicate">Vắng</span>',
+        )
+        self.assertContains(
+            results_page,
+            'data-is-absent="true"',
+        )
+
+        self.client.post(
+            results_url,
+            {
+                "action": "save",
+                f"score_{self.learners[1].pk}": "75",
+                f"score_{self.learners[2].pk}": "80",
+            },
+        )
+        self.client.post(results_url, {"action": "finalize"})
+        self.training_class.refresh_from_db()
+        self.assertTrue(self.training_class.final_results_locked)
+
+    def test_single_result_action_can_enter_edit_and_mark_absent(self):
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        learner = self.learners[0]
+
+        entered = self.client.post(
+            results_url,
+            {
+                "action": "save_single",
+                "learner_id": learner.pk,
+                "score": "80",
+            },
+        )
+        self.assertEqual(entered.status_code, 302)
+        result = FinalCourseResult.objects.get(
+            training_class=self.training_class,
+            learner=learner,
+        )
+        self.assertEqual(result.score, Decimal("80"))
+        self.assertFalse(result.is_absent)
+
+        absent = self.client.post(
+            results_url,
+            {
+                "action": "save_single",
+                "learner_id": learner.pk,
+                "is_absent": "1",
+            },
+        )
+        self.assertEqual(absent.status_code, 302)
+        result.refresh_from_db()
+        self.assertIsNone(result.score)
+        self.assertTrue(result.is_absent)
+
+        edited = self.client.post(
+            results_url,
+            {
+                "action": "save_single",
+                "learner_id": learner.pk,
+                "score": "85",
+            },
+        )
+        self.assertEqual(edited.status_code, 302)
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("85"))
+        self.assertFalse(result.is_absent)
+
+    def test_single_result_action_requires_reason_after_finalization(self):
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("65"),
+        )
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+
+        missing_reason = self.client.post(
+            results_url,
+            {
+                "action": "save_single",
+                "learner_id": self.learners[0].pk,
+                "score": "80",
+            },
+        )
+        self.assertEqual(missing_reason.status_code, 200)
+        self.assertContains(
+            missing_reason,
+            "Vui lòng nhập lý do sửa điểm sau khi chốt.",
+        )
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("65"))
+
+        saved = self.client.post(
+            results_url,
+            {
+                "action": "save_single",
+                "learner_id": self.learners[0].pk,
+                "score": "80",
+                "reason": "Sửa theo biên bản đối soát",
+            },
+        )
+        self.assertEqual(saved.status_code, 302)
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("80"))
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_type="training.FinalCourseResult",
+                object_id=str(result.pk),
+                reason="Sửa theo biên bản đối soát",
+            ).exists()
+        )
+
+    def test_unmarking_absence_without_a_score_returns_to_unentered(self):
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=None,
+            is_absent=True,
+        )
+
+        response = self.client.post(
+            reverse("class-results", args=(self.training_class.pk,)),
+            {
+                "action": "save",
+                f"score_{self.learners[0].pk}": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        result.refresh_from_db()
+        self.assertFalse(result.is_absent)
+        self.assertIsNone(result.score)
+        self.assertEqual(result.outcome, "Chưa nhập")
+
     def test_manual_score_outside_range_is_rejected_without_saving(self):
         response = self.client.post(
             reverse("class-results", args=(self.training_class.pk,)),
@@ -1565,6 +2155,167 @@ class FinalCourseResultTests(TestCase):
                 reason="Chốt kết quả cuối khóa.",
             ).exists()
         )
+
+    def test_finalize_action_uses_an_in_app_confirmation_modal(self):
+        for learner in self.learners:
+            FinalCourseResult.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+                score=Decimal("80"),
+            )
+
+        response = self.client.get(
+            reverse("class-results", args=(self.training_class.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["can_finalize"])
+        self.assertContains(response, 'id="finalizeResultsModal"')
+        self.assertContains(response, 'role="alertdialog"')
+        self.assertContains(response, "Xác nhận chốt kết quả")
+        self.assertContains(response, "Sau khi chốt, mọi chỉnh sửa đều cần lý do.")
+        self.assertContains(response, '<input type="hidden" name="action" value="finalize">')
+        self.assertContains(
+            response,
+            '<button type="submit" class="cce-btn cce-btn-danger">\n'
+            '              Xác nhận chốt\n'
+            '            </button>',
+        )
+        self.assertNotContains(response, "onclick=\"return confirm(")
+
+    def test_final_results_must_be_locked_and_complete_before_publication(self):
+        for learner in self.learners[:2]:
+            FinalCourseResult.objects.create(
+                training_class=self.training_class,
+                learner=learner,
+                score=Decimal("80"),
+            )
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+
+        before_lock = self.client.post(
+            results_url,
+            {"action": "publish_results"},
+            follow=True,
+        )
+        self.assertContains(before_lock, "Chốt kết quả lớp trước khi công bố.")
+        self.assertFalse(
+            FinalCourseResult.objects.filter(
+                training_class=self.training_class,
+                is_published=True,
+            ).exists()
+        )
+
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.final_results_locked_by = self.manager
+        self.training_class.save(
+            update_fields=("final_results_locked_at", "final_results_locked_by")
+        )
+        results_page = self.client.get(results_url)
+        self.assertFalse(results_page.context["can_publish_results"])
+
+        missing_result = self.client.post(
+            results_url,
+            {"action": "publish_results"},
+            follow=True,
+        )
+        self.assertContains(
+            missing_result,
+            "Cần nhập điểm hoặc đánh dấu Vắng cho toàn bộ kết quả trước khi công bố.",
+        )
+        self.assertFalse(
+            FinalCourseResult.objects.filter(
+                training_class=self.training_class,
+                is_published=True,
+            ).exists()
+        )
+
+    def test_class_wide_publication_includes_absence_and_records_audit(self):
+        results = self._complete_and_lock_results()
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        page = self.client.get(results_url)
+        self.assertTrue(page.context["can_publish_results"])
+        self.assertContains(page, 'id="publishResultsModal"')
+        self.assertContains(page, "Xác nhận công bố kết quả")
+        self.assertContains(
+            page,
+            '<input type="hidden" name="action" value="publish_results">',
+        )
+        self.assertContains(
+            page,
+            '<button type="submit" class="cce-btn cce-btn-danger">\n'
+            '              Xác nhận công bố\n'
+            '            </button>',
+        )
+        self.assertNotContains(page, "onclick=\"return confirm(")
+
+        published = self.client.post(results_url, {"action": "publish_results"})
+
+        self.assertEqual(published.status_code, 302)
+        for result in results:
+            result.refresh_from_db()
+            self.assertTrue(result.is_published)
+            self.assertIsNotNone(result.published_at)
+            audit = AuditLog.objects.get(
+                action=AuditLog.Action.EDIT,
+                object_type="training.FinalCourseResult",
+                object_id=str(result.pk),
+            )
+            self.assertFalse(audit.old_values["is_published"])
+            self.assertTrue(audit.new_values["is_published"])
+        self.assertTrue(results[-1].is_absent)
+
+        published_page = self.client.get(results_url)
+        self.assertContains(
+            published_page,
+            '<span class="cce-badge cce-badge-published">Đã công bố</span>',
+        )
+        self.assertFalse(published_page.context["can_publish_results"])
+        self.assertTrue(published_page.context["can_revoke_results"])
+
+    def test_revoking_final_result_publication_requires_reason_and_is_audited(self):
+        results = self._complete_and_lock_results()
+        results_url = reverse("class-results", args=(self.training_class.pk,))
+        self.client.post(results_url, {"action": "publish_results"})
+        published_page = self.client.get(results_url)
+        self.assertContains(
+            published_page,
+            '<button class="cce-btn cce-btn-danger" type="button"',
+        )
+        self.assertContains(
+            published_page,
+            '<button type="submit" class="cce-btn cce-btn-danger">Thu hồi công bố</button>',
+        )
+
+        missing_reason = self.client.post(
+            results_url,
+            {"action": "revoke_results"},
+        )
+
+        self.assertEqual(missing_reason.status_code, 200)
+        self.assertContains(missing_reason, "Vui lòng nhập lý do thu hồi công bố kết quả.")
+        for result in results:
+            result.refresh_from_db()
+            self.assertTrue(result.is_published)
+
+        reason = "Điều chỉnh kết quả theo biên bản"
+        revoked = self.client.post(
+            results_url,
+            {"action": "revoke_results", "reason": reason},
+        )
+
+        self.assertEqual(revoked.status_code, 302)
+        for result in results:
+            result.refresh_from_db()
+            self.assertFalse(result.is_published)
+            self.assertIsNone(result.published_at)
+            audit = AuditLog.objects.get(
+                action=AuditLog.Action.EDIT,
+                object_type="training.FinalCourseResult",
+                object_id=str(result.pk),
+                reason=reason,
+            )
+            self.assertTrue(audit.old_values["is_published"])
+            self.assertFalse(audit.new_values["is_published"])
 
     def test_locked_manual_edits_require_reason_and_record_audit(self):
         self.training_class.final_results_locked_at = timezone.now()
@@ -1638,6 +2389,127 @@ class FinalCourseResultTests(TestCase):
         self.assertFalse(
             FinalCourseResult.objects.filter(training_class=self.training_class).exists()
         )
+
+    def test_upload_warns_for_existing_score_and_overwrites_after_confirmation(self):
+        result = FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=Decimal("65"),
+        )
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+        rows = [[
+            self.learners[0].full_name,
+            self.learners[0].id_number,
+            "80",
+        ]]
+        unchanged_preview = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[0].full_name,
+                    self.learners[0].id_number,
+                    "65",
+                ]]),
+                "preview": "1",
+            },
+        ).json()
+        self.assertEqual(unchanged_preview["overwrite_count"], 1)
+
+        unchanged_confirmation = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file([[
+                    self.learners[0].full_name,
+                    self.learners[0].id_number,
+                    "65",
+                ]]),
+            },
+        ).json()
+        self.assertTrue(unchanged_confirmation["requires_overwrite_confirmation"])
+
+        preview = self.client.post(
+            upload_url,
+            {"file": self.score_file(rows), "preview": "1"},
+        ).json()
+        self.assertTrue(preview["ok"])
+        self.assertEqual(preview["overwrite_count"], 1)
+
+        confirmation_required = self.client.post(
+            upload_url,
+            {"file": self.score_file(rows)},
+        ).json()
+        self.assertTrue(confirmation_required["requires_overwrite_confirmation"])
+        self.assertEqual(confirmation_required["overwrite_count"], 1)
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("65"))
+
+        saved = self.client.post(
+            upload_url,
+            {
+                "file": self.score_file(rows),
+                "confirm_overwrite_count": "1",
+            },
+        ).json()
+        self.assertTrue(saved["ok"])
+        self.assertEqual(saved["saved"], 1)
+        self.assertEqual(saved["overwrite_count"], 1)
+        result.refresh_from_db()
+        self.assertEqual(result.score, Decimal("80"))
+        audit = AuditLog.objects.get(
+            action=AuditLog.Action.EDIT,
+            object_type="training.FinalCourseResult",
+            object_id=str(result.pk),
+        )
+        self.assertEqual(Decimal(audit.old_values["score"]), Decimal("65"))
+        self.assertEqual(Decimal(audit.new_values["score"]), Decimal("80"))
+
+    def test_upload_can_record_absent_without_a_score(self):
+        buffer = StringIO(newline="")
+        writer = csv.writer(buffer)
+        writer.writerow(["Lớp", "Họ và tên", "Số CCCD", "Điểm cuối khóa", "Vắng"])
+        writer.writerow([
+            self.training_class.name,
+            self.learners[0].full_name,
+            self.learners[0].id_number,
+            "",
+            "Vắng",
+        ])
+        uploaded = SimpleUploadedFile(
+            "final-results.csv",
+            buffer.getvalue().encode("utf-8-sig"),
+            content_type="text/csv",
+        )
+        upload_url = reverse(
+            "class-results-upload",
+            args=(self.training_class.pk,),
+        )
+
+        preview = self.client.post(
+            upload_url,
+            {"file": uploaded, "preview": "1"},
+        ).json()
+
+        self.assertTrue(preview["ok"])
+        self.assertIn("Vắng", preview["preview_rows"][0]["preview_text"])
+
+        saved = self.client.post(
+            upload_url,
+            {
+                "file": SimpleUploadedFile(
+                    "final-results.csv",
+                    buffer.getvalue().encode("utf-8-sig"),
+                    content_type="text/csv",
+                ),
+            },
+        ).json()
+
+        self.assertTrue(saved["ok"])
+        result = FinalCourseResult.objects.get(learner=self.learners[0])
+        self.assertTrue(result.is_absent)
+        self.assertIsNone(result.score)
 
     def test_upload_requires_a_matching_class_column(self):
         row = [
@@ -1733,6 +2605,13 @@ class FinalCourseResultTests(TestCase):
         self.assertEqual(upload_page.status_code, 200)
         self.assertContains(upload_page, "Số CCCD")
         self.assertContains(upload_page, "Điểm cuối khóa")
+        self.assertNotContains(upload_page, "Tải file mẫu")
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=self.learners[0],
+            score=None,
+            is_absent=True,
+        )
         class_detail = self.client.get(
             reverse("class-detail", args=(self.training_class.pk,))
         )
@@ -1749,7 +2628,12 @@ class FinalCourseResultTests(TestCase):
         self.assertEqual(sample.status_code, 200)
         sample_content = sample.content.decode("utf-8-sig")
         self.assertIn(
-            "Lớp,Họ và tên,Số CCCD,Điểm cuối khóa",
+            "Lớp,Họ và tên,Số CCCD,Điểm cuối khóa,Vắng",
+            sample_content,
+        )
+        self.assertIn(
+            f"{self.training_class.name},{self.learners[0].full_name},"
+            f"{self.learners[0].id_number},,Vắng",
             sample_content,
         )
         self.assertIn(self.training_class.name, sample_content)
@@ -1790,7 +2674,7 @@ class FinalCourseResultTests(TestCase):
             '<a class="cce-nav-link is-active active" href="/my-classes/" aria-current="page">',
         )
         self.assertFalse(results_page.context["can_finalize"])
-        self.assertNotContains(results_page, "Chốt kết quả")
+        self.assertNotContains(results_page, 'id="openFinalizeResults"')
         self.assertContains(results_page, "Upload file điểm")
         self.assertEqual(
             self.client.post(results_url, {"action": "finalize"}).status_code,
@@ -1878,20 +2762,31 @@ class FinalCourseResultTests(TestCase):
         results_url = reverse("class-results", args=(self.training_class.pk,))
         response = self.client.get(results_url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "readonly")
-        self.assertNotContains(response, "Chốt kết quả")
+        self.assertNotContains(response, "finalResultModal")
+        self.assertNotContains(response, "openFinalResultModal(this)")
+        self.assertNotContains(response, 'id="openFinalizeResults"')
         self.assertNotContains(response, "Lưu điểm")
         self.assertNotContains(response, "Upload file điểm")
 
-        for action in ("finalize", "save", "save_locked"):
+        for action in (
+            "finalize",
+            "save",
+            "save_locked",
+            "save_single",
+            "publish_results",
+            "revoke_results",
+        ):
             with self.subTest(action=action):
+                post_data = {
+                    "action": action,
+                    "reason": "Không được phép",
+                    f"score_{self.learners[0].pk}": "90",
+                }
+                if action == "save_single":
+                    post_data["learner_id"] = self.learners[0].pk
                 response = self.client.post(
                     results_url,
-                    {
-                        "action": action,
-                        "reason": "Không được phép",
-                        f"score_{self.learners[0].pk}": "90",
-                    },
+                    post_data,
                 )
                 self.assertEqual(response.status_code, 403)
 
@@ -3827,8 +4722,53 @@ class ReportListTests(TestCase):
         self.giaoyu, self.pw = _make_giaoyu_user()
         self.client.login(username=self.giaoyu.username, password=self.pw)
 
+    def _create_report_class(self, course, name, start_date):
+        return TrainingClass.objects.create(
+            name=name,
+            course=course,
+            learning_format=TrainingClass.LearningFormat.ONLINE,
+            schedule="Thứ 2, 8:00-10:00",
+            start_date=start_date,
+            max_students=20,
+        )
+
+    def _create_report_enrollment(self, training_class, name, created_on):
+        learner = Learner.objects.create(full_name=name)
+        enrollment = Enrollment.objects.create(
+            training_class=training_class,
+            learner=learner,
+        )
+        Enrollment.objects.filter(pk=enrollment.pk).update(
+            created_at=timezone.make_aware(datetime.combine(created_on, time(12)))
+        )
+        return enrollment
+
     def test_report_list_200_for_giaoyu(self):
-        self.assertEqual(self.client.get(reverse("report-list")).status_code, 200)
+        response = self.client.get(reverse("report-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["period_form"]["period_month"].value(), "")
+        self.assertEqual(response.context["period_form"]["period_year"].value(), "")
+        self.assertIsNone(response.context["period_report"])
+
+    def test_incomplete_month_selection_returns_to_placeholders(self):
+        response = self.client.get(
+            reverse("report-list"),
+            {"period_type": "month", "period_month": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["period_form"]["period_month"].value(), "")
+        self.assertEqual(response.context["period_form"]["period_year"].value(), "")
+        self.assertIsNone(response.context["period_report"])
+        self.assertNotContains(response, "Vui lòng nhập năm.")
+
+        export = self.client.get(
+            reverse("report-export-excel"),
+            {"period_type": "month", "period_month": "1"},
+            follow=True,
+        )
+        self.assertEqual(export.status_code, 200)
+        self.assertIsNone(export.context["period_report"])
 
     def test_report_list_forbidden_for_canbothi(self):
         """Cán bộ thi KHÔNG có quyền xem báo cáo giáo vụ."""
@@ -3845,9 +4785,22 @@ class ReportListTests(TestCase):
     def test_report_list_contains_export_button(self):
         r = self.client.get(reverse("report-list"))
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "Xuất Báo cáo file Excel")
+        self.assertNotContains(r, "Xuất Báo cáo file Excel")
         self.assertContains(r, reverse("report-export-excel"))
+        self.assertContains(r, "Báo cáo theo tuần / tháng")
+        self.assertContains(r, "Xuất báo cáo kỳ này (Excel)")
+        self.assertContains(r, 'name="period_date"')
+        self.assertContains(r, 'name="period_month"')
+        self.assertContains(r, 'type="date"')
+        self.assertNotContains(r, "Xem báo cáo")
         self.assertNotContains(r, "Xuất Excel")
+        year_field = r.context["period_form"]["period_year"]
+        self.assertIn("<select", str(year_field))
+        year_values = [value for value, _ in year_field.field.choices if value]
+        self.assertIn(str(timezone.localdate().year), year_values)
+        self.assertTrue(
+            all(int(year) <= timezone.localdate().year for year in year_values)
+        )
 
     def test_report_export_excel_200_and_valid_workbook(self):
         import openpyxl
@@ -3859,10 +4812,116 @@ class ReportListTests(TestCase):
         wb = openpyxl.load_workbook(io.BytesIO(r.content))
         self.assertIn("Đào tạo - Lớp học", wb.sheetnames)
         self.assertIn("Khóa học - Chương trình", wb.sheetnames)
+        self.assertNotIn("Báo cáo theo kỳ", wb.sheetnames)
         ws_classes = wb["Đào tạo - Lớp học"]
         self.assertEqual(ws_classes["A2"].value, "BÁO CÁO TỔNG HỢP LỚP HỌC ĐÀO TẠO")
         ws_courses = wb["Khóa học - Chương trình"]
         self.assertEqual(ws_courses["A2"].value, "BÁO CÁO TỔNG HỢP CHƯƠNG TRÌNH ĐÀO TẠO")
+
+    def test_monthly_report_includes_first_and_last_day_only(self):
+        import openpyxl
+
+        course = Course.objects.create(name="Báo cáo tháng", pass_threshold=50)
+        february_start = self._create_report_class(
+            course, "REPORT-FEB-START", date(2024, 2, 1)
+        )
+        february_end = self._create_report_class(
+            course, "REPORT-FEB-END", date(2024, 2, 29)
+        )
+        march_start = self._create_report_class(
+            course, "REPORT-MAR-START", date(2024, 3, 1)
+        )
+        earlier_class = self._create_report_class(
+            course, "REPORT-EARLIER", date(2024, 1, 15)
+        )
+        self._create_report_enrollment(february_start, "Tháng đầu", date(2024, 2, 1))
+        self._create_report_enrollment(february_end, "Tháng cuối", date(2024, 2, 29))
+        self._create_report_enrollment(march_start, "Tháng sau", date(2024, 3, 1))
+        self._create_report_enrollment(earlier_class, "Ghi danh tháng", date(2024, 2, 15))
+
+        response = self.client.get(
+            reverse("report-list"),
+            {"period_type": "month", "period_month": "2", "period_year": "2024"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["period_report"],
+            {
+                "label": "Tháng 02/2024",
+                "class_count": 2,
+                "enrollment_count": 3,
+            },
+        )
+        export = self.client.get(
+            reverse("report-export-excel"),
+            {"period_type": "month", "period_month": "2", "period_year": "2024"},
+        )
+        self.assertIn("202402", export["Content-Disposition"])
+        workbook = openpyxl.load_workbook(BytesIO(export.content))
+        worksheet = workbook["Báo cáo theo kỳ"]
+        self.assertIn("THÁNG 02/2024", worksheet["A2"].value)
+        self.assertEqual(worksheet["A6"].value, "2 lớp")
+        self.assertEqual(worksheet["D6"].value, "3 lượt")
+
+    def test_weekly_excel_report_uses_monday_to_sunday_boundaries(self):
+        import openpyxl
+
+        course = Course.objects.create(name="Báo cáo tuần", pass_threshold=50)
+        monday_class = self._create_report_class(
+            course, "REPORT-WEEK-MONDAY", date(2024, 12, 30)
+        )
+        sunday_class = self._create_report_class(
+            course, "REPORT-WEEK-SUNDAY", date(2025, 1, 5)
+        )
+        next_week_class = self._create_report_class(
+            course, "REPORT-NEXT-WEEK", date(2025, 1, 6)
+        )
+        earlier_class = self._create_report_class(
+            course, "REPORT-WEEK-EARLIER", date(2024, 12, 20)
+        )
+        self._create_report_enrollment(monday_class, "Thứ hai", date(2024, 12, 30))
+        self._create_report_enrollment(sunday_class, "Chủ nhật", date(2025, 1, 5))
+        self._create_report_enrollment(next_week_class, "Tuần sau", date(2025, 1, 6))
+        self._create_report_enrollment(earlier_class, "Ghi danh trong tuần", date(2025, 1, 1))
+
+        response = self.client.get(
+            reverse("report-export-excel"),
+            {"period_type": "week", "period_date": "2024-12-30"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("2025W01", response["Content-Disposition"])
+        workbook = openpyxl.load_workbook(BytesIO(response.content))
+        self.assertEqual(workbook.sheetnames, ["Báo cáo theo kỳ"])
+        worksheet = workbook["Báo cáo theo kỳ"]
+        self.assertIn("TUẦN 01/2025", worksheet["A2"].value)
+        self.assertEqual(worksheet["A6"].value, "2 lớp")
+        self.assertEqual(worksheet["D6"].value, "3 lượt")
+        exported_classes = {
+            worksheet.cell(row=row, column=2).value:
+            worksheet.cell(row=row, column=5).value
+            for row in range(9, worksheet.max_row + 1)
+        }
+        self.assertEqual(
+            exported_classes,
+            {
+                "REPORT-WEEK-MONDAY": 1,
+                "REPORT-WEEK-SUNDAY": 1,
+                "REPORT-WEEK-EARLIER": 1,
+            },
+        )
+
+    def test_invalid_period_is_returned_to_report_page_with_error(self):
+        response = self.client.get(
+            reverse("report-export-excel"),
+            {"period_type": "week", "period_date": "9999-12-31"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Không thể xác định tuần cho ngày đã chọn.")
+        self.assertIsNone(response.context["period_report"])
 
     def test_report_list_pagination_10_per_page(self):
         # Create 15 classes to ensure pagination triggers
@@ -4037,6 +5096,29 @@ class CertificateWorkflowTests(TestCase):
                 training_class=self.training_class,
                 learner=learner,
                 certificate_number="CCE-2026-0002",
+                status=Certificate.Status.ISSUED,
+            ).clean()
+
+    def test_certificate_issue_rejects_absent_final_result(self):
+        learner = Learner.objects.create(
+            full_name="Trần Thị Vắng",
+            date_of_birth="2001-02-02",
+            id_number="123456789014",
+            phone="0909123458",
+            email="absent@example.com",
+        )
+        FinalCourseResult.objects.create(
+            training_class=self.training_class,
+            learner=learner,
+            score=None,
+            is_absent=True,
+        )
+
+        with self.assertRaises(ValidationError):
+            Certificate(
+                training_class=self.training_class,
+                learner=learner,
+                certificate_number="CCE-2026-0003",
                 status=Certificate.Status.ISSUED,
             ).clean()
 
@@ -4534,6 +5616,35 @@ class PublicExamRegistrationTests(TestCase):
         self.assertContains(
             response,
             f'href="{reverse("exam-application-public-register")}"',
+        )
+        self.assertContains(response, "Tải phiếu đăng ký (PDF)")
+        self.assertContains(
+            response,
+            reverse("exam-application-public-export-pdf"),
+        )
+
+        pdf_response = self.client.get(
+            reverse("exam-application-public-export-pdf")
+        )
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertIn(
+            "phieu-xac-nhan-dang-ky-du-thi.pdf",
+            pdf_response["Content-Disposition"],
+        )
+        self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
+        self.assertRedirects(
+            self.client.get(reverse("exam-application-public-export-pdf")),
+            reverse("exam-application-public-register"),
+        )
+
+    def test_registration_export_requires_a_successful_registration_session(self):
+        response = self.client.get(
+            reverse("exam-application-public-export-pdf")
+        )
+        self.assertRedirects(
+            response,
+            reverse("exam-application-public-register"),
         )
 
     def test_registration_calendar_value_is_parsed_into_a_date(self):

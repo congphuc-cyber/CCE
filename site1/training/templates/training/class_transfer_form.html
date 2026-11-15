@@ -22,7 +22,7 @@
     <p class="cce-form-help">
       Danh sách lớp hiển thị sĩ số và trạng thái. Lớp đã đóng, lớp đầy hoặc học viên đã có trong lớp mới sẽ bị từ chối; lớp hiện tại được giữ nguyên.
     </p>
-    {% include "training/partials/form_fields.html" with form=form submit_label="Xác nhận chuyển lớp" cancel_url=cancel_url %}
+    {% include "training/partials/form_fields.html" with form=form submit_label="Xác nhận chuyển lớp" cancel_url=cancel_url hide_capacity_error=show_full_capacity_popup %}
   {% else %}
     <div class="cce-empty-state">
       <p>Chưa có học viên ghi danh để chuyển lớp.</p>
@@ -30,4 +30,96 @@
     </div>
   {% endif %}
 </section>
+
+{% if has_enrollments %}
+  {{ full_destination_class_ids|json_script:"full-destination-class-ids" }}
+  <div class="cce-modal-backdrop{% if show_full_capacity_popup %} is-open{% endif %}"
+       id="class-transfer-capacity-modal"
+       role="alertdialog"
+       aria-modal="true"
+       aria-hidden="{% if show_full_capacity_popup %}false{% else %}true{% endif %}"
+       aria-labelledby="class-transfer-capacity-title"
+       aria-describedby="class-transfer-capacity-description">
+    <section class="cce-modal-dialog">
+      <header class="cce-modal-header">
+        <h2 class="cce-modal-title" id="class-transfer-capacity-title">
+          Lớp mới đã đủ sĩ số
+        </h2>
+      </header>
+      <div class="cce-modal-body">
+        <p id="class-transfer-capacity-description">
+          Lớp <strong id="class-transfer-capacity-name">{{ capacity_class_label }}</strong>
+          đã đạt tối đa sĩ số và không thể nhận thêm học viên. Hãy chọn lớp khác để tiếp tục.
+        </p>
+      </div>
+      <footer class="cce-modal-footer">
+        <button class="cce-btn cce-btn-primary" id="class-transfer-capacity-close" type="button">
+          Chọn lớp khác
+        </button>
+      </footer>
+    </section>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  {% if has_enrollments %}
+    <script>
+      (function() {
+        var destinationSelect = document.getElementById('id_destination_class');
+        var sourceSelect = document.getElementById('id_source_class');
+        var fullClassIds = JSON.parse(
+          document.getElementById('full-destination-class-ids').textContent
+        );
+        var modal = document.getElementById('class-transfer-capacity-modal');
+        var className = document.getElementById('class-transfer-capacity-name');
+        var closeButton = document.getElementById('class-transfer-capacity-close');
+
+        function openModal() {
+          var selectedOption = destinationSelect.options[destinationSelect.selectedIndex];
+          if (!selectedOption || destinationSelect.value === sourceSelect.value
+              || fullClassIds.indexOf(destinationSelect.value) === -1) {
+            return;
+          }
+          className.textContent = selectedOption.textContent.trim();
+          modal.classList.add('is-open');
+          modal.setAttribute('aria-hidden', 'false');
+          closeButton.focus();
+        }
+
+        function closeModal() {
+          modal.classList.remove('is-open');
+          modal.setAttribute('aria-hidden', 'true');
+          destinationSelect.focus();
+        }
+
+        destinationSelect.addEventListener('change', openModal);
+        closeButton.addEventListener('click', closeModal);
+        modal.addEventListener('click', function(event) {
+          if (event.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', function(event) {
+          if (!modal.classList.contains('is-open')) return;
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closeModal();
+          } else if (event.key === 'Tab') {
+            event.preventDefault();
+            closeButton.focus();
+          }
+        });
+
+        sourceSelect.addEventListener('change', function() {
+          window.location.search = sourceSelect.value
+            ? '?source_class=' + encodeURIComponent(sourceSelect.value)
+            : '';
+        });
+
+        if (modal.classList.contains('is-open')) {
+          openModal();
+        }
+      })();
+    </script>
+  {% endif %}
 {% endblock %}

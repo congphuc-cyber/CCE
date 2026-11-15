@@ -64,7 +64,7 @@ def ui_navigation(request):
         "sidebar_items": items,
         "sidebar_groups": group_menu_items(
             items,
-            include_empty=request.user.is_superuser or "Quản trị viên" in roles,
+            include_empty="Quản trị viên" in roles,
         ),
         "user_roles": roles,
         "active_menu": _active_menu(request),

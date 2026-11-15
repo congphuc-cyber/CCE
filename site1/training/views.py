@@ -19,7 +19,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
-from training.access import all_features, role_feature_states, user_has_feature
+from training.access import (
+    REQUIRED_ADMIN_FEATURES,
+    all_features,
+    role_feature_states,
+    user_has_feature,
+)
 from training.audit import audit_values_for_display, record_audit, snapshot_instance
 from training.forms import (
     ClassAssignmentForm,
@@ -131,8 +136,6 @@ def get_home(request):
             return redirect("dashboard")
         if user_has_feature(request.user, "my-classes"):
             return redirect("my-class-list")
-        if request.user.is_superuser:
-            return redirect("admin:index")
         return redirect("profile")
     registration_periods = (
         ExamPeriod.objects.filter(
@@ -160,9 +163,7 @@ def permission_denied(request, exception=None):
 
 def _can_manage_classes(user):
     roles = roles_for_user(user)
-    return user.is_superuser or (
-        bool(set(roles) - {"Giáo viên"}) and user_has_feature(user, "classes")
-    )
+    return bool(set(roles) - {"Giáo viên"}) and user_has_feature(user, "classes")
 
 
 class CCELoginView(LoginView):
@@ -177,8 +178,6 @@ class CCELoginView(LoginView):
             return reverse("dashboard")
         if user_has_feature(self.request.user, "my-classes"):
             return reverse("my-class-list")
-        if self.request.user.is_superuser:
-            return reverse("admin:index")
         if user_has_feature(self.request.user, "accounts"):
             return reverse("admin:auth_user_changelist")
         if user_has_feature(self.request.user, "permissions"):
@@ -500,7 +499,11 @@ class CertificateIssueForm(forms.Form):
             result = FinalCourseResult.objects.filter(training_class=training_class, learner=learner).first()
             if result is None:
                 raise forms.ValidationError("Học viên chưa có kết quả cuối khóa trong lớp này.")
-            if result.score < training_class.course.pass_threshold:
+            if (
+                result.is_absent
+                or result.score is None
+                or result.score < training_class.course.pass_threshold
+            ):
                 raise forms.ValidationError("Học viên chưa đạt điều kiện cấp chứng nhận.")
             if Certificate.objects.filter(training_class=training_class, learner=learner, status=Certificate.Status.ISSUED).exists():
                 raise forms.ValidationError("Học viên này đã có chứng nhận còn hiệu lực trong lớp.")
@@ -1332,6 +1335,21 @@ def class_transfer(request):
             return redirect("class-detail", class_id=destination_class.pk)
 
     source_class = form.cleaned_data.get("source_class") if form.is_bound else None
+    destination_class = (
+        form.cleaned_data.get("destination_class") if form.is_bound else None
+    )
+    destination_errors = [
+        str(error) for error in form.errors.get("destination_class", [])
+    ]
+    show_full_capacity_popup = (
+        "Lớp mới đã đạt sĩ số tối đa." in destination_errors
+    )
+    destination_classes = form.fields["destination_class"].queryset
+    full_destination_class_ids = [
+        str(item.pk)
+        for item in destination_classes
+        if item._enrollment_count >= item.max_students
+    ]
     return render(
         request,
         "training/class_transfer_form.html",
@@ -1345,6 +1363,13 @@ def class_transfer(request):
             ],
             "form": form,
             "has_enrollments": Enrollment.objects.exists(),
+            "full_destination_class_ids": full_destination_class_ids,
+            "show_full_capacity_popup": show_full_capacity_popup,
+            "capacity_class_label": (
+                form.fields["destination_class"].label_from_instance(destination_class)
+                if destination_class and show_full_capacity_popup
+                else ""
+            ),
             "cancel_url": (
                 reverse("class-detail", args=(source_class.pk,))
                 if source_class
@@ -1515,6 +1540,10 @@ def role_permissions(request):
                 {
                     "group": group,
                     "allowed": states[group.name][feature["key"]],
+                    "locked": (
+                        group.name == "Quản trị viên"
+                        and feature["key"] in REQUIRED_ADMIN_FEATURES
+                    ),
                     "input_value": f"{group.pk}:{feature['key']}",
                 }
                 for group in groups
@@ -1527,18 +1556,41 @@ def role_permissions(request):
         selected = set(request.POST.getlist("permissions"))
         new_states = {
             group.name: {
-                feature["key"]: f"{group.pk}:{feature['key']}" in selected
+                feature["key"]: (
+                    group.name == "Quản trị viên"
+                    and feature["key"] in REQUIRED_ADMIN_FEATURES
+                ) or f"{group.pk}:{feature['key']}" in selected
                 for feature in features
             }
             for group in groups
         }
         with transaction.atomic():
+            saved_denials = {
+                (group_id, feature): deny_overrides
+                for group_id, feature, deny_overrides in RoleFeaturePermission.objects.filter(
+                    group__in=groups
+                ).values_list("group_id", "feature", "deny_overrides")
+            }
             for group in groups:
                 for feature in features:
+                    was_allowed = states[group.name][feature["key"]]
+                    is_allowed = new_states[group.name][feature["key"]]
+                    was_denied = saved_denials.get(
+                        (group.pk, feature["key"]),
+                        False,
+                    )
+                    deny_overrides = (
+                        False
+                        if is_allowed
+                        else was_allowed or was_denied
+                    )
                     RoleFeaturePermission.objects.update_or_create(
                         group=group,
                         feature=feature["key"],
-                        defaults={"allowed": new_states[group.name][feature["key"]]},
+                        defaults={
+                            "allowed": is_allowed,
+                            "deny_overrides": deny_overrides,
+                        },
                     )
             administrator_group = next(
                 group for group in groups if group.name == "Quản trị viên"
@@ -1573,6 +1625,10 @@ def role_permissions(request):
                     {
                         "group": group,
                         "allowed": states[group.name][feature["key"]],
+                        "locked": (
+                            group.name == "Quản trị viên"
+                            and feature["key"] in REQUIRED_ADMIN_FEATURES
+                        ),
                         "input_value": f"{group.pk}:{feature['key']}",
                     }
                     for group in groups

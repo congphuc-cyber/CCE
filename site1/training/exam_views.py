@@ -2,8 +2,10 @@
 # =============================================================================
 # EXAM VIEWS — Pha 1: Đợt thi + Hồ sơ đăng ký
 # =============================================================================
+import calendar
 import csv
 import io
+from datetime import date, timedelta
 
 from django import forms as django_forms
 from django.contrib import messages
@@ -21,6 +23,7 @@ from training.access import user_has_feature
 from training.audit import record_audit, snapshot_instance
 from training.models import AuditLog, ExamApplication, ExamPeriod
 from training.pagination import PAGE_SIZE
+from training.scheduling import EXAM_SESSION_CHOICES
 
 
 # ── Forms ────────────────────────────────────────────────────────────────────
@@ -745,16 +748,7 @@ from training.models import ExamRoom, ExamRoomAssignment, ExamScore
 
 SESSION_CHOICES = [
     ("", "-- Chọn khung giờ ca thi --"),
-    ("Ca 1 — Sáng (07:30–09:30)", "Ca 1 — Sáng (07:30–09:30)"),
-    ("Ca 2 — Sáng (09:30–11:30)", "Ca 2 — Sáng (09:30–11:30)"),
-    ("Ca 3 — Chiều (13:30–15:30)", "Ca 3 — Chiều (13:30–15:30)"),
-    ("Ca 4 — Chiều (15:30–17:30)", "Ca 4 — Chiều (15:30–17:30)"),
-    ("Ca 5 — Tối (18:00–20:00)", "Ca 5 — Tối (18:00–20:00)"),
-    ("Ca 1 — Sáng (08:00–10:00)", "Ca 1 — Sáng (08:00–10:00)"),
-    ("Ca 2 — Sáng (10:00–12:00)", "Ca 2 — Sáng (10:00–12:00)"),
-    ("Ca 3 — Chiều (14:00–16:00)", "Ca 3 — Chiều (14:00–16:00)"),
-    ("Ca 4 — Chiều (16:00–18:00)", "Ca 4 — Chiều (16:00–18:00)"),
-    ("Ca 5 — Tối (18:30–20:30)", "Ca 5 — Tối (18:30–20:30)"),
+    *EXAM_SESSION_CHOICES,
 ]
 
 
@@ -2371,6 +2365,142 @@ def exam_statistics(request):
 
 # ── Báo cáo giáo vụ ──────────────────────────────────────────────────────────
 
+class ReportPeriodFilterForm(django_forms.Form):
+    period_type = django_forms.ChoiceField(
+        label="Xem theo",
+        choices=(("week", "Tuần"), ("month", "Tháng")),
+        widget=django_forms.Select(attrs={"class": "cce-select"}),
+    )
+    period_date = django_forms.DateField(
+        required=False,
+        label="Chọn một ngày thuộc kỳ",
+        widget=django_forms.DateInput(
+            attrs={"type": "date", "class": "cce-input"}
+        ),
+    )
+    period_month = django_forms.ChoiceField(
+        required=False,
+        choices=(("", "Chọn tháng"),) + tuple(
+            (str(month), f"Tháng {month}") for month in range(1, 13)
+        ),
+        widget=django_forms.Select(attrs={"class": "cce-select"}),
+    )
+    period_year = django_forms.TypedChoiceField(
+        required=False,
+        coerce=int,
+        empty_value=None,
+        choices=(),
+        widget=django_forms.Select(attrs={"class": "cce-select"}),
+    )
+
+    def __init__(self, *args, year_choices, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["period_year"].choices = [("", "Chọn năm"), *year_choices]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        period_type = cleaned_data.get("period_type")
+        selected_date = cleaned_data.get("period_date")
+        if not period_type:
+            return cleaned_data
+
+        if period_type == "week":
+            if not selected_date:
+                return cleaned_data
+            try:
+                iso_year, iso_week, _ = selected_date.isocalendar()
+                start_date = date.fromisocalendar(iso_year, iso_week, 1)
+                end_date = start_date + timedelta(days=6)
+            except (OverflowError, ValueError):
+                self.add_error("period_date", "Không thể xác định tuần cho ngày đã chọn.")
+                return cleaned_data
+            cleaned_data["period_label"] = (
+                f"Tuần {iso_week:02d}/{iso_year} "
+                f"({start_date:%d/%m/%Y} – {end_date:%d/%m/%Y})"
+            )
+            cleaned_data["period_token"] = f"{iso_year}-W{iso_week:02d}"
+        elif period_type == "month":
+            month_value = cleaned_data.get("period_month")
+            year = cleaned_data.get("period_year")
+            if not month_value or year is None:
+                return cleaned_data
+            month = int(month_value)
+            start_date = date(year, month, 1)
+            end_date = date(year, month, calendar.monthrange(year, month)[1])
+            cleaned_data["period_label"] = f"Tháng {month:02d}/{year}"
+            cleaned_data["period_token"] = f"{year:04d}-{month:02d}"
+        else:
+            return cleaned_data
+
+        cleaned_data["start_date"] = start_date
+        cleaned_data["end_date"] = end_date
+        return cleaned_data
+
+
+def _report_period_filter(request):
+    from django.db.models import Min
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    defaults = {
+        "period_type": "month",
+        "period_date": today.isoformat(),
+        "period_month": "",
+        "period_year": "",
+    }
+    filter_keys = ("period_type", "period_date", "period_month", "period_year")
+    has_period_filter = any(key in request.GET for key in filter_keys)
+    form_data = None
+    initial = defaults
+    if has_period_filter:
+        form_data = request.GET.copy()
+        if (
+            form_data.get("period_type") == "month"
+            and (not form_data.get("period_month") or not form_data.get("period_year"))
+        ):
+            legacy_date = form_data.get("period_date")
+            if legacy_date and not form_data.get("period_month") and not form_data.get("period_year"):
+                try:
+                    selected_month = date.fromisoformat(legacy_date)
+                except ValueError:
+                    form_data["period_month"] = ""
+                    form_data["period_year"] = ""
+                else:
+                    form_data["period_month"] = str(selected_month.month)
+                    form_data["period_year"] = str(selected_month.year)
+            else:
+                form_data["period_month"] = ""
+                form_data["period_year"] = ""
+
+    class_bounds = TrainingClass.objects.aggregate(
+        min_start_date=Min("start_date"),
+    )
+    enrollment_bounds = Enrollment.objects.aggregate(
+        min_created_at=Min("created_at"),
+    )
+    available_dates = [
+        value
+        for value in (
+            class_bounds["min_start_date"],
+            enrollment_bounds["min_created_at"],
+        )
+        if value is not None
+    ]
+    years = [today.year - 20, today.year]
+    years.extend(value.year for value in available_dates)
+
+    year_choices = [
+        (str(year), str(year))
+        for year in range(min(years), today.year + 1)
+    ]
+    form = (
+        ReportPeriodFilterForm(form_data, year_choices=year_choices)
+        if has_period_filter
+        else ReportPeriodFilterForm(year_choices=year_choices, initial=initial)
+    )
+    return form, has_period_filter
+
+
 @login_required
 def report_list(request):
     """Báo cáo tổng hợp giáo vụ: lớp học, đào tạo."""
@@ -2382,6 +2512,26 @@ def report_list(request):
 
     from django.db.models import Count
     from training.models import Course
+
+    period_form, _ = _report_period_filter(request)
+    period_is_valid = period_form.is_valid()
+    selected_period_type = period_form["period_type"].value() or "month"
+    period_form.fields["period_date"].widget.attrs["disabled"] = selected_period_type != "week"
+    period_form.fields["period_month"].widget.attrs["disabled"] = selected_period_type != "month"
+    period_form.fields["period_year"].widget.attrs["disabled"] = selected_period_type != "month"
+
+    period_report = None
+    if period_is_valid and "start_date" in period_form.cleaned_data:
+        period_data = period_form.cleaned_data
+        period_report = {
+            "label": period_data["period_label"],
+            "class_count": TrainingClass.objects.filter(
+                start_date__range=(period_data["start_date"], period_data["end_date"])
+            ).count(),
+            "enrollment_count": Enrollment.objects.filter(
+                created_at__date__range=(period_data["start_date"], period_data["end_date"])
+            ).count(),
+        }
 
     classes_qs = TrainingClass.objects.select_related("course").annotate(
         enrollment_count=Count("enrollments"),
@@ -2407,7 +2557,144 @@ def report_list(request):
         "total_enrolled_learners": total_enrolled_learners,
         "open_classes_count": open_classes_count,
         "total_courses_count": total_courses_count,
+        "period_form": period_form,
+        "period_report": period_report,
     })
+
+
+def _report_period_excel_response(request, period_data):
+    import openpyxl
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Báo cáo theo kỳ"
+    worksheet.sheet_view.showGridLines = True
+
+    navy_header_fill = PatternFill(start_color="172B3A", end_color="172B3A", fill_type="solid")
+    kpi_bg_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    font_org = Font(name="Calibri", size=10, bold=True, color="005B94")
+    font_title = Font(name="Calibri", size=16, bold=True, color="172B3A")
+    font_subtitle = Font(name="Calibri", size=10, italic=True, color="64748B")
+    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    font_data = Font(name="Calibri", size=11, color="0F172A")
+    font_kpi_label = Font(name="Calibri", size=9, bold=True, color="475569")
+    font_kpi_value = Font(name="Calibri", size=13, bold=True, color="005B94")
+    thin_side = Side(border_style="thin", color="CBD5E1")
+    cell_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+    align_header = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    worksheet.merge_cells("A1:G1")
+    worksheet.merge_cells("A2:G2")
+    worksheet.merge_cells("A3:G3")
+    worksheet["A1"] = "TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN — ĐH BÁCH KHOA ĐHQG-HCM"
+    worksheet["A1"].font = font_org
+    worksheet["A2"] = f"BÁO CÁO GIÁO VỤ — {period_data['period_label'].upper()}"
+    worksheet["A2"].font = font_title
+    creator_name = request.user.get_full_name() or request.user.username
+    now_str = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M:%S")
+    worksheet["A3"] = f"Thời gian xuất: {now_str}   |   Người xuất: {creator_name}"
+    worksheet["A3"].font = font_subtitle
+
+    period_start = period_data["start_date"]
+    period_end = period_data["end_date"]
+    classes_started = TrainingClass.objects.filter(
+        start_date__range=(period_start, period_end)
+    )
+    period_enrollments = Enrollment.objects.filter(
+        created_at__date__range=(period_start, period_end)
+    )
+    for start_column, end_column, label, value in (
+        ("A", "B", "LỚP KHAI GIẢNG TRONG KỲ", f"{classes_started.count()} lớp"),
+        ("D", "E", "LƯỢT GHI DANH TRONG KỲ", f"{period_enrollments.count()} lượt"),
+    ):
+        label_range = f"{start_column}5:{end_column}5"
+        value_range = f"{start_column}6:{end_column}6"
+        worksheet.merge_cells(label_range)
+        worksheet.merge_cells(value_range)
+        for cell_range, font in (
+            (label_range, font_kpi_label),
+            (value_range, font_kpi_value),
+        ):
+            for row in worksheet[cell_range]:
+                for cell in row:
+                    cell.font = font
+                    cell.fill = kpi_bg_fill
+                    cell.border = cell_border
+                    cell.alignment = align_center
+        worksheet[f"{start_column}5"] = label
+        worksheet[f"{start_column}6"] = value
+
+    period_classes = TrainingClass.objects.select_related("course").annotate(
+        period_enrollment_count=Count(
+            "enrollments",
+            filter=Q(enrollments__created_at__date__range=(period_start, period_end)),
+        ),
+    ).filter(
+        Q(start_date__range=(period_start, period_end))
+        | Q(enrollments__created_at__date__range=(period_start, period_end))
+    ).distinct().order_by("course__name", "name")
+    headers = [
+        ("STT", 6),
+        ("Mã / Tên lớp", 28),
+        ("Khóa học / Chương trình", 32),
+        ("Ngày khai giảng", 16),
+        ("Lượt ghi danh trong kỳ", 22),
+        ("Sĩ số tối đa", 14),
+        ("Trạng thái", 16),
+    ]
+    header_row = 8
+    worksheet.row_dimensions[header_row].height = 28
+    for column, (header, _) in enumerate(headers, start=1):
+        cell = worksheet.cell(row=header_row, column=column, value=header)
+        cell.font = font_header
+        cell.fill = navy_header_fill
+        cell.alignment = align_header
+        cell.border = cell_border
+
+    for index, cls in enumerate(period_classes, start=1):
+        row = header_row + index
+        row_fill = zebra_fill if index % 2 == 0 else white_fill
+        values = (
+            (index, align_center),
+            (cls.name, align_left),
+            (cls.course.name if cls.course else "—", align_left),
+            (cls.start_date.strftime("%d/%m/%Y") if cls.start_date else "—", align_center),
+            (cls.period_enrollment_count, align_right),
+            (cls.max_students, align_right),
+            (
+                "Đang mở" if cls.status == TrainingClass.Status.OPEN else "Đã đóng",
+                align_center,
+            ),
+        )
+        for column, (value, alignment) in enumerate(values, start=1):
+            cell = worksheet.cell(row=row, column=column, value=value)
+            cell.font = font_data
+            cell.fill = row_fill
+            cell.alignment = alignment
+            cell.border = cell_border
+
+    for column, (_, width) in enumerate(headers, start=1):
+        worksheet.column_dimensions[get_column_letter(column)].width = width
+
+    timestamp = timezone.localtime(timezone.now()).strftime("%Y%m%d_%H%M%S")
+    filename = (
+        f"Bao_cao_giao_vu_CCE_{period_data['period_token'].replace('-', '')}_{timestamp}.xlsx"
+    )
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    workbook.save(response)
+    return response
 
 
 @login_required
@@ -2416,13 +2703,22 @@ def report_export_excel(request):
     if not user_has_feature(request.user, "reports"):
         raise PermissionDenied
 
+    from django.db.models import Count
+    from django.utils import timezone
+    from training.models import Course
+
+    period_form, has_period_filter = _report_period_filter(request)
+    period_data = None
+    if has_period_filter:
+        if not period_form.is_valid() or "start_date" not in period_form.cleaned_data:
+            return redirect(f"{reverse('report-list')}?{request.GET.urlencode()}")
+        period_data = period_form.cleaned_data
+        return _report_period_excel_response(request, period_data)
+
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from django.http import HttpResponse
-    from django.utils import timezone
-    from django.db.models import Count
-    from training.models import Course
 
     wb = openpyxl.Workbook()
 

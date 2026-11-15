@@ -62,6 +62,7 @@
                       value="{{ cell.input_value }}"
                       aria-label="{{ cell.group.name }}: {{ row.feature.label }}"
                       {% if cell.allowed %}checked{% endif %}
+                      {% if cell.locked %}disabled aria-disabled="true" title="Quyền bắt buộc của vai trò Quản trị viên"{% endif %}
                     >
                   </label>
                 </td>
@@ -74,7 +75,8 @@
 
     <div class="cce-permissions-footer">
       <p class="cce-permissions-guidance">
-        <strong>Quy tắc bảo mật:</strong> Bỏ chọn ô tương ứng sẽ ẩn menu và từ chối mọi yêu cầu truy cập trực tiếp.
+        <strong>Quy tắc bảo mật:</strong> Bỏ chọn một chức năng sẽ từ chối truy cập cho người dùng thuộc vai trò đó, kể cả khi vai trò khác đang cho phép. Tài khoản quản trị cũng chịu quyền của vai trò Quản trị viên.
+        Ba quyền <strong>Tài khoản</strong>, <strong>Phân quyền</strong> và <strong>Nhật ký thao tác</strong> của vai trò Quản trị viên luôn được bật.
       </p>
       <button class="cce-btn cce-btn-primary cce-permissions-save" type="submit">Lưu ma trận phân quyền</button>
     </div>

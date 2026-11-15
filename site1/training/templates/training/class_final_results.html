@@ -9,6 +9,16 @@
 {% endblock %}
 
 {% block page_actions %}
+  {% if can_publish_results %}
+    <button class="cce-btn cce-btn-accent" id="openPublishResults"
+            type="button" onclick="openPublishResultsModal()">
+      Công bố kết quả
+    </button>
+  {% endif %}
+  {% if can_revoke_results %}
+    <button class="cce-btn cce-btn-danger" type="button"
+            onclick="openRevokeResultsModal()">Thu hồi công bố</button>
+  {% endif %}
   {% if can_upload_results %}
     <a class="cce-btn cce-btn-secondary" href="{{ upload_url }}">
       <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
@@ -40,7 +50,7 @@
   {% else %}
     <div class="cce-alert cce-alert-info" role="status" style="margin-bottom:var(--space-4);">
       <span class="material-symbols-outlined" aria-hidden="true">info</span>
-      Để trống ô điểm nếu không muốn thay đổi điểm đã lưu. Có thể sửa điểm trước khi chốt kết quả.
+      Dùng nút Thao tác để nhập hoặc sửa điểm, hoặc đánh dấu Vắng. Bỏ chọn Vắng mà không nhập điểm sẽ chuyển kết quả về Chưa nhập.
     </div>
   {% endif %}
 
@@ -55,41 +65,26 @@
       <div>
         <h2 class="cce-card-title" id="final-results-heading">Bảng điểm lớp</h2>
         <p style="margin:var(--space-1) 0 0; color:var(--c-text-muted); font-size:var(--font-size-sm);">
-          {% if missing_score_count %}
-            Còn {{ missing_score_count }} học viên đang ghi danh chưa có điểm.
+          {% if missing_result_count %}
+            Còn {{ missing_result_count }} học viên đang ghi danh chưa có kết quả (điểm hoặc vắng).
           {% else %}
-            Tất cả học viên đang ghi danh đã có điểm.
+            Tất cả học viên đang ghi danh đã có kết quả (điểm hoặc vắng).
           {% endif %}
         </p>
       </div>
     </div>
 
-    <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="{% if final_results_locked %}save_locked{% else %}save{% endif %}">
-
-      {% if final_results_locked and can_manage_results %}
-        <div class="cce-form-group" style="padding:var(--space-4);">
-          <label class="cce-label" for="final-results-reason">
-            Lý do sửa điểm <span class="cce-required" aria-hidden="true">*</span>
-          </label>
-          <textarea class="cce-textarea" id="final-results-reason" name="reason"
-                    rows="3" required aria-describedby="final-results-reason-help">{{ reason_value }}</textarea>
-          <p class="cce-form-help" id="final-results-reason-help">
-            Lý do sẽ được ghi lại trong nhật ký thao tác.
-          </p>
-        </div>
-      {% endif %}
-
-      <div class="cce-table-wrap">
-        <table class="cce-table">
+    <div class="cce-table-wrap">
+      <table class="cce-table cce-final-results-table">
           <thead>
             <tr>
               <th scope="col">Họ và tên</th>
               <th scope="col">Số CCCD</th>
-              <th scope="col">Điểm cuối khóa (0–100)</th>
-              <th scope="col">Kết quả</th>
-              <th scope="col">Kiểm tra</th>
+              <th scope="col" style="width:120px;">Điểm cuối khóa (0–100)</th>
+              <th scope="col" style="min-width:120px; text-align:center;">Kết quả</th>
+              <th scope="col" style="min-width:120px; text-align:center;">Chốt kết quả</th>
+              <th scope="col" style="min-width:120px; text-align:center;">Công bố</th>
+              <th scope="col" style="min-width:120px; text-align:right;">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -97,60 +92,394 @@
               <tr>
                 <td><strong>{{ row.learner.full_name }}</strong></td>
                 <td>{% if row.learner.id_number %}<code>{{ row.learner.id_number }}</code>{% else %}—{% endif %}</td>
-                <td>
-                  <input class="cce-input" type="number" inputmode="decimal"
-                         id="{{ row.input_id }}" name="score_{{ row.learner.pk }}"
-                         min="0" max="100" step="0.01"
-                         value="{{ row.score_value }}"
-                         {% if not can_edit_scores %}readonly aria-readonly="true"{% endif %}
-                         aria-label="Điểm cuối khóa của {{ row.learner.full_name }}">
+                <td style="text-align:center;">
+                  {% if row.is_absent %}
+                    <span style="font-family:var(--font-family-mono); color:var(--c-text-muted);">—</span>
+                  {% elif row.score_value %}
+                    <span style="font-family:var(--font-family-mono); font-size:var(--font-size-md); font-weight:var(--font-weight-extrabold); color:{% if row.outcome == 'Đạt' %}var(--c-success){% else %}var(--c-danger){% endif %};">
+                      {{ row.score_value }}
+                    </span>
+                  {% else %}
+                    <span style="font-family:var(--font-family-mono); color:var(--c-text-muted);">—</span>
+                  {% endif %}
                 </td>
-                <td>{{ row.outcome }}</td>
-                <td>
-                  {% if row.error %}
-                    <span class="cce-form-error">{{ row.error }}</span>
+                <td style="text-align:center;">
+                  {% if row.is_absent %}
+                    <span class="cce-badge cce-badge-duplicate">Vắng</span>
+                  {% elif row.outcome == "Đạt" %}
+                    <span class="cce-badge cce-badge-valid">Đạt</span>
+                  {% elif row.outcome == "Không đạt" %}
+                    <span class="cce-badge cce-badge-duplicate">Không đạt</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-new">Chưa nhập</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:center;">
+                  {% if final_results_locked %}
+                    <span class="cce-badge cce-badge-closed">Đã chốt</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-draft">Chưa chốt</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:center;">
+                  {% if row.is_published %}
+                    <span class="cce-badge cce-badge-published">Đã công bố</span>
+                  {% else %}
+                    <span class="cce-badge cce-badge-draft">Chưa</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:right; white-space:nowrap;">
+                  {% if can_edit_scores %}
+                    <button type="button" class="cce-table-btn cce-table-btn-outline"
+                            onclick="openFinalResultModal(this)"
+                            data-learner-id="{{ row.learner.pk }}"
+                            data-learner-name="{{ row.learner.full_name }}"
+                            data-current-score="{{ row.score_value }}"
+                            data-is-absent="{{ row.is_absent|yesno:'true,false' }}"
+                            title="Nhập kết quả cho {{ row.learner.full_name }}">
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      <span>Nhập kết quả</span>
+                    </button>
                   {% else %}
                     <span style="color:var(--c-text-muted);">—</span>
+                  {% endif %}
+                  {% if row.error %}
+                    <span class="cce-form-error">{{ row.error }}</span>
                   {% endif %}
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="5" class="cce-empty-state" style="padding:var(--space-8);">
+                <td colspan="7" class="cce-empty-state" style="padding:var(--space-8);">
                   Lớp chưa có học viên ghi danh hoặc kết quả cần xem.
                 </td>
               </tr>
             {% endfor %}
           </tbody>
-        </table>
-      </div>
+      </table>
+    </div>
 
-      {% include "training/partials/pagination.html" with page_obj=page_obj count_label="học viên" %}
-
-      {% if rows and can_edit_scores %}
-        <div class="cce-form-actions" style="padding:var(--space-4); display:flex; gap:var(--space-3); flex-wrap:wrap;">
-          <button class="cce-btn cce-btn-primary" type="submit">Lưu điểm</button>
-          {% if final_results_locked %}
-            <span class="cce-form-help">Sau khi lưu, kết quả vẫn giữ trạng thái đã chốt.</span>
-          {% endif %}
-        </div>
-      {% endif %}
-    </form>
+    {% include "training/partials/pagination.html" with page_obj=page_obj count_label="học viên" %}
   </section>
 
+  {% if can_publish_results %}
+    <div class="cce-modal-backdrop" id="publishResultsModal"
+         role="alertdialog" aria-modal="true"
+         aria-labelledby="publishResultsModalTitle"
+         aria-describedby="publishResultsModalDescription">
+      <section class="cce-modal-dialog">
+        <div class="cce-modal-header">
+          <h2 class="cce-modal-title" id="publishResultsModalTitle">
+            Xác nhận công bố kết quả
+          </h2>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  onclick="closePublishResultsModal()" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="cce-modal-body">
+          <p id="publishResultsModalDescription">
+            Công bố kết quả cuối khóa cho toàn bộ lớp
+            <strong>{{ training_class.name }}</strong>?
+          </p>
+        </div>
+        <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="publish_results">
+          <div class="cce-modal-footer">
+            <button type="button" id="cancelPublishResults"
+                    class="cce-btn cce-btn-secondary"
+                    onclick="closePublishResultsModal()">Hủy</button>
+            <button type="submit" class="cce-btn cce-btn-danger">
+              Xác nhận công bố
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  {% endif %}
+
+  {% if can_revoke_results %}
+    <div class="cce-modal-backdrop{% if publication_modal_data %} is-open{% endif %}"
+         id="revokeResultsModal" role="dialog" aria-modal="true"
+         aria-labelledby="revokeResultsModalTitle">
+      <div class="cce-modal-dialog">
+        <div class="cce-modal-header">
+          <h2 class="cce-modal-title" id="revokeResultsModalTitle">Thu hồi công bố kết quả</h2>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  onclick="closeRevokeResultsModal()" aria-label="Đóng">&times;</button>
+        </div>
+        <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="revoke_results">
+          <div class="cce-modal-body">
+            <p>Thao tác này sẽ thu hồi công bố kết quả của toàn bộ lớp.</p>
+            <label class="cce-label" for="revokeResultsReason">
+              Lý do thu hồi <span class="cce-required" aria-hidden="true">*</span>
+            </label>
+            <textarea class="cce-textarea" id="revokeResultsReason" name="reason"
+                      rows="3" required>{{ publication_modal_data.reason|default:'' }}</textarea>
+            {% if publication_modal_data.error %}
+              <p class="cce-form-error" role="alert">{{ publication_modal_data.error }}</p>
+            {% endif %}
+          </div>
+          <div class="cce-modal-footer">
+            <button type="button" class="cce-btn cce-btn-secondary"
+                    onclick="closeRevokeResultsModal()">Hủy</button>
+            <button type="submit" class="cce-btn cce-btn-danger">Thu hồi công bố</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if can_edit_scores %}
+    <div class="cce-modal-backdrop{% if modal_data %} is-open{% endif %}"
+         id="finalResultModal" role="dialog" aria-modal="true"
+         aria-labelledby="finalResultModalTitle"
+         style="{% if modal_data %}display:flex;{% else %}display:none;{% endif %}">
+      <div class="cce-modal-dialog" style="max-width:500px;">
+        <div class="cce-modal-header">
+          <h2 class="cce-modal-title" id="finalResultModalTitle">Kết quả cuối khóa</h2>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  onclick="closeFinalResultModal()" aria-label="Đóng">&times;</button>
+        </div>
+        <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_single">
+          <input type="hidden" name="learner_id" id="finalResultLearnerId"
+                 value="{{ modal_data.learner_id|default:'' }}">
+          <div class="cce-modal-body" style="display:flex; flex-direction:column; gap:var(--space-4);">
+            <div style="padding:var(--space-3) var(--space-4); background:var(--c-surface-subtle); border-radius:var(--radius-md); border:1px solid var(--c-border-subtle);">
+              <strong id="finalResultLearnerName">{{ modal_data.learner_name|default:"Chọn học viên" }}</strong>
+              <div class="cce-form-help" style="margin-top:var(--space-1);">Thang điểm: 0–100</div>
+            </div>
+
+            {% if final_results_locked and can_manage_results %}
+              <div class="cce-form-group">
+                <label class="cce-label" for="finalResultReason">
+                  Lý do sửa kết quả <span class="cce-required" aria-hidden="true">*</span>
+                </label>
+                <textarea class="cce-textarea" id="finalResultReason" name="reason"
+                          rows="2" required>{{ modal_data.reason|default:'' }}</textarea>
+                <p class="cce-form-help">Lý do sẽ được ghi lại trong nhật ký thao tác.</p>
+              </div>
+            {% endif %}
+
+            {% if modal_data.error %}
+              <div class="cce-alert cce-alert-error" id="finalResultModalError" role="alert">
+                {{ modal_data.error }}
+              </div>
+            {% endif %}
+
+            <div class="cce-form-group" id="finalResultScoreGroup">
+              <label class="cce-label" for="finalResultScore">
+                Điểm cuối khóa <span class="cce-required" aria-hidden="true">*</span>
+              </label>
+              <input type="number" name="score" id="finalResultScore"
+                     class="cce-input" inputmode="decimal" min="0" max="100" step="0.01"
+                     value="{{ modal_data.score_value|default:'' }}"
+                     {% if modal_data.is_absent %}disabled{% endif %}
+                     oninput="if(this.value) document.getElementById('finalResultAbsent').checked=false;">
+            </div>
+
+            <div style="display:flex; align-items:center; gap:var(--space-2);">
+              <input type="checkbox" name="is_absent" id="finalResultAbsent"
+                     value="1" {% if modal_data.is_absent %}checked{% endif %}
+                     onchange="handleFinalResultAbsent(this.checked)"
+                     style="width:18px; height:18px; cursor:pointer;">
+              <label for="finalResultAbsent" style="cursor:pointer;">Vắng</label>
+            </div>
+            <p class="cce-form-help" style="margin-top:calc(-1 * var(--space-3));">
+              Chọn Vắng nếu học viên vắng buổi đánh giá; khi chọn, điểm sẽ bị xóa.
+            </p>
+          </div>
+          <div class="cce-modal-footer">
+            <button type="button" class="cce-btn cce-btn-secondary"
+                    onclick="closeFinalResultModal()">Hủy</button>
+            <button type="submit" class="cce-btn cce-btn-primary">Lưu kết quả</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if can_publish_results %}
+    <script>
+      function openPublishResultsModal() {
+        var modal = document.getElementById("publishResultsModal");
+        modal.classList.add("is-open");
+        document.getElementById("cancelPublishResults").focus();
+      }
+
+      function closePublishResultsModal() {
+        var modal = document.getElementById("publishResultsModal");
+        if (!modal.classList.contains("is-open")) return;
+        modal.classList.remove("is-open");
+        document.getElementById("openPublishResults").focus();
+      }
+
+      document.addEventListener("keydown", function(event) {
+        if (
+          event.key === "Escape"
+          && document.getElementById("publishResultsModal").classList.contains("is-open")
+        ) {
+          closePublishResultsModal();
+        }
+      });
+
+      document.getElementById("publishResultsModal").addEventListener("click", function(event) {
+        if (event.target === this) closePublishResultsModal();
+      });
+    </script>
+  {% endif %}
+
   {% if can_finalize %}
-    <form method="post" action="{{ results_url }}" style="margin-top:var(--space-4);">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="finalize">
-      <button class="cce-btn cce-btn-accent" type="submit"
-              onclick="return confirm('Chốt kết quả cuối khóa cho lớp {{ training_class.name|escapejs }}? Sau khi chốt, mọi chỉnh sửa cần lý do.');">
-        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
-        Chốt kết quả
-      </button>
-    </form>
+    <button class="cce-btn cce-btn-accent" type="button"
+            id="openFinalizeResults"
+            style="margin-top:var(--space-4);"
+            onclick="openFinalizeResultsModal()">
+      <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+      Chốt kết quả
+    </button>
+    <div class="cce-modal-backdrop" id="finalizeResultsModal"
+         role="alertdialog" aria-modal="true"
+         aria-labelledby="finalizeResultsModalTitle"
+         aria-describedby="finalizeResultsModalDescription">
+      <section class="cce-modal-dialog">
+        <div class="cce-modal-header">
+          <h2 class="cce-modal-title" id="finalizeResultsModalTitle">
+            Xác nhận chốt kết quả
+          </h2>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  onclick="closeFinalizeResultsModal()" aria-label="Đóng">&times;</button>
+        </div>
+        <div class="cce-modal-body">
+          <p id="finalizeResultsModalDescription">
+            Chốt kết quả cuối khóa cho lớp <strong>{{ training_class.name }}</strong>?
+          </p>
+          <p style="margin-bottom:0; color:var(--c-text-muted);">
+            Sau khi chốt, mọi chỉnh sửa đều cần lý do.
+          </p>
+        </div>
+        <form method="post" action="{{ results_url }}?page={{ page_obj.number }}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="finalize">
+          <div class="cce-modal-footer">
+            <button type="button" id="cancelFinalizeResults"
+                    class="cce-btn cce-btn-secondary"
+                    onclick="closeFinalizeResultsModal()">Hủy</button>
+            <button type="submit" class="cce-btn cce-btn-danger">
+              Xác nhận chốt
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   {% elif not final_results_locked and training_class.enrolled_count %}
     <p class="cce-form-help" style="margin-top:var(--space-3);">
-      Nhập điểm cho tất cả học viên đang ghi danh để có thể chốt kết quả lớp.
+      Nhập điểm hoặc đánh dấu Vắng cho tất cả học viên đang ghi danh để có thể chốt kết quả lớp.
     </p>
+  {% endif %}
+
+  {% if can_finalize %}
+    <script>
+      function openFinalizeResultsModal() {
+        var modal = document.getElementById("finalizeResultsModal");
+        modal.classList.add("is-open");
+        document.getElementById("cancelFinalizeResults").focus();
+      }
+
+      function closeFinalizeResultsModal() {
+        var modal = document.getElementById("finalizeResultsModal");
+        if (!modal.classList.contains("is-open")) return;
+        modal.classList.remove("is-open");
+        document.getElementById("openFinalizeResults").focus();
+      }
+
+      document.addEventListener("keydown", function(event) {
+        if (
+          event.key === "Escape"
+          && document.getElementById("finalizeResultsModal").classList.contains("is-open")
+        ) {
+          closeFinalizeResultsModal();
+        }
+      });
+
+      document.getElementById("finalizeResultsModal").addEventListener("click", function(event) {
+        if (event.target === this) closeFinalizeResultsModal();
+      });
+    </script>
+  {% endif %}
+
+  {% if can_edit_scores %}
+    <script>
+      function openFinalResultModal(button) {
+        var modal = document.getElementById("finalResultModal");
+        var scoreInput = document.getElementById("finalResultScore");
+        var absentInput = document.getElementById("finalResultAbsent");
+        var isAbsent = button.dataset.isAbsent === "true";
+
+        document.getElementById("finalResultLearnerId").value = button.dataset.learnerId;
+        document.getElementById("finalResultLearnerName").textContent = button.dataset.learnerName;
+        scoreInput.value = button.dataset.currentScore || "";
+        absentInput.checked = isAbsent;
+        handleFinalResultAbsent(isAbsent);
+        var errorBox = document.getElementById("finalResultModalError");
+        if (errorBox) {
+          errorBox.style.display = "none";
+          errorBox.textContent = "";
+        }
+        {% if final_results_locked and can_manage_results %}
+          document.getElementById("finalResultReason").value = "";
+        {% endif %}
+        modal.style.display = "flex";
+        modal.classList.add("is-open");
+        if (!isAbsent) {
+          scoreInput.focus();
+          scoreInput.select();
+        }
+      }
+
+      function handleFinalResultAbsent(isAbsent) {
+        var scoreInput = document.getElementById("finalResultScore");
+        scoreInput.disabled = isAbsent;
+        if (isAbsent) scoreInput.value = "";
+      }
+
+      function closeFinalResultModal() {
+        var modal = document.getElementById("finalResultModal");
+        modal.style.display = "none";
+        modal.classList.remove("is-open");
+      }
+
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") closeFinalResultModal();
+      });
+
+      document.getElementById("finalResultModal").addEventListener("click", function(event) {
+        if (event.target === this) closeFinalResultModal();
+      });
+    </script>
+  {% endif %}
+
+  {% if can_revoke_results %}
+    <script>
+      function openRevokeResultsModal() {
+        var modal = document.getElementById("revokeResultsModal");
+        modal.classList.add("is-open");
+        document.getElementById("revokeResultsReason").focus();
+      }
+
+      function closeRevokeResultsModal() {
+        document.getElementById("revokeResultsModal").classList.remove("is-open");
+      }
+
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") closeRevokeResultsModal();
+      });
+
+      document.getElementById("revokeResultsModal").addEventListener("click", function(event) {
+        if (event.target === this) closeRevokeResultsModal();
+      });
+    </script>
   {% endif %}
 {% endblock %}

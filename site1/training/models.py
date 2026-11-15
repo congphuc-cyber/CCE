@@ -310,7 +310,16 @@ class FinalCourseResult(models.Model):
         "Điểm cuối khóa",
         max_digits=5,
         decimal_places=2,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    is_absent = models.BooleanField("Vắng", default=False)
+    is_published = models.BooleanField("Đã công bố", default=False)
+    published_at = models.DateTimeField(
+        "Thời điểm công bố",
+        null=True,
+        blank=True,
     )
     modified_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -332,14 +341,27 @@ class FinalCourseResult(models.Model):
             models.UniqueConstraint(
                 fields=("training_class", "learner"),
                 name="unique_final_course_result",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(is_absent=False) | Q(score__isnull=True),
+                name="final_result_absent_without_score",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.learner} — {self.training_class}: {self.score}"
+        result = (
+            "Vắng"
+            if self.is_absent
+            else self.score if self.score is not None else "Chưa nhập"
+        )
+        return f"{self.learner} — {self.training_class}: {result}"
 
     @property
     def outcome(self):
+        if self.is_absent:
+            return "Vắng"
+        if self.score is None:
+            return "Chưa nhập"
         return (
             "Đạt"
             if self.score >= self.training_class.course.pass_threshold
@@ -409,7 +431,11 @@ class Certificate(models.Model):
             ).first()
             if final_result is None:
                 raise ValidationError({"learner": "Học viên chưa có kết quả cuối khóa trong lớp này."})
-            if final_result.score < self.training_class.course.pass_threshold:
+            if (
+                final_result.is_absent
+                or final_result.score is None
+                or final_result.score < self.training_class.course.pass_threshold
+            ):
                 raise ValidationError({"learner": "Học viên chưa đạt điều kiện cấp chứng nhận."})
             active_qs = Certificate.objects.filter(
                 training_class=self.training_class,
@@ -462,6 +488,7 @@ class RoleFeaturePermission(models.Model):
     )
     feature = models.CharField("Chức năng", max_length=80)
     allowed = models.BooleanField("Được phép truy cập", default=True)
+    deny_overrides = models.BooleanField("Ưu tiên từ chối", default=False)
 
     class Meta:
         db_table = "home_rolefeaturepermission"

@@ -6,7 +6,10 @@
      data-retry-label="{{ retry_label|default:'' }}"
      data-success-title="{{ success_title|default:'' }}"
      data-use-response-message="{{ use_response_message|yesno:'true,false' }}"
-     data-zero-save-success="{{ zero_save_success|yesno:'true,false' }}">
+     data-zero-save-success="{{ zero_save_success|yesno:'true,false' }}"
+     data-valid-label="{{ valid_label|default:'' }}"
+     data-overwrite-label="{{ overwrite_label|default:'điểm chưa công bố' }}"
+     data-overwrite-details="{{ overwrite_details|default:'Điểm đã công bố sẽ không bị thay đổi. Thí sinh vắng vẫn giữ trạng thái vắng và không nhận điểm.' }}">
   <form style="display:none;" aria-hidden="true">{% csrf_token %}</form>
   <div class="cce-upload-alert" id="{{ wizard_id }}-alert" role="alert" tabindex="-1" hidden></div>
 
@@ -134,7 +137,7 @@
       </header>
       <div class="cce-modal-body">
         <p id="{{ wizard_id }}-overwrite-description"></p>
-        <p>Điểm đã công bố sẽ không bị thay đổi. Thí sinh vắng vẫn giữ trạng thái vắng và không nhận điểm.</p>
+        <p>{{ overwrite_details|default:"Điểm đã công bố sẽ không bị thay đổi. Thí sinh vắng vẫn giữ trạng thái vắng và không nhận điểm." }}</p>
       </div>
       <footer class="cce-modal-footer">
         <button type="button" class="cce-btn cce-btn-secondary"
@@ -616,7 +619,7 @@ var cceWizard = (function() {
 
       var validLabel = document.createElement('span');
       validLabel.className = 'is-valid';
-      validLabel.textContent = newValidCount+' dòng mới hợp lệ';
+      validLabel.textContent = root.dataset.validLabel || (newValidCount+' dòng mới hợp lệ');
       summary.appendChild(validLabel);
       if (duplicateCount) {
         var duplicateLabel = document.createElement('span');
@@ -627,7 +630,7 @@ var cceWizard = (function() {
       if (overwriteCount) {
         var overwriteLabel = document.createElement('span');
         overwriteLabel.className = 'is-overwrite';
-        overwriteLabel.textContent = overwriteCount+' điểm chưa công bố sẽ bị ghi đè';
+        overwriteLabel.textContent = overwriteCount+' '+root.dataset.overwriteLabel+' sẽ bị ghi đè';
         summary.appendChild(overwriteLabel);
       }
       appendGroupedErrors(errorList, errors);
@@ -672,8 +675,7 @@ var cceWizard = (function() {
           'Các hồ sơ trùng vẫn được nhập với trạng thái Trùng lặp để xử lý sau.';
       } else if (overwriteCount) {
         document.getElementById(id+'-feedback-title').textContent = 'Cần xác nhận ghi đè điểm';
-        document.getElementById(id+'-feedback-message').textContent =
-          'Điểm đã công bố, đã khóa và thí sinh vắng sẽ không được thay đổi.';
+        document.getElementById(id+'-feedback-message').textContent = root.dataset.overwriteDetails;
       } else if (errors.length && validCount) {
         document.getElementById(id+'-feedback-title').textContent = 'Có thể nhập các dòng hợp lệ';
         document.getElementById(id+'-feedback-message').textContent =
@@ -799,8 +801,10 @@ var cceWizard = (function() {
       var description = document.getElementById(id+'-overwrite-description');
       var cancelButton = modal && modal.querySelector('.cce-modal-footer .cce-btn-secondary');
       if (!modal || !description) return;
+      var overwriteLabel = document.getElementById(id).dataset.overwriteLabel;
       description.textContent =
-        'File sẽ ghi đè '+overwriteCount+' điểm chưa công bố. Bạn có muốn tiếp tục không?';
+        'File sẽ ghi đè '+overwriteCount+' '+overwriteLabel
+        +'. Bạn có muốn tiếp tục không?';
       modal.hidden = false;
       modal.style.display = 'flex';
       modal.classList.add('is-open');

@@ -2,6 +2,9 @@ from training.models import RoleFeaturePermission
 from training.navigation import ROLE_MENUS, roles_for_user
 
 
+REQUIRED_ADMIN_FEATURES = frozenset({"accounts", "permissions", "audit-log"})
+
+
 def all_features():
     features = {}
     for role in ROLE_MENUS.values():
@@ -25,25 +28,36 @@ def enabled_features_for_user(user):
         return frozenset()
 
     features = all_features()
-    if getattr(user, "is_superuser", False):
-        return frozenset(item["key"] for item in features)
-
     roles = roles_for_user(user)
     if not roles:
         return frozenset()
 
     overrides = {
-        (role_name, feature): allowed
-        for role_name, feature, allowed in RoleFeaturePermission.objects.filter(
+        (role_name, feature): (allowed, deny_overrides)
+        for role_name, feature, allowed, deny_overrides in RoleFeaturePermission.objects.filter(
             group__name__in=roles
-        ).values_list("group__name", "feature", "allowed")
+        ).values_list("group__name", "feature", "allowed", "deny_overrides")
+    }
+    denied_features = {
+        feature
+        for (_, feature), (_, deny_overrides) in overrides.items()
+        if deny_overrides
     }
     enabled = set()
     for role_name in roles:
         defaults = default_features_for_role(role_name)
         for item in features:
             feature = item["key"]
-            if overrides.get((role_name, feature), feature in defaults):
+            if (
+                role_name == "Quản trị viên"
+                and feature in REQUIRED_ADMIN_FEATURES
+            ):
+                enabled.add(feature)
+                continue
+            if feature in denied_features:
+                continue
+            allowed = overrides.get((role_name, feature), (feature in defaults, False))[0]
+            if allowed:
                 enabled.add(feature)
     return frozenset(enabled)
 
@@ -65,6 +79,9 @@ def role_feature_states(groups):
             item["key"]: overrides.get(
                 (group.name, item["key"]),
                 item["key"] in default_features_for_role(group.name),
+            ) or (
+                group.name == "Quản trị viên"
+                and item["key"] in REQUIRED_ADMIN_FEATURES
             )
             for item in all_features()
         }

@@ -38,6 +38,7 @@ from training.public_exam_forms import (
 
 
 REGISTRATION_SUCCESS_SESSION_KEY = "public_exam_registration_id"
+REGISTRATION_EXPORT_SESSION_KEY = "public_exam_registration_export_id"
 LOOKUP_RESULT_SESSION_KEY = "public_exam_lookup_result"
 LOOKUP_SESSION_TTL = timedelta(minutes=10)
 LOOKUP_RATE_WINDOW = 15 * 60
@@ -87,6 +88,7 @@ def render_registration_closed(request, period=None, state="closed"):
 
 @require_http_methods(["GET", "POST"])
 def exam_application_register(request):
+    request.session.pop(REGISTRATION_EXPORT_SESSION_KEY, None)
     available_periods = available_exam_periods()
     initial_period = None
 
@@ -176,11 +178,47 @@ def exam_application_registration_success(request):
         pk=application_id,
         source=ExamApplication.Source.ONLINE,
     )
+    request.session[REGISTRATION_EXPORT_SESSION_KEY] = application.pk
     return render(
         request,
         "training/public_exam_registration_success.html",
         {"application": application},
     )
+
+
+@never_cache
+@require_http_methods(["GET"])
+def exam_application_registration_export_pdf(request):
+    application_id = request.session.get(REGISTRATION_EXPORT_SESSION_KEY)
+    if not application_id:
+        return redirect("exam-application-public-register")
+
+    application = get_object_or_404(
+        ExamApplication.objects.select_related("exam_period__cert_type"),
+        pk=application_id,
+        source=ExamApplication.Source.ONLINE,
+    )
+    response = _public_lookup_pdf_response(
+        "Phiếu xác nhận đăng ký dự thi",
+        application,
+        _masked_id_number(application.id_number),
+        "registration",
+        [{
+            "title": application.exam_period.name,
+            "details": [
+                application.exam_period.cert_type.name,
+                "Ngày thi: "
+                + application.exam_period.exam_date.strftime("%d/%m/%Y"),
+                "Ngày đăng ký: "
+                + timezone.localtime(application.registered_at).strftime(
+                    "%d/%m/%Y %H:%M"
+                ),
+                "Tình trạng: Đã nhận hồ sơ đăng ký",
+            ],
+        }],
+    )
+    request.session.pop(REGISTRATION_EXPORT_SESSION_KEY, None)
+    return response
 
 
 def _rate_limit_key(request, *parts, include_ip=True):
@@ -497,11 +535,10 @@ def _public_lookup_pdf_response(title, candidate, masked_id_number, purpose, row
     document.build(story)
 
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
-    filename = (
-        "lich-phong-thi.pdf"
-        if purpose == "rooms"
-        else "ket-qua-diem-chung-chi.pdf"
-    )
+    filename = {
+        "rooms": "lich-phong-thi.pdf",
+        "registration": "phieu-xac-nhan-dang-ky-du-thi.pdf",
+    }.get(purpose, "ket-qua-diem-chung-chi.pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     response["Cache-Control"] = "no-store, private"
     response["X-Content-Type-Options"] = "nosniff"

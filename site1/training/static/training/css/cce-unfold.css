@@ -521,6 +521,64 @@ a.bg-red-600:hover {
   font-style: italic !important;
 }
 
+.change-form .cce-weekday-grid {
+  display: flex !important;
+  flex-wrap: nowrap;
+  gap: 6px;
+  width: 100%;
+  max-width: none;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+}
+
+.change-form .cce-weekday-grid > div {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.change-form .cce-weekday-grid label {
+  display: flex !important;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 !important;
+  padding: 5px 8px;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  color: var(--c-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.change-form .cce-weekday-grid label:hover {
+  border-color: var(--c-primary);
+  background-color: var(--c-surface-subtle);
+}
+
+.change-form .cce-weekday-grid label:has(input:checked) {
+  border-color: var(--c-primary);
+  background-color: #EEF4F8;
+  color: var(--c-primary);
+}
+
+.change-form .cce-weekday-grid label:focus-within {
+  outline: 3px solid var(--c-focus-ring);
+  outline-offset: 2px;
+}
+
+.change-form .cce-weekday-grid input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--c-primary);
+}
+
 /* ==========================================================================
    CCE Calendar Widget (Matching media_1794645160126_cb6b8637.png)
    ========================================================================== */

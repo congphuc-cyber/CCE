@@ -5,14 +5,119 @@
 {% block page_title %}Báo cáo giáo vụ{% endblock %}
 {% block page_description %}Tổng hợp số liệu lớp học và chương trình đào tạo để báo cáo giáo vụ.{% endblock %}
 
-{% block page_actions %}
-  <a class="cce-btn cce-btn-accent" href="{% url 'report-export-excel' %}">
-    <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
-    <span>Xuất Báo cáo file Excel</span>
-  </a>
-{% endblock %}
-
 {% block content %}
+
+<section class="cce-card cce-report-period-card" style="margin-bottom:var(--space-6);">
+  <div class="cce-card-header">
+    <h2 class="cce-card-title">Báo cáo theo tuần / tháng</h2>
+  </div>
+  <form id="report-period-form" method="get" action="{% url 'report-list' %}">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(12rem,1fr)); gap:var(--space-4); align-items:end;">
+      <div class="cce-form-group">
+        <label class="cce-label" for="{{ period_form.period_type.id_for_label }}">Kỳ báo cáo</label>
+        {{ period_form.period_type }}
+      </div>
+      <div class="cce-form-group" id="report-week-field" {% if period_form.period_type.value != "week" %}hidden{% endif %}>
+        <label class="cce-label" for="{{ period_form.period_date.id_for_label }}">Chọn ngày trong kỳ</label>
+        {{ period_form.period_date }}
+      </div>
+      <div class="cce-form-group" id="report-month-field" {% if period_form.period_type.value != "month" %}hidden{% endif %}>
+        <label class="cce-label" for="{{ period_form.period_month.id_for_label }}">Tháng</label>
+        {{ period_form.period_month }}
+      </div>
+      <div class="cce-form-group" id="report-year-field" {% if period_form.period_type.value != "month" %}hidden{% endif %}>
+        <label class="cce-label" for="{{ period_form.period_year.id_for_label }}">Năm</label>
+        {{ period_form.period_year }}
+      </div>
+      <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; margin-bottom:var(--space-4);">
+        <button id="report-filter-submit" type="submit" hidden></button>
+        <button id="report-period-export" class="cce-btn cce-btn-accent" type="submit" formaction="{% url 'report-export-excel' %}" {% if not period_report %}disabled{% endif %}>
+          <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
+          <span>Xuất báo cáo kỳ này (Excel)</span>
+        </button>
+      </div>
+    </div>
+  </form>
+
+  {% for field in period_form %}
+    {% for error in field.errors %}
+      <p role="alert" style="color:var(--c-danger); margin:0 0 var(--space-2);">{{ error }}</p>
+    {% endfor %}
+  {% endfor %}
+
+  {% if period_report %}
+    <p class="cce-report-period-summary" aria-live="polite" aria-atomic="true">
+      Trong <strong>{{ period_report.label }}</strong>:
+      <strong>{{ period_report.class_count }}</strong> lớp khai giảng,
+      <strong>{{ period_report.enrollment_count }}</strong> lượt ghi danh.
+    </p>
+  {% endif %}
+</section>
+
+<script>
+  (function () {
+    const form = document.getElementById("report-period-form");
+    const typeSelect = document.getElementById("{{ period_form.period_type.id_for_label }}");
+    const weekGroup = document.getElementById("report-week-field");
+    const monthGroup = document.getElementById("report-month-field");
+    const yearGroup = document.getElementById("report-year-field");
+    const dateInput = document.getElementById("{{ period_form.period_date.id_for_label }}");
+    const monthSelect = document.getElementById("{{ period_form.period_month.id_for_label }}");
+    const yearInput = document.getElementById("{{ period_form.period_year.id_for_label }}");
+    const filterSubmit = document.getElementById("report-filter-submit");
+    const exportButton = document.getElementById("report-period-export");
+    let refreshTimer;
+
+    function syncFields() {
+      const isWeek = typeSelect.value === "week";
+      weekGroup.hidden = !isWeek;
+      dateInput.disabled = !isWeek;
+      monthGroup.hidden = isWeek;
+      yearGroup.hidden = isWeek;
+      monthSelect.disabled = isWeek;
+      yearInput.disabled = isWeek;
+      exportButton.disabled = !hasCompleteSelection();
+    }
+
+    function hasCompleteSelection() {
+      return typeSelect.value === "week"
+        ? Boolean(dateInput.value)
+        : Boolean(monthSelect.value && yearInput.value);
+    }
+
+    function refreshReport() {
+      window.clearTimeout(refreshTimer);
+      if (!hasCompleteSelection()) {
+        exportButton.disabled = true;
+        return;
+      }
+      exportButton.disabled = false;
+      refreshTimer = window.setTimeout(function () {
+        form.requestSubmit(filterSubmit);
+      }, 250);
+    }
+
+    typeSelect.addEventListener("change", function () {
+      if (typeSelect.value === "week" && monthSelect.value && yearInput.value) {
+        dateInput.value = `${yearInput.value}-${String(monthSelect.value).padStart(2, "0")}-01`;
+      } else if (typeSelect.value === "month" && dateInput.value) {
+        const [year, month] = dateInput.value.split("-");
+        monthSelect.value = String(Number(month));
+        yearInput.value = year;
+      }
+      syncFields();
+      refreshReport();
+    });
+
+    dateInput.addEventListener("change", refreshReport);
+    monthSelect.addEventListener("change", refreshReport);
+    yearInput.addEventListener("change", refreshReport);
+    exportButton.addEventListener("click", function () {
+      window.clearTimeout(refreshTimer);
+    });
+    syncFields();
+  })();
+</script>
 
 {# 4 Thẻ chỉ số tổng quan báo cáo giáo vụ #}
 <div class="cce-stat-grid stat-theme-reports" style="margin-bottom:var(--space-6);">

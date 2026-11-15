@@ -122,7 +122,7 @@ UNFOLD = {
     },
     "STYLES": [
         lambda request: static("training/css/tokens.css") + "?v=shared-sidebar-20261114",
-        lambda request: static("training/css/cce-core.css") + "?v=avatar-profile-gap-20261114",
-        lambda request: static("training/css/cce-unfold.css") + "?v=learner-popup-20261114-v3",
+        lambda request: static("training/css/cce-core.css") + "?v=class-actions-colors-20261115",
+        lambda request: static("training/css/cce-unfold.css") + "?v=weekday-row-20261115-v3",
     ],
 }

@@ -45,14 +45,12 @@ SCORE_FIELD_LABELS = {
     "id_number": "Số CCCD",
     "score": "Điểm cuối khóa",
 }
+ABSENCE_FILE_FIELD_ALIASES = {"vang", "absent", "is_absent"}
 
 
 def _can_manage_final_results(user):
     roles = set(roles_for_user(user))
-    return user.is_superuser or (
-        bool(roles & RESULT_ROLES)
-        and user_has_feature(user, "classes")
-    )
+    return bool(roles & RESULT_ROLES) and user_has_feature(user, "classes")
 
 
 def _can_access_final_results(user, training_class):
@@ -101,10 +99,33 @@ def _parse_score(raw_value):
     return score, None
 
 
-def _outcome(score, threshold):
+def _parse_absence(raw_value):
+    normalized = _normalize_header(raw_value)
+    if normalized in {"", "0", "false", "no", "n", "khong"}:
+        return False, None
+    if normalized in {"1", "true", "yes", "y", "co", "vang", "absent"}:
+        return True, None
+    return False, "Cột Vắng chỉ nhận Vắng/Có/Không hoặc 1/0."
+
+
+def _outcome(score, threshold, is_absent=False):
+    if is_absent:
+        return "Vắng"
     if score is None:
-        return "Chưa có điểm"
+        return "Chưa nhập"
     return "Đạt" if score >= threshold else "Không đạt"
+
+
+def _missing_result_count(training_class, enrolled_ids):
+    completed_ids = set(
+        FinalCourseResult.objects.filter(
+            training_class=training_class,
+            learner_id__in=enrolled_ids,
+        )
+        .filter(Q(score__isnull=False) | Q(is_absent=True))
+        .values_list("learner_id", flat=True)
+    )
+    return len(set(enrolled_ids) - completed_ids)
 
 
 def _render_results(
@@ -112,9 +133,12 @@ def _render_results(
     training_class,
     *,
     score_values=None,
+    absent_values=None,
     field_errors=None,
     reason_error="",
     reason_value="",
+    modal_data=None,
+    publication_modal_data=None,
     status=200,
 ):
     can_manage_results = _can_manage_final_results(request.user)
@@ -134,8 +158,17 @@ def _render_results(
         result = saved_results.get(learner.pk)
         if score_values is not None and learner.pk in score_values:
             score_value = score_values[learner.pk]
+        elif result and result.score is not None:
+            score_value = str(result.score)
         else:
-            score_value = str(result.score) if result else ""
+            score_value = ""
+        is_absent = (
+            absent_values[learner.pk]
+            if absent_values is not None and learner.pk in absent_values
+            else result.is_absent if result else False
+        )
+        if is_absent:
+            score_value = ""
 
         score, error = (
             _parse_score(score_value)
@@ -145,7 +178,13 @@ def _render_results(
         rows.append({
             "learner": learner,
             "score_value": score_value,
-            "outcome": _outcome(score, training_class.course.pass_threshold),
+            "outcome": _outcome(
+                score,
+                training_class.course.pass_threshold,
+                is_absent,
+            ),
+            "is_absent": is_absent,
+            "is_published": result.is_published if result else False,
             "error": (field_errors or {}).get(learner.pk) or error,
             "input_id": f"score-{learner.pk}",
         })
@@ -154,14 +193,14 @@ def _render_results(
         Enrollment.objects.filter(training_class=training_class)
         .values_list("learner_id", flat=True)
     )
-    scored_ids = set(
-        FinalCourseResult.objects.filter(
-            training_class=training_class,
-            learner_id__in=enrolled_ids,
-            score__isnull=False,
-        ).values_list("learner_id", flat=True)
-    )
-    missing_score_count = len(set(enrolled_ids) - scored_ids)
+    missing_result_count = _missing_result_count(training_class, enrolled_ids)
+    class_results = FinalCourseResult.objects.filter(training_class=training_class)
+    published_count = class_results.filter(is_published=True).count()
+    result_count = class_results.count()
+    has_incomplete_result = class_results.filter(
+        score__isnull=True,
+        is_absent=False,
+    ).exists()
     has_sample_rows = _class_learners(training_class).exclude(
         id_number__isnull=True
     ).exclude(id_number="").exists()
@@ -192,12 +231,24 @@ def _render_results(
         "can_upload_results": can_manage_results or not training_class.final_results_locked,
         "rows": rows,
         "page_obj": page_obj,
-        "missing_score_count": missing_score_count,
+        "missing_result_count": missing_result_count,
         "final_results_locked": training_class.final_results_locked,
         "final_results_locked_at": training_class.final_results_locked_at,
         "final_results_locked_by": training_class.final_results_locked_by,
         "reason_error": reason_error,
         "reason_value": reason_value,
+        "modal_data": modal_data,
+        "publication_modal_data": publication_modal_data,
+        "published_count": published_count,
+        "can_publish_results": (
+            can_manage_results
+            and training_class.final_results_locked
+            and bool(enrolled_ids)
+            and missing_result_count == 0
+            and not has_incomplete_result
+            and published_count < result_count
+        ),
+        "can_revoke_results": can_manage_results and published_count > 0,
         "results_url": reverse("class-results", args=(training_class.pk,)),
         "upload_url": reverse("class-results-upload", args=(training_class.pk,)),
         "upload_sample_url": reverse(
@@ -208,7 +259,7 @@ def _render_results(
         "can_finalize": (
             can_manage_results
             and bool(enrolled_ids)
-            and missing_score_count == 0
+            and missing_result_count == 0
             and not training_class.final_results_locked
         ),
     }
@@ -241,18 +292,12 @@ def _finalize_results(request, training_class):
             messages.error(request, "Lớp chưa có học viên để chốt kết quả.")
             return _redirect_to_results(request, training_class)
 
-        scored_ids = set(
-            FinalCourseResult.objects.filter(
-                training_class=training_class,
-                learner_id__in=enrolled_ids,
-                score__isnull=False,
-            ).values_list("learner_id", flat=True)
-        )
-        missing_count = len(set(enrolled_ids) - scored_ids)
+        missing_count = _missing_result_count(training_class, enrolled_ids)
         if missing_count:
             messages.error(
                 request,
-                f"Còn {missing_count} học viên chưa có điểm; chưa thể chốt kết quả.",
+                f"Còn {missing_count} học viên chưa có kết quả điểm hoặc vắng; "
+                "chưa thể chốt kết quả.",
             )
             return _redirect_to_results(request, training_class)
 
@@ -275,26 +320,170 @@ def _finalize_results(request, training_class):
     return _redirect_to_results(request, training_class)
 
 
-def _validate_manual_scores(request, page_obj):
+def _manage_final_result_publication(request, training_class, action):
+    reason = request.POST.get("reason", "").strip()
+    if action == "revoke_results" and not reason:
+        return _render_results(
+            request,
+            training_class,
+            publication_modal_data={
+                "error": "Vui lòng nhập lý do thu hồi công bố kết quả.",
+                "reason": reason,
+            },
+        )
+
+    changed_count = 0
+    error = ""
+    with transaction.atomic():
+        locked_class = get_object_or_404(
+            TrainingClass.objects.select_for_update().select_related("course"),
+            pk=training_class.pk,
+        )
+        results = list(
+            FinalCourseResult.objects.select_for_update()
+            .filter(training_class=locked_class)
+            .order_by("pk")
+        )
+
+        if action == "publish_results":
+            enrolled_ids = list(
+                Enrollment.objects.filter(training_class=locked_class)
+                .values_list("learner_id", flat=True)
+            )
+            missing_count = _missing_result_count(locked_class, enrolled_ids)
+            has_incomplete_result = any(
+                result.score is None and not result.is_absent
+                for result in results
+            )
+            if not locked_class.final_results_locked:
+                error = "Chốt kết quả lớp trước khi công bố."
+            elif not enrolled_ids:
+                error = "Lớp chưa có học viên để công bố kết quả."
+            elif missing_count or has_incomplete_result:
+                error = "Cần nhập điểm hoặc đánh dấu Vắng cho toàn bộ kết quả trước khi công bố."
+            elif not results:
+                error = "Lớp chưa có kết quả để công bố."
+            else:
+                published_at = timezone.now()
+                for result in results:
+                    if result.is_published:
+                        continue
+                    old_values = snapshot_instance(result)
+                    result.is_published = True
+                    result.published_at = published_at
+                    result.save(
+                        update_fields=("is_published", "published_at", "updated_at")
+                    )
+                    record_audit(
+                        request.user,
+                        AuditLog.Action.EDIT,
+                        result,
+                        object_label=(
+                            f"Công bố kết quả {result.learner.full_name} — "
+                            f"{locked_class.name}"
+                        ),
+                        old_values=old_values,
+                        new_values=snapshot_instance(result),
+                    )
+                    changed_count += 1
+        else:
+            for result in results:
+                if not result.is_published:
+                    continue
+                old_values = snapshot_instance(result)
+                result.is_published = False
+                result.published_at = None
+                result.save(
+                    update_fields=("is_published", "published_at", "updated_at")
+                )
+                record_audit(
+                    request.user,
+                    AuditLog.Action.EDIT,
+                    result,
+                    object_label=(
+                        f"Thu hồi công bố kết quả {result.learner.full_name} — "
+                        f"{locked_class.name}"
+                    ),
+                    old_values=old_values,
+                    new_values=snapshot_instance(result),
+                    reason=reason,
+                )
+                changed_count += 1
+
+    if error:
+        messages.error(request, error)
+    elif action == "publish_results":
+        messages.success(
+            request,
+            f"Đã công bố kết quả cho {changed_count} học viên."
+            if changed_count
+            else "Tất cả kết quả đã được công bố.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Đã thu hồi công bố kết quả của {changed_count} học viên."
+            if changed_count
+            else "Không có kết quả nào đang được công bố.",
+        )
+    return _redirect_to_results(request, training_class)
+
+
+def _validate_manual_scores(request, training_class, page_obj):
     score_values = {}
+    absent_values = {}
     entries = []
     errors = {}
+    previously_absent_ids = set(
+        FinalCourseResult.objects.filter(
+            training_class=training_class,
+            learner_id__in=[learner.pk for learner in page_obj.object_list],
+            is_absent=True,
+        ).values_list("learner_id", flat=True)
+    )
     for learner in page_obj.object_list:
-        key = f"score_{learner.pk}"
-        if key not in request.POST:
+        score_key = f"score_{learner.pk}"
+        absent_key = f"absent_{learner.pk}"
+        if score_key not in request.POST and absent_key not in request.POST:
             continue
 
-        raw_value = request.POST.get(key, "")
+        raw_value = request.POST.get(score_key, "")
+        is_absent = request.POST.get(absent_key) == "1"
         score_values[learner.pk] = raw_value
+        absent_values[learner.pk] = is_absent
+
+        if is_absent:
+            if raw_value.strip():
+                errors[learner.pk] = "Xóa điểm số khi đánh dấu vắng."
+            else:
+                entries.append({
+                    "learner": learner,
+                    "score": None,
+                    "is_absent": True,
+                })
+            continue
+
+        if score_key not in request.POST:
+            continue
         if not raw_value.strip():
+            if learner.pk in previously_absent_ids:
+                entries.append({
+                    "learner": learner,
+                    "score": None,
+                    "is_absent": False,
+                })
             continue
 
         score, error = _parse_score(raw_value)
         if error:
             errors[learner.pk] = error
         else:
-            entries.append({"learner": learner, "score": score})
-    return entries, score_values, errors
+            entries.append({
+                "learner": learner,
+                "score": score,
+                "is_absent": False,
+            })
+    return entries, score_values, absent_values, errors
 
 
 def _save_result_entries(actor, training_class, entries, reason=""):
@@ -302,12 +491,15 @@ def _save_result_entries(actor, training_class, entries, reason=""):
     for entry in entries:
         learner = entry["learner"]
         score = entry["score"]
+        is_absent = entry.get("is_absent", False)
         result = (
             FinalCourseResult.objects.select_for_update()
             .filter(training_class=training_class, learner=learner)
             .first()
         )
-        if result and result.score == score:
+        if result and result.score == score and result.is_absent == is_absent:
+            continue
+        if result is None and score is None and not is_absent:
             continue
 
         old_values = snapshot_instance(result) if result else {}
@@ -316,10 +508,12 @@ def _save_result_entries(actor, training_class, entries, reason=""):
                 training_class=training_class,
                 learner=learner,
                 score=score,
+                is_absent=is_absent,
             )
             action = AuditLog.Action.CREATE
         else:
             result.score = score
+            result.is_absent = is_absent
             action = AuditLog.Action.EDIT
         result.modified_by = actor
         result.full_clean()
@@ -337,6 +531,90 @@ def _save_result_entries(actor, training_class, entries, reason=""):
     return saved_count
 
 
+def _save_single_final_result(request, training_class, can_manage_results):
+    if not can_manage_results and training_class.final_results_locked:
+        raise PermissionDenied
+
+    learner = get_object_or_404(
+        _class_learners(training_class),
+        pk=request.POST.get("learner_id"),
+    )
+    raw_score = request.POST.get("score", "").strip()
+    is_absent = request.POST.get("is_absent") == "1"
+    reason = request.POST.get("reason", "").strip()
+    modal_data = {
+        "learner_id": learner.pk,
+        "learner_name": learner.full_name,
+        "score_value": raw_score,
+        "is_absent": is_absent,
+        "reason": reason,
+        "error": "",
+    }
+
+    entry = None
+    error = ""
+    if is_absent and raw_score:
+        error = "Xóa điểm số khi đánh dấu vắng."
+    elif is_absent:
+        entry = {"learner": learner, "score": None, "is_absent": True}
+    elif raw_score:
+        score, error = _parse_score(raw_score)
+        if not error:
+            entry = {"learner": learner, "score": score, "is_absent": False}
+
+    saved_count = 0
+    with transaction.atomic():
+        locked_class = get_object_or_404(
+            TrainingClass.objects.select_for_update().select_related("course"),
+            pk=training_class.pk,
+        )
+        if not can_manage_results and locked_class.final_results_locked:
+            raise PermissionDenied
+
+        current_learner = _class_learners(locked_class).filter(pk=learner.pk).first()
+        if current_learner is None:
+            error = "Danh sách học viên đã thay đổi. Tải lại trang rồi thử lại."
+        elif locked_class.final_results_locked and not reason:
+            error = "Vui lòng nhập lý do sửa điểm sau khi chốt."
+        elif not error and entry is None:
+            previous_result = (
+                FinalCourseResult.objects.select_for_update()
+                .filter(training_class=locked_class, learner=current_learner)
+                .first()
+            )
+            if previous_result and previous_result.is_absent:
+                entry = {
+                    "learner": current_learner,
+                    "score": None,
+                    "is_absent": False,
+                }
+
+        if not error and entry is not None:
+            entry["learner"] = current_learner
+            saved_count = _save_result_entries(
+                request.user,
+                locked_class,
+                [entry],
+                reason=reason if locked_class.final_results_locked else "",
+            )
+
+    if error:
+        modal_data["error"] = error
+        return _render_results(
+            request,
+            training_class,
+            modal_data=modal_data,
+        )
+
+    messages.success(
+        request,
+        "Đã lưu kết quả cho học viên."
+        if saved_count
+        else "Không có thay đổi kết quả cần lưu.",
+    )
+    return _redirect_to_results(request, training_class)
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def class_final_results(request, class_id):
@@ -351,10 +629,16 @@ def class_final_results(request, class_id):
         return _render_results(request, training_class)
 
     action = request.POST.get("action")
+    if action in {"publish_results", "revoke_results"}:
+        if not can_manage_results:
+            raise PermissionDenied
+        return _manage_final_result_publication(request, training_class, action)
     if action == "finalize":
         if not can_manage_results:
             raise PermissionDenied
         return _finalize_results(request, training_class)
+    if action == "save_single":
+        return _save_single_final_result(request, training_class, can_manage_results)
     if not can_manage_results and training_class.final_results_locked:
         raise PermissionDenied
     if action == "save_locked" and not can_manage_results:
@@ -365,7 +649,11 @@ def class_final_results(request, class_id):
     page_obj = Paginator(_class_learners(training_class), PAGE_SIZE).get_page(
         request.GET.get("page")
     )
-    entries, score_values, field_errors = _validate_manual_scores(request, page_obj)
+    entries, score_values, absent_values, field_errors = _validate_manual_scores(
+        request,
+        training_class,
+        page_obj,
+    )
     reason = request.POST.get("reason", "").strip()
     reason_error = ""
     saved_count = 0
@@ -405,6 +693,7 @@ def class_final_results(request, class_id):
             request,
             training_class,
             score_values=score_values,
+            absent_values=absent_values,
             field_errors=field_errors,
             reason_error=reason_error,
             reason_value=reason,
@@ -412,9 +701,9 @@ def class_final_results(request, class_id):
 
     messages.success(
         request,
-        f"Đã lưu điểm cho {saved_count} học viên."
+        f"Đã lưu kết quả cho {saved_count} học viên."
         if saved_count
-        else "Không có thay đổi điểm cần lưu.",
+        else "Không có thay đổi kết quả cần lưu.",
     )
     return _redirect_to_results(request, training_class)
 
@@ -476,6 +765,7 @@ def _parse_final_result_csv(uploaded, training_class):
         ], []
 
     header_map = {}
+    absence_header = None
     for index, normalized in enumerate(normalized_headers):
         for field_name, aliases in SCORE_FILE_FIELDS.items():
             if normalized in aliases:
@@ -488,6 +778,16 @@ def _parse_final_result_csv(uploaded, training_class):
                         )
                     ], []
                 header_map[field_name] = headers[index]
+        if normalized in ABSENCE_FILE_FIELD_ALIASES:
+            if absence_header is not None:
+                return [], [
+                    _upload_error(
+                        1,
+                        "Tiêu đề",
+                        "File có nhiều cột cùng biểu thị “Vắng”.",
+                    )
+                ], []
+            absence_header = headers[index]
 
     missing = [
         SCORE_FIELD_LABELS[field_name]
@@ -546,6 +846,11 @@ def _parse_final_result_csv(uploaded, training_class):
         full_name = (row.get(header_map["full_name"]) or "").strip()
         id_number = (row.get(header_map["id_number"]) or "").strip()
         raw_score = (row.get(header_map["score"]) or "").strip()
+        raw_absence = (
+            (row.get(absence_header) or "").strip()
+            if absence_header is not None
+            else ""
+        )
         class_name = (row.get(header_map["class_name"]) or "").strip()
         learner = learners_by_id.get(id_number)
         error = None
@@ -563,8 +868,6 @@ def _parse_final_result_csv(uploaded, training_class):
             error_column, error = "Họ và tên", "Vui lòng nhập họ và tên."
         elif not id_number:
             error_column, error = "Số CCCD", "Vui lòng nhập số CCCD."
-        elif not raw_score:
-            error_column, error = "Điểm cuối khóa", "Vui lòng nhập điểm cuối khóa."
         elif id_number in seen_id_numbers:
             error_column, error = "Số CCCD", "Số CCCD xuất hiện nhiều lần trong file."
         elif learner is None:
@@ -580,8 +883,21 @@ def _parse_final_result_csv(uploaded, training_class):
                 "Họ và tên trong file không khớp với số CCCD.",
             )
 
-        score = None
+        is_absent = False
         if error is None:
+            is_absent, error = _parse_absence(raw_absence)
+            if error:
+                error_column = "Vắng"
+        if error is None and is_absent and raw_score:
+            error_column, error = "Vắng", "Không nhập điểm khi đã đánh dấu vắng."
+        elif error is None and not is_absent and not raw_score:
+            error_column, error = (
+                "Điểm cuối khóa",
+                "Vui lòng nhập điểm cuối khóa hoặc đánh dấu vắng.",
+            )
+
+        score = None
+        if error is None and not is_absent:
             score, error = _parse_score(raw_score)
             if error:
                 error_column = "Điểm cuối khóa"
@@ -591,18 +907,23 @@ def _parse_final_result_csv(uploaded, training_class):
             continue
 
         seen_id_numbers.add(id_number)
-        entries.append({"learner": learner, "score": score})
+        preview_result = "Vắng" if is_absent else f"{score} điểm"
+        entries.append({
+            "learner": learner,
+            "score": score,
+            "is_absent": is_absent,
+        })
         preview_rows.append({
             "row": row_number,
             "preview_text": (
-                f"{training_class.name} — {full_name} — {id_number} — {score} điểm"
+                f"{training_class.name} — {full_name} — {id_number} — {preview_result}"
             ),
             "status": "valid",
         })
 
     if not entries and not errors:
         errors.append(
-            _upload_error(1, "Dữ liệu", "File không có dòng điểm để nhập.")
+            _upload_error(1, "Dữ liệu", "File không có dòng kết quả để nhập.")
         )
     return entries, errors, preview_rows
 
@@ -616,6 +937,14 @@ def _json_upload_failure(message, errors=None, valid_count=0, preview_rows=None)
         "preview_rows": preview_rows or [],
         "message": message,
     })
+
+
+def _final_result_overwrite_count(training_class, entries):
+    learner_ids = [entry["learner"].pk for entry in entries]
+    return FinalCourseResult.objects.filter(
+        training_class=training_class,
+        learner_id__in=learner_ids,
+    ).count()
 
 
 @login_required
@@ -653,6 +982,10 @@ def class_final_result_upload(request, class_id):
                 "ok": not errors,
                 "saved": 0,
                 "valid_count": len(entries),
+                "overwrite_count": _final_result_overwrite_count(
+                    training_class,
+                    entries,
+                ),
                 "errors": errors,
                 "preview_rows": preview_rows,
                 "message": (
@@ -687,6 +1020,29 @@ def class_final_result_upload(request, class_id):
                     preview_rows=preview_rows,
                 )
 
+            overwrite_count = _final_result_overwrite_count(
+                locked_class,
+                entries,
+            )
+            confirmed_overwrite_count = request.POST.get("confirm_overwrite_count")
+            if (
+                overwrite_count
+                and confirmed_overwrite_count != str(overwrite_count)
+            ):
+                return JsonResponse({
+                    "ok": False,
+                    "saved": 0,
+                    "valid_count": len(entries),
+                    "overwrite_count": overwrite_count,
+                    "requires_overwrite_confirmation": True,
+                    "errors": [],
+                    "preview_rows": preview_rows,
+                    "message": (
+                        f"File sẽ ghi đè {overwrite_count} kết quả đã có. "
+                        "Cần xác nhận trước khi tiếp tục."
+                    ),
+                })
+
             saved_count = _save_result_entries(
                 request.user,
                 locked_class,
@@ -698,14 +1054,24 @@ def class_final_result_upload(request, class_id):
             "ok": True,
             "saved": saved_count,
             "valid_count": saved_count,
+            "overwrite_count": overwrite_count,
             "errors": [],
             "preview_rows": preview_rows,
-            "message": f"Đã lưu điểm cuối khóa cho {saved_count} học viên.",
+            "message": (
+                (
+                    f"Đã cập nhật kết quả cuối khóa cho {saved_count} học viên."
+                    if saved_count
+                    else "File đã được xử lý; không có kết quả nào thay đổi."
+                )
+                + (
+                    f" Có {overwrite_count} học viên trong file đã có kết quả từ trước."
+                    if overwrite_count else ""
+                )
+            ),
         })
 
     learners = _class_learners(training_class)
     has_learners = learners.exists()
-    has_sample_rows = learners.exclude(id_number__isnull=True).exclude(id_number="").exists()
     return render(
         request,
         "training/class_final_results_upload.html",
@@ -713,7 +1079,8 @@ def class_final_result_upload(request, class_id):
             "active_menu": "classes" if can_manage_results else "my-classes",
             "page_title": f"Upload file điểm — {training_class.name}",
             "page_description": (
-                "Chọn file CSV UTF-8 có lớp, họ tên, CCCD và điểm cuối khóa. "
+                "Chọn file CSV UTF-8 có lớp, họ tên, CCCD và điểm cuối khóa "
+                "hoặc trạng thái Vắng. "
                 "Nếu có bất kỳ lỗi nào, chưa có dữ liệu nào được lưu."
             ),
             "breadcrumbs": [
@@ -729,14 +1096,9 @@ def class_final_result_upload(request, class_id):
             ],
             "training_class": training_class,
             "has_learners": has_learners,
-            "has_sample_rows": has_sample_rows,
             "locked": training_class.final_results_locked,
             "upload_url": reverse(
                 "class-results-upload",
-                args=(training_class.pk,),
-            ),
-            "sample_url": reverse(
-                "class-results-upload-sample",
                 args=(training_class.pk,),
             ),
             "results_url": reverse(
@@ -768,14 +1130,15 @@ def class_final_result_upload_sample(request, class_id):
 
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["Lớp", "Họ và tên", "Số CCCD", "Điểm cuối khóa"])
+    writer.writerow(["Lớp", "Họ và tên", "Số CCCD", "Điểm cuối khóa", "Vắng"])
     for learner in learners:
         result = results.get(learner.pk)
         writer.writerow([
             training_class.name,
             learner.full_name,
             learner.id_number,
-            str(result.score) if result else "",
+            str(result.score) if result and result.score is not None else "",
+            "Vắng" if result and result.is_absent else "",
         ])
 
     response = HttpResponse(

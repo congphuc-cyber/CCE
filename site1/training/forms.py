@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
@@ -8,6 +10,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count, Q
 from training.models import ClassAssignment, Course, Enrollment, Learner, Teacher, TrainingClass
 from training.navigation import ROLE_ORDER
+from training.scheduling import EXAM_SESSION_CHOICES, WEEKDAY_CHOICES
 
 
 class VietnameseAuthenticationForm(AuthenticationForm):
@@ -88,15 +91,162 @@ class CourseAdminForm(forms.ModelForm):
 
 
 class TrainingClassAdminForm(forms.ModelForm):
+    LEGACY_SESSION_VALUE = "__legacy_class_session__"
+    _WEEKDAY_PATTERN = re.compile(r"Thứ\s*([2-7])|Chủ\s*nhật", re.IGNORECASE)
+    _TIME_RANGE_PATTERN = re.compile(r"\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}")
+
+    weekdays = forms.MultipleChoiceField(
+        label="Thứ học",
+        choices=WEEKDAY_CHOICES,
+        required=False,
+        help_text="Chọn từ 1 đến 3 thứ.",
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "cce-weekday-grid"}),
+    )
+    class_session = forms.ChoiceField(
+        label="Ca học",
+        choices=(("", "Chọn ca học"), *EXAM_SESSION_CHOICES),
+        required=True,
+        widget=forms.Select(attrs={"class": "cce-select"}),
+    )
+
     class Meta:
         model = TrainingClass
-        fields = ("name", "course", "learning_format", "schedule", "start_date", "max_students")
+        fields = ("name", "course", "learning_format", "start_date", "max_students")
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date", "class": "cce-input"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._legacy_session = None
+        if self.instance.pk:
+            weekdays, session, legacy_session = self._parse_schedule(self.instance.schedule)
+            self.initial.setdefault("weekdays", weekdays)
+            if legacy_session:
+                self._legacy_session = legacy_session
+                self.fields["class_session"].choices = (
+                    *self.fields["class_session"].choices,
+                    (
+                        self.LEGACY_SESSION_VALUE,
+                        f"Giữ ca hiện tại — {legacy_session}",
+                    ),
+                )
+                session = self.LEGACY_SESSION_VALUE
+            if session:
+                self.initial.setdefault("class_session", session)
+
+    @classmethod
+    def _parse_schedule(cls, schedule):
+        if not schedule:
+            return [], None, None
+
+        session = next(
+            (value for value, _label in EXAM_SESSION_CHOICES if value in schedule),
+            None,
+        )
+        day_source = schedule
+        legacy_session = None
+        if session:
+            day_source = schedule[:schedule.index(session)]
+        else:
+            time_range = cls._TIME_RANGE_PATTERN.search(schedule)
+            if time_range:
+                day_source = schedule[:time_range.start()]
+                current_range = time_range.group().replace("-", "–")
+                session = next(
+                    (
+                        value
+                        for value, _label in EXAM_SESSION_CHOICES
+                        if cls._TIME_RANGE_PATTERN.search(value).group().replace("-", "–")
+                        == current_range
+                    ),
+                    None,
+                )
+                if session is None:
+                    legacy_session = schedule[time_range.start():].strip(" ,&—–-")
+
+        weekday_values = set()
+        last_weekday_end = 0
+        for match in cls._WEEKDAY_PATTERN.finditer(day_source):
+            weekday_values.add("sun" if match.group(1) is None else {
+                "2": "mon",
+                "3": "tue",
+                "4": "wed",
+                "5": "thu",
+                "6": "fri",
+                "7": "sat",
+            }[match.group(1)])
+            last_weekday_end = max(last_weekday_end, match.end())
+
+        shorthand = re.match(
+            r"^\s*Thứ\s*([2-7])((?:\s*[,/&]\s*(?:Thứ\s*)?[2-7])*)",
+            day_source,
+            re.IGNORECASE,
+        )
+        if shorthand:
+            weekday_values.add(
+                {"2": "mon", "3": "tue", "4": "wed", "5": "thu", "6": "fri", "7": "sat"}[
+                    shorthand.group(1)
+                ]
+            )
+            weekday_values.update(
+                {"2": "mon", "3": "tue", "4": "wed", "5": "thu", "6": "fri", "7": "sat"}[day]
+                for day in re.findall(r"[2-7]", shorthand.group(2))
+            )
+            last_weekday_end = max(last_weekday_end, shorthand.end())
+
+        if not session and not legacy_session and last_weekday_end:
+            legacy_session = schedule[last_weekday_end:].strip(" ,&—–-")
+
+        weekday_order = {value: index for index, (value, _label) in enumerate(WEEKDAY_CHOICES)}
+        ordered_weekdays = sorted(weekday_values, key=weekday_order.__getitem__)
+        if legacy_session == "":
+            legacy_session = None
+        return ordered_weekdays, session, legacy_session
+
+    def clean_weekdays(self):
+        weekdays = self.cleaned_data.get("weekdays", [])
+        if not 1 <= len(weekdays) <= 3:
+            raise ValidationError("Chọn từ 1 đến 3 thứ học.")
+        weekday_order = {value: index for index, (value, _label) in enumerate(WEEKDAY_CHOICES)}
+        return sorted(weekdays, key=weekday_order.__getitem__)
+
+    @classmethod
+    def format_schedule_for_display(cls, schedule):
+        weekdays, session, legacy_session = cls._parse_schedule(schedule)
+        if session:
+            session_label = session
+        elif legacy_session:
+            session_label = re.sub(
+                r"\s*\((?:tối|tập trung)\)\s*$",
+                "",
+                legacy_session,
+                flags=re.IGNORECASE,
+            ).strip()
+        else:
+            session_label = None
+
+        if not weekdays or not session_label:
+            return schedule or "Chưa có thông tin"
+
+        weekday_labels = dict(WEEKDAY_CHOICES)
+        return (
+            f"{', '.join(weekday_labels[day] for day in weekdays)} — "
+            f"{session_label}"
+        )
+
     def clean(self):
         cleaned_data = super().clean()
+        weekdays = cleaned_data.get("weekdays")
+        session = cleaned_data.get("class_session")
+        if weekdays and session:
+            if session == self.LEGACY_SESSION_VALUE:
+                session = self._legacy_session
+            weekday_labels = dict(WEEKDAY_CHOICES)
+            self.instance.schedule = (
+                f"{', '.join(weekday_labels[day] for day in weekdays)} — {session}"
+            )
+
         max_students = cleaned_data.get("max_students")
         if self.instance.pk and max_students is not None:
             enrolled_count = Enrollment.objects.filter(training_class=self.instance).count()
@@ -354,6 +504,11 @@ class ClassAssignmentForm(forms.ModelForm):
             Q(teacher_assignments__training_class=training_class)
             & Q(teacher_assignments__is_active=True)
         ).distinct()
+        self.fields["teacher"].empty_label = "Chọn giáo viên"
+        self.fields["teacher"].help_text = "Chỉ hiển thị giáo viên chưa được phân công cho lớp này."
+        self.fields["teacher"].widget.attrs.update(
+            {"class": "cce-select cce-teacher-select"}
+        )
 
     def clean_teacher(self):
         teacher = self.cleaned_data["teacher"]
@@ -377,6 +532,9 @@ class EnrollmentTransferForm(forms.Form):
     learner = LearnerChoiceField(
         label="Học viên",
         queryset=Learner.objects.none(),
+        error_messages={
+            "invalid_choice": "Học viên không được ghi danh trong lớp hiện tại."
+        },
         widget=forms.Select(attrs={"class": "cce-select"}),
     )
     source_class = TrainingClassChoiceField(
@@ -392,9 +550,6 @@ class EnrollmentTransferForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["learner"].queryset = Learner.objects.filter(
-            enrollments__isnull=False
-        ).distinct().order_by("full_name")
         self.fields["source_class"].queryset = (
             TrainingClass.objects.filter(enrollments__isnull=False)
             .annotate(_enrollment_count=Count("enrollments"))
@@ -405,6 +560,19 @@ class EnrollmentTransferForm(forms.Form):
             TrainingClass.objects.annotate(_enrollment_count=Count("enrollments"))
             .order_by("name")
         )
+        source_class_id = (
+            self.data.get("source_class")
+            if self.is_bound
+            else self.initial.get("source_class")
+        )
+        learners = Learner.objects.filter(enrollments__isnull=False)
+        if source_class_id:
+            learners = learners.filter(
+                enrollments__training_class_id=source_class_id
+            )
+        else:
+            learners = learners.none()
+        self.fields["learner"].queryset = learners.distinct().order_by("full_name")
 
     def clean(self):
         cleaned_data = super().clean()

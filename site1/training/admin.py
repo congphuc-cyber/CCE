@@ -27,9 +27,7 @@ from training.pagination import PAGE_SIZE
 
 def can_manage_classes(user):
     roles = roles_for_user(user)
-    return user.is_superuser or (
-        "Giáo viên" not in roles and user_has_feature(user, "classes")
-    )
+    return "Giáo viên" not in roles and user_has_feature(user, "classes")
 
 
 class CCEAdminSite(UnfoldAdminSite):
@@ -188,8 +186,8 @@ class TrainingClassAdmin(BaseModelAdmin):
         "name",
         "course",
         "format_display",
-        "schedule",
-        "start_date",
+        "schedule_display",
+        "start_date_display",
         "capacity_display",
         "status_badge",
         "edit_action",
@@ -199,7 +197,18 @@ class TrainingClassAdmin(BaseModelAdmin):
     list_filter = ("course", "learning_format", "status")
     search_fields = ("name", "course__name")
     ordering = ("name",)
-    fields = ("name", "course", "learning_format", "schedule", "start_date", "max_students")
+    fields = (
+        "name",
+        "course",
+        "learning_format",
+        "weekdays",
+        "class_session",
+        "start_date",
+        "max_students",
+    )
+
+    class Media:
+        js = ("training/js/cce-admin-datepicker.js",)
 
     def get_queryset(self, request):
         return (
@@ -212,6 +221,14 @@ class TrainingClassAdmin(BaseModelAdmin):
     @admin.display(description="Hình thức")
     def format_display(self, obj):
         return obj.get_learning_format_display()
+
+    @admin.display(description="Lịch học")
+    def schedule_display(self, obj):
+        return TrainingClassAdminForm.format_schedule_for_display(obj.schedule)
+
+    @admin.display(description="Ngày khai giảng", empty_value="Chưa có thông tin")
+    def start_date_display(self, obj):
+        return obj.start_date.strftime("%d/%m/%Y") if obj.start_date else None
 
     @admin.display(description="Sĩ số hiện tại / tối đa")
     def capacity_display(self, obj):
@@ -489,10 +506,47 @@ role_admin_site.register(account_model, AccountAdmin)
 class ExamPageSizeAdmin(admin.ModelAdmin):
     list_per_page = PAGE_SIZE
     list_max_show_all = PAGE_SIZE
+    feature_key = None
+
+    def role_feature_access(self, request):
+        if not roles_for_user(request.user):
+            return None
+        return bool(self.feature_key and user_has_feature(request.user, self.feature_key))
+
+    def has_module_permission(self, request):
+        role_access = self.role_feature_access(request)
+        if role_access is not None:
+            return role_access
+        return super().has_module_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        role_access = self.role_feature_access(request)
+        if role_access is not None:
+            return role_access
+        return super().has_view_permission(request, obj)
+
+    def has_add_permission(self, request):
+        role_access = self.role_feature_access(request)
+        if role_access is not None:
+            return role_access
+        return super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        role_access = self.role_feature_access(request)
+        if role_access is not None:
+            return role_access
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        role_access = self.role_feature_access(request)
+        if role_access is False:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(ExamPeriod, site=role_admin_site)
 class ExamPeriodAdmin(ExamPageSizeAdmin):
+    feature_key = "exam-periods"
     list_display = ("name", "exam_date", "cert_type", "status", "application_count")
     list_filter = ("status", "cert_type")
     search_fields = ("name",)
@@ -502,6 +556,7 @@ class ExamPeriodAdmin(ExamPageSizeAdmin):
 
 @admin.register(ExamApplication, site=role_admin_site)
 class ExamApplicationAdmin(ExamPageSizeAdmin):
+    feature_key = "exam-applications"
     list_display = ("full_name", "id_number", "exam_period", "status", "registered_at")
     list_filter = ("status", "exam_period")
     search_fields = ("full_name", "id_number")
@@ -510,6 +565,7 @@ class ExamApplicationAdmin(ExamPageSizeAdmin):
 
 @admin.register(ExamRoom, site=role_admin_site)
 class ExamRoomAdmin(ExamPageSizeAdmin):
+    feature_key = "exam-rooms"
     list_display = ("name", "exam_period", "session", "capacity", "assigned_count")
     list_filter = ("exam_period",)
     search_fields = ("name",)
@@ -517,6 +573,7 @@ class ExamRoomAdmin(ExamPageSizeAdmin):
 
 @admin.register(ExamScore, site=role_admin_site)
 class ExamScoreAdmin(ExamPageSizeAdmin):
+    feature_key = "exam-scores"
     list_display = ("assignment", "score", "is_absent", "is_published", "is_locked")
     list_filter = ("is_published", "is_locked", "is_absent")
     readonly_fields = ("entered_at", "published_at")
@@ -524,6 +581,7 @@ class ExamScoreAdmin(ExamPageSizeAdmin):
 
 @admin.register(MyBKExportLog, site=role_admin_site)
 class MyBKExportLogAdmin(ExamPageSizeAdmin):
+    feature_key = "mybk-export"
     list_display = ("exam_period", "exported_by", "exported_at", "record_count")
     list_filter = ("exam_period",)
     readonly_fields = ("exported_at",)
