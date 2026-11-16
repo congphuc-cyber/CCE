@@ -8,10 +8,12 @@ from xml.sax.saxutils import escape
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.db import transaction
 from django.db.models import Count, F, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from django.views.decorators.cache import never_cache
@@ -25,6 +27,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from training.models import (
+    AuditLog,
     ExamApplication,
     ExamCertificate,
     ExamPeriod,
@@ -35,6 +38,7 @@ from training.public_exam_forms import (
     PublicExamLookupRequestForm,
     PublicExamRegistrationForm,
 )
+from training.views import _build_exam_certificate_pdf
 
 
 REGISTRATION_SUCCESS_SESSION_KEY = "public_exam_registration_id"
@@ -44,6 +48,7 @@ LOOKUP_SESSION_TTL = timedelta(minutes=10)
 LOOKUP_RATE_WINDOW = 15 * 60
 LOOKUP_IP_LIMIT = 12
 LOOKUP_IDENTITY_LIMIT = 5
+CERTIFICATE_DOWNLOAD_SIGNER = TimestampSigner(salt="exam-public-certificate-pdf")
 _PUBLIC_PDF_REQUIRED_GLYPHS = (
     0x00C2, 0x00E2, 0x00CA, 0x00EA, 0x00D4, 0x00F4,
     0x0102, 0x0103, 0x0110, 0x0111, 0x01A0, 0x01A1,
@@ -57,19 +62,24 @@ def available_exam_periods():
             status=ExamPeriod.Status.PUBLISHED,
             registration_deadline__gte=timezone.localdate(),
         )
-        .annotate(candidate_count=Count("applications"))
+        .annotate(candidate_count=Count("applications__id_number", distinct=True))
         .filter(candidate_count__lt=F("max_candidates"))
         .select_related("cert_type")
         .order_by("exam_date", "name")
     )
 
 
-def unavailable_period_state(period):
+def unavailable_period_state(period, id_number=""):
     if period.status != ExamPeriod.Status.PUBLISHED:
         return "closed"
     if period.registration_deadline < timezone.localdate():
         return "expired"
-    if period.applications.count() >= period.max_candidates:
+    candidate_count = period.applications.values("id_number").distinct().count()
+    is_duplicate = bool(
+        id_number
+        and period.applications.filter(id_number=id_number).exists()
+    )
+    if candidate_count >= period.max_candidates and not is_duplicate:
         return "full"
     return None
 
@@ -100,8 +110,14 @@ def exam_application_register(request):
             ).first()
             if initial_period:
                 state = unavailable_period_state(initial_period)
-                if state:
+                if state and state != "full":
                     return render_registration_closed(request, initial_period, state)
+                if state == "full":
+                    period_ids = list(available_periods.values_list("pk", flat=True))
+                    period_ids.append(initial_period.pk)
+                    available_periods = ExamPeriod.objects.filter(
+                        pk__in=period_ids
+                    ).select_related("cert_type").order_by("exam_date", "name")
     else:
         raw_period_id = request.POST.get("exam_period", "")
         if raw_period_id.isdecimal():
@@ -109,9 +125,18 @@ def exam_application_register(request):
                 "cert_type"
             ).first()
             if selected_period:
-                state = unavailable_period_state(selected_period)
+                id_number = request.POST.get("id_number", "").strip()
+                state = unavailable_period_state(selected_period, id_number)
                 if state:
                     return render_registration_closed(request, selected_period, state)
+                if id_number and selected_period.applications.filter(
+                    id_number=id_number
+                ).exists():
+                    period_ids = list(available_periods.values_list("pk", flat=True))
+                    period_ids.append(selected_period.pk)
+                    available_periods = ExamPeriod.objects.filter(
+                        pk__in=period_ids
+                    ).select_related("cert_type").order_by("exam_date", "name")
 
     if not available_periods.exists():
         return render_registration_closed(request)
@@ -279,6 +304,7 @@ def _render_lookup_page(
     candidate_name=None,
     masked_id_number=None,
     no_results=False,
+    remaining_seconds=None,
     status=200,
 ):
     is_room_lookup = purpose == "rooms"
@@ -299,6 +325,7 @@ def _render_lookup_page(
             "candidate_name": candidate_name,
             "masked_id_number": masked_id_number,
             "no_results": no_results,
+            "remaining_seconds": remaining_seconds or LOOKUP_RATE_WINDOW,
         },
         status=status,
     )
@@ -334,7 +361,8 @@ def _lookup_rate_limit_response(request, purpose):
         purpose,
         state="error",
         state_title="Đã vượt giới hạn tra cứu",
-        state_message="Bạn đã thử quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.",
+        state_message="Bạn đã nhập sai thông tin quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.",
+        remaining_seconds=LOOKUP_RATE_WINDOW,
         status=429,
     )
 
@@ -353,7 +381,7 @@ def _masked_id_number(id_number):
     return f"{id_number[:3]}******{id_number[-3:]}"
 
 
-def _published_exam_results(id_number, email):
+def _published_exam_results(id_number, email, session_key=None):
     results = []
     scores = (
         ExamScore.objects.filter(
@@ -382,10 +410,16 @@ def _published_exam_results(id_number, email):
             application_id__in=application_ids,
             exam_period_id__in=period_ids,
         )
+        .select_related("replaced_by")
         .order_by("-issued_at", "-pk")
     )
     certificates_by_pair = {}
     for certificate in certificates:
+        if session_key and certificate.status == ExamCertificate.Status.ISSUED:
+            token = CERTIFICATE_DOWNLOAD_SIGNER.sign(f"{certificate.pk}:{session_key}")
+            certificate.download_url = f"{reverse('exam-public-certificate-pdf')}?token={token}"
+        else:
+            certificate.download_url = None
         certificates_by_pair.setdefault(
             (certificate.application_id, certificate.exam_period_id),
             [],
@@ -651,10 +685,46 @@ def _public_lookup_page(request, purpose):
         if _identity_is_rate_limited(request, "request", id_number, email):
             return _lookup_rate_limit_response(request, purpose)
 
+        if purpose == "rooms":
+            valid_app = ExamApplication.objects.filter(
+                id_number=id_number,
+                email__iexact=email,
+                status=ExamApplication.Status.VALID,
+            ).first()
+            if not valid_app:
+                _increment_rate_limit(
+                    request,
+                    ("request", id_number, email.casefold()),
+                    LOOKUP_IDENTITY_LIMIT,
+                    include_ip=False,
+                )
+                fresh_form = _fresh_form_with_errors(
+                    PublicExamLookupRequestForm,
+                    submitted_form,
+                    initial={
+                        "id_number": id_number,
+                        "email": email,
+                    },
+                )
+                fresh_form.add_error(
+                    None,
+                    "Không tìm thấy thông tin phù hợp. Vui lòng kiểm tra lại CCCD và email đã đăng ký.",
+                )
+                return _render_lookup_page(
+                    request,
+                    purpose,
+                    request_form=fresh_form,
+                    state="error",
+                    state_title="Không tìm thấy thông tin phù hợp",
+                    state_message="Không tìm thấy thông tin phù hợp. Vui lòng kiểm tra lại CCCD và email đã đăng ký.",
+                    status=400,
+                )
+
         request.session[LOOKUP_RESULT_SESSION_KEY] = {
             "id_number": id_number,
             "email": email,
             "purpose": purpose,
+            "candidate_name": valid_app.full_name if purpose == "rooms" and valid_app else "",
             "expires_at": (timezone.now() + LOOKUP_SESSION_TTL).timestamp(),
         }
         return redirect(
@@ -679,17 +749,33 @@ def _public_lookup_page(request, purpose):
     masked_id = _masked_id_number(id_number)
     if purpose == "rooms":
         assignments = _public_room_assignments(id_number, email)
+        candidate_name = identity.get("candidate_name") or (assignments[0].application.full_name if assignments else "")
+        if not assignments:
+            return _render_lookup_page(
+                request,
+                purpose,
+                step="no_rooms",
+                candidate_name=candidate_name,
+                masked_id_number=masked_id,
+                no_results=True,
+            )
         return _render_lookup_page(
             request,
             purpose,
             step="results",
             results=assignments,
-            candidate_name=assignments[0].application.full_name if assignments else "",
+            candidate_name=candidate_name,
             masked_id_number=masked_id,
-            no_results=not assignments,
+            no_results=False,
         )
 
-    results = _published_exam_results(id_number, email)
+    if not request.session.session_key:
+        request.session.save()
+    results = _published_exam_results(
+        id_number,
+        email,
+        session_key=request.session.session_key,
+    )
     return _render_lookup_page(
         request,
         purpose,
@@ -723,3 +809,67 @@ def exam_public_export_pdf(request):
 @require_http_methods(["GET"])
 def exam_room_public_export_pdf(request):
     return _public_lookup_pdf(request, "rooms")
+
+
+@never_cache
+@require_http_methods(["GET"])
+def exam_public_certificate_pdf(request):
+    if _increment_rate_limit(request, ("ip",), LOOKUP_IP_LIMIT):
+        return HttpResponse("Đã vượt quá giới hạn tải.", status=429)
+
+    token = request.GET.get("token")
+    if not token:
+        raise Http404("Không tìm thấy chứng chỉ.")
+
+    try:
+        payload = CERTIFICATE_DOWNLOAD_SIGNER.unsign(token, max_age=300)
+    except (BadSignature, SignatureExpired):
+        raise Http404("Đường dẫn tải chứng chỉ không hợp lệ hoặc đã hết hạn.")
+
+    try:
+        cert_id_str, signed_session_key = payload.split(":", 1)
+        cert_id = int(cert_id_str)
+    except (ValueError, AttributeError):
+        raise Http404("Chứng chỉ không hợp lệ.")
+
+    if not request.session.session_key or request.session.session_key != signed_session_key:
+        raise Http404("Phiên tra cứu không hợp lệ.")
+
+    identity = _lookup_identity(request)
+    if not identity or identity.get("purpose") != "results":
+        raise Http404("Phiên tra cứu đã hết hạn.")
+
+    certificate = (
+        ExamCertificate.objects.select_related(
+            "exam_period__cert_type",
+            "application",
+        )
+        .filter(
+            pk=cert_id,
+            application__id_number=identity["id_number"],
+            application__email__iexact=identity["email"],
+            status=ExamCertificate.Status.ISSUED,
+        )
+        .first()
+    )
+    if not certificate:
+        raise Http404("Chứng chỉ không tồn tại hoặc không còn hiệu lực.")
+
+    AuditLog.objects.create(
+        action=AuditLog.Action.EXPORT,
+        actor=None,
+        actor_username="Thí sinh công khai",
+        object_type="ExamCertificate",
+        object_id=str(certificate.pk),
+        object_label=f"Chứng chỉ {certificate.certificate_number}",
+        reason=f"Thí sinh tải PDF chứng chỉ {certificate.certificate_number}",
+    )
+
+    pdf_bytes = _build_exam_certificate_pdf(certificate)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="chung-chi-{certificate.certificate_number}.pdf"'
+    )
+    response["Cache-Control"] = "no-store, private"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response

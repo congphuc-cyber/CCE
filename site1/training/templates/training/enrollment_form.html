@@ -46,7 +46,7 @@
                placeholder="Nhập họ tên hoặc số CCCD"
                role="combobox" aria-autocomplete="list" aria-expanded="false"
                aria-controls="learner-suggestions" aria-haspopup="listbox" autocomplete="off">
-        <div class="cce-form-help" id="learner-search-result" aria-live="polite"></div>
+        <div class="cce-form-help" id="learner-search-result" role="status" aria-live="polite"></div>
         <div class="learner-suggestions" id="learner-suggestions" role="listbox" aria-label="Học viên phù hợp" hidden></div>
       </div>
     </div>
@@ -140,6 +140,7 @@
         var term = normalize(search.value.trim());
         var tokens = term.split(/\s+/).filter(Boolean);
         if (!tokens.length) {
+          result.textContent = "";
           closeSuggestions();
           return;
         }
@@ -162,8 +163,10 @@
 
         if (!suggestionOptions.length) {
           closeSuggestions();
+          result.textContent = "Không tìm thấy học viên phù hợp. Hãy thử tên hoặc số CCCD khác.";
           return;
         }
+        result.textContent = "";
 
         suggestionOptions.forEach(function(option, index) {
           var button = document.createElement("button");

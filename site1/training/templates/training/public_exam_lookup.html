@@ -1,57 +1,203 @@
-{% extends "training/base_public_exam.html" %}
+{% extends "training/base_candidate.html" %}
+{% load static %}
 
-{% block title %}Tra cứu điểm và chứng chỉ{% endblock %}
+{% block title %}
+  {% if state_title == "Đã vượt giới hạn tra cứu" %}
+    Đã vượt giới hạn tra cứu | CCE
+  {% elif step == "results" and not no_results %}
+    Kết quả tra cứu | CCE
+  {% elif step == "results" and no_results %}
+    Không tìm thấy kết quả | CCE
+  {% else %}
+    Tra cứu điểm và chứng chỉ | CCE
+  {% endif %}
+{% endblock %}
+
+{% block meta_description %}Tra cứu điểm thi và chứng chỉ của thí sinh tại Trung tâm Kỹ thuật Điện toán, Trường ĐH Bách Khoa — ĐHQG-HCM.{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'training/css/public-exam-lookup.css' %}?v=20261116">
+{% endblock %}
 
 {% block content %}
-<section class="public-exam-panel">
-  <h1>Tra cứu điểm và chứng chỉ</h1>
-  <p class="public-exam-lead">Nhập CCCD, email đã đăng ký và mã xác thực trong hình để tra cứu điểm, chứng chỉ.</p>
-
-  {% if state %}
-    {% include "training/partials/public_state.html" with state=state title=state_title message=state_message %}
-  {% endif %}
-
-  {% if step == "results" %}
-    {% if no_results %}
-      {% include "training/partials/public_state.html" with state="warning" title="Không tìm thấy kết quả" message="Không tìm thấy kết quả phù hợp. Điểm có thể chưa được công bố hoặc thông tin tra cứu không khớp." %}
-    {% else %}
-      <section class="public-lookup-results" aria-labelledby="lookup-results-title">
-        <h2 id="lookup-results-title">Kết quả tra cứu</h2>
-        <p><strong>Thí sinh:</strong> {{ candidate_name }}</p>
-        <p><strong>CCCD:</strong> {{ masked_id_number }}</p>
-        <ul class="public-lookup-result-list">
-          {% for item in results %}
-            <li class="public-lookup-result">
-              <h3>{{ item.period.name }}</h3>
-              <p>{{ item.period.cert_type.name }} · Ngày thi {{ item.period.exam_date|date:"d/m/Y" }}</p>
-              {% if item.score.is_absent %}
-                <p><strong>Trạng thái:</strong> Vắng thi</p>
-              {% else %}
-                <p><strong>Điểm đã công bố:</strong> {{ item.score.score|floatformat:2 }} / {{ item.period.score_scale|floatformat:2 }}</p>
-              {% endif %}
-              <div class="public-lookup-certificate">
-                <strong>Chứng chỉ:</strong>
-                {% if item.certificates %}
-                  <ul class="public-lookup-certificates">
-                    {% for certificate in item.certificates %}
-                      <li>{{ certificate.certificate_number }} — {{ certificate.get_status_display }}</li>
-                    {% endfor %}
-                  </ul>
-                {% else %}
-                  <span>Chưa được cấp</span>
-                {% endif %}
-              </div>
-            </li>
-          {% endfor %}
-        </ul>
-      </section>
-    {% endif %}
-    <div class="public-exam-actions">
-      <a class="cce-btn cce-btn-primary" href="{% url 'exam-public-export-pdf' %}">Xuất PDF</a>
-      <a class="cce-btn cce-btn-outline" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
+<section class="card{% if step == 'results' and not no_results %} card-wide{% endif %}">
+  <div class="top">
+    <div class="ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
     </div>
+    <div>
+      <h1>Tra cứu điểm và chứng chỉ</h1>
+      <p>Nhập CCCD, email đã đăng ký và mã xác thực trong hình để tra cứu điểm, chứng chỉ.</p>
+    </div>
+  </div>
+
+  {% if state_title == "Đã vượt giới hạn tra cứu" %}
+    {# ── TRẠNG THÁI 4: ĐÃ VƯỢT GIỚI HẠN TRA CỨU ── #}
+    <div class="alert" role="alert">
+      <div class="ai" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+      </div>
+      <div>
+        <h2>Đã vượt giới hạn tra cứu</h2>
+        <p>Bạn đã nhập sai thông tin quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.</p>
+      </div>
+    </div>
+
+    <div class="acts">
+      <a id="retry" class="btn pri off" href="{% url 'exam-public-lookup' %}" aria-disabled="true" tabindex="-1">Thử lại sau <span id="cd" data-seconds="{{ remaining_seconds|default:900 }}" aria-live="off">15:00</span></a>
+      <a class="btn pri" href="{% url 'home' %}">Về trang chủ</a>
+    </div>
+
+  {% elif step == "results" %}
+    {% if no_results %}
+      {# ── TRẠNG THÁI 3: KHÔNG TÌM THẤY KẾT QUẢ ── #}
+      <div class="alert-card" role="status">
+        <div class="alert-card-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="alert-card-body">
+          <h2>Không tìm thấy kết quả phù hợp</h2>
+          <p>Không tìm thấy kết quả phù hợp. Vui lòng kiểm tra lại CCCD và email đã đăng ký, hoặc quay lại sau khi Trung tâm công bố kết quả.</p>
+        </div>
+      </div>
+
+      <div class="acts">
+        <a class="btn pri" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu lại</a>
+        <a class="btn" href="{% url 'home' %}">Về trang chủ</a>
+      </div>
+
+    {% else %}
+      {# ── TRẠNG THÁI 5: KẾT QUẢ TRA CỨU ── #}
+      <h2 class="sec">Kết quả tra cứu</h2>
+      <div class="who">
+        <p><b>Thí sinh:</b> {{ candidate_name }}</p>
+        <p><b>CCCD:</b> {{ masked_id_number }}</p>
+      </div>
+
+      {% for item in results %}
+        <div class="exam">
+          <h2>{{ item.period.name }} — {{ item.period.cert_type.name }}</h2>
+          <div class="tiles">
+            <div class="tile">
+              <span>Ngày thi</span>
+              <b>{{ item.period.exam_date|date:"d/m/Y" }}</b>
+            </div>
+            <div class="tile score">
+              <span>Điểm đã công bố</span>
+              {% if item.score.is_absent %}
+                <b>Vắng thi</b>
+              {% else %}
+                <b>{{ item.score.score|floatformat:2 }} <small>/ {{ item.period.score_scale|floatformat:2 }}</small></b>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="certs">
+            <h3>Chứng chỉ</h3>
+            {% if item.certificates %}
+              <ul>
+                {% for cert in item.certificates %}
+                  <li>
+                    <div class="cert-meta">
+                      <span class="cert-num">{{ cert.certificate_number }}</span>
+                      {% if cert.status == "revoked" %}
+                        <p class="cert-msg">Chứng chỉ đã bị thu hồi và không còn hiệu lực.</p>
+                      {% elif cert.status == "replaced" %}
+                        <p class="cert-msg">{% if cert.replaced_by %}Đã được thay thế bằng chứng chỉ số {{ cert.replaced_by.certificate_number }}. {% endif %}Chứng chỉ không còn hiệu lực.</p>
+                      {% endif %}
+                    </div>
+
+                    <div class="cert-acts">
+                      {% if cert.status == "issued" %}
+                        <span class="badge on">Đã cấp</span>
+                      {% elif cert.status == "revoked" %}
+                        <span class="badge off">{{ cert.get_status_display }}</span>
+                      {% elif cert.status == "replaced" %}
+                        <span class="badge neutral">{{ cert.get_status_display }}</span>
+                      {% else %}
+                        <span class="badge neutral">{{ cert.get_status_display }}</span>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="no-certs">Chưa có chứng chỉ</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+
+      <div class="acts">
+        <a class="btn pri" id="export-pdf-btn" href="{% url 'exam-public-export-pdf' %}" download="ket-qua-diem-chung-chi.pdf">Tải PDF</a>
+        <a class="btn" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
+        <a class="btn" href="{% url 'home' %}">Về trang chủ</a>
+      </div>
+    {% endif %}
+
   {% else %}
-    {% include "training/partials/public_lookup_auth_form.html" %}
+    {# ── TRẠNG THÁI 1 & 2: FORM MẶC ĐỊNH / FORM CÓ LỖI ── #}
+    {% if state == "error" or request_form.errors %}
+      <div class="alert" role="alert" id="error-summary" tabindex="-1">
+        <div class="ai" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div>
+          <h2>{{ state_title|default:"Vui lòng kiểm tra lại thông tin" }}</h2>
+          {% if state_message and state_title != state_message %}
+            <p>{{ state_message }}</p>
+          {% endif %}
+          {% if request_form.errors %}
+            <ul>
+              {% for field in request_form %}
+                {% for error in field.errors %}
+                  <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
+                {% endfor %}
+              {% endfor %}
+              {% for error in request_form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="post" action="" novalidate id="exam-lookup-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="lookup">
+
+      <div class="f{% if request_form.id_number.errors %} has-error{% endif %}">
+        <label for="{{ request_form.id_number.id_for_label }}">{{ request_form.id_number.label }}<i>*</i></label>
+        {{ request_form.id_number }}
+        {% for error in request_form.id_number.errors %}
+          <p class="err" id="{{ request_form.id_number.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="f{% if request_form.email.errors %} has-error{% endif %}">
+        <label for="{{ request_form.email.id_for_label }}">{{ request_form.email.label }}<i>*</i></label>
+        {{ request_form.email }}
+        {% for error in request_form.email.errors %}
+          <p class="err" id="{{ request_form.email.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="f{% if request_form.captcha.errors %} has-error{% endif %}">
+        <label for="{{ request_form.captcha.id_for_label }}">{{ request_form.captcha.label }}<i>*</i></label>
+        {{ request_form.captcha }}
+        <p class="hint">Nhập các ký tự trong hình.</p>
+        {% for error in request_form.captcha.errors %}
+          <p class="err" id="{{ request_form.captcha.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <button class="go" type="submit" id="submit-btn">Tra cứu</button>
+    </form>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'training/js/public-exam-lookup.js' %}?v=20261116" defer></script>
 {% endblock %}

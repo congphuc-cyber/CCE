@@ -92,7 +92,13 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="5" class="cce-empty-state">Không có dữ liệu</td>
+            <td colspan="5" class="cce-empty-state">
+              {% if has_active_filters %}
+                {% include "training/partials/search_empty_state.html" with reset_url="?" message="Không có nhật ký phù hợp với các điều kiện lọc đã chọn." %}
+              {% else %}
+                Không có dữ liệu
+              {% endif %}
+            </td>
           </tr>
         {% endfor %}
       </tbody>

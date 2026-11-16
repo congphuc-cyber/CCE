@@ -1,0 +1,16 @@
+<div class="cce-empty-results cce-empty-results--search" role="status" aria-live="polite">
+  <span class="material-symbols-outlined cce-empty-results__visual" aria-hidden="true">search_off</span>
+  <div class="cce-empty-results__content">
+    <h3 class="cce-empty-results__title">Không tìm thấy kết quả</h3>
+    <p class="cce-empty-results__message">
+      {{ message|default:"Thử từ khóa khác hoặc xóa bớt bộ lọc." }}
+    </p>
+    {% if query %}
+      <p class="cce-empty-results__query">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <span class="cce-empty-results__query-label">Từ khóa</span>
+        <code>{{ query }}</code>
+      </p>
+    {% endif %}
+  </div>
+</div>

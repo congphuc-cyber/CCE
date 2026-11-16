@@ -43,6 +43,6 @@
     </form>
   </div>
 
-  {% include "training/partials/data_table.html" with columns=columns rows=rows page_obj=page_obj hide_actions=True %}
+  {% include "training/partials/data_table.html" with columns=columns rows=rows page_obj=page_obj hide_actions=True empty_state_filtered=has_active_filters empty_state_reset_url="?" empty_state_message="Không có lịch sử chuyển lớp phù hợp với học viên hoặc lớp đã chọn." %}
 </section>
 {% endblock %}

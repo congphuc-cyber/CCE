@@ -72,7 +72,7 @@
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Bảng theo dõi điểm thi & kết quả</h2>
   </div>
 
-  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+  {% include "training/partials/exam_score_filter_bar.html" %}
 
   {# Thanh tiến độ nhập điểm trực quan #}
   {% if total > 0 %}
@@ -81,7 +81,7 @@
         Tiến độ chấm điểm:
       </span>
       <div style="flex:1; background:var(--c-border); border-radius:var(--radius-pill); height:8px; overflow:hidden;">
-        <div style="height:100%; background:var(--c-primary); width:{{ score_progress_pct }}%; border-radius:var(--radius-pill); transition:width var(--transition-normal);"></div>
+        <div style="height:100%; background:var(--c-accent); width:{{ score_progress_pct }}%; border-radius:var(--radius-pill); transition:width var(--transition-normal);"></div>
       </div>
       <span style="font-size:var(--font-size-sm); font-weight:var(--font-weight-bold); color:var(--c-primary);">
         {{ has_score_count }}/{{ total }} thí sinh ({{ score_progress_pct }}%)
@@ -185,16 +185,19 @@
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
-      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">grading</span>
-      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có dữ liệu điểm thi</p>
-      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
-        Chưa có thí sinh nào được xếp phòng trong tiêu chí lọc này, hoặc thí sinh chưa được nhập điểm.
-      </p>
-      <a class="cce-btn cce-btn-accent" href="{% url 'exam-room-list' %}">
-        → Đến danh sách phòng thi để xếp phòng
-      </a>
-    </div>
+    {% if has_active_score_filters %}
+      {% include "training/partials/search_empty_state.html" with reset_url=reset_filter_url message="Không có thí sinh nào phù hợp với bộ lọc đang chọn." %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
+        <span class="material-symbols-outlined cce-empty-icon" aria-hidden="true">grading</span>
+        <p class="cce-empty-title">Chưa có dữ liệu điểm thi</p>
+        <p class="cce-empty-desc">Hãy xếp thí sinh vào phòng thi trước khi theo dõi điểm.</p>
+        <a class="cce-btn cce-btn-accent" href="{% url 'exam-room-list' %}">
+          <span class="material-symbols-outlined" aria-hidden="true">meeting_room</span>
+          <span>Mở danh sách phòng thi</span>
+        </a>
+      </div>
+    {% endif %}
   {% endif %}
 </section>
 
@@ -278,6 +281,39 @@
 </div>
 
 <script>
+  (function () {
+    const dialog = document.getElementById('exam-score-filter-dialog');
+    const openButton = document.querySelector('[data-open-exam-score-filter]');
+    const periodSelect = document.querySelector('[data-exam-score-period]');
+
+    openButton.addEventListener('click', function () {
+      dialog.showModal();
+    });
+
+    document.querySelectorAll('[data-close-exam-score-filter]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        dialog.close();
+      });
+    });
+
+    dialog.addEventListener('click', function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+
+    if (dialog.dataset.activeFilters === 'true') {
+      dialog.showModal();
+    }
+
+    periodSelect.addEventListener('change', function () {
+      dialog.querySelectorAll('input[name="room"]').forEach(function (roomOption) {
+        roomOption.checked = roomOption.value === '';
+      });
+      this.form.requestSubmit();
+    });
+  })();
+
   function openScoreModal(data) {
     document.getElementById('modalAssignmentId').value = data.assignmentId;
     document.getElementById('modalCandidateName').textContent = data.fullName;

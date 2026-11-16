@@ -3,6 +3,18 @@
 
 {% block nav-global-side %}{% endblock %}
 
+{% block content %}
+    {% if request.path == "/admin/training/course/" or request.path == "/admin/training/trainingclass/" or request.path == "/admin/training/teacher/" or request.path == "/admin/training/learner/" or request.path == "/admin/auth/user/" %}
+        <div class="cce-page-header cce-admin-page-header">
+            <div class="cce-page-title-block">
+                <h1>{{ cl.opts.verbose_name_plural }}</h1>
+                <p class="cce-page-subtitle">{{ change_list_description }}</p>
+            </div>
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}
+
 {% block date_hierarchy %}
     {{ block.super }}
     {% get_admin_stats opts.model_name as admin_stats %}
@@ -20,9 +32,25 @@
 {% endblock %}
 
 {% block search %}
-    <div class="cce-admin-search-actions">
+    <div class="cce-admin-search-actions{% if cl.opts.model_name == "teacher" %} cce-admin-search-actions--teacher{% endif %}">
         {{ block.super }}
     </div>
+    {% if cl.opts.model_name == "teacher" %}
+        <script>
+            (function () {
+                var search = document.getElementById("searchbar");
+                if (!search) {
+                    return;
+                }
+                search.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        search.form.requestSubmit();
+                    }
+                });
+            })();
+        </script>
+    {% endif %}
 {% endblock %}
 
 {% block filters %}

@@ -12,7 +12,7 @@ from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
@@ -132,18 +132,12 @@ AUDIT_OBJECT_TYPE_LABELS = {
 
 
 def get_home(request):
-    if request.user.is_authenticated:
-        if user_has_feature(request.user, "dashboard"):
-            return redirect("dashboard")
-        if user_has_feature(request.user, "my-classes"):
-            return redirect("my-class-list")
-        return redirect("profile")
     registration_periods = (
         ExamPeriod.objects.filter(
             status=ExamPeriod.Status.PUBLISHED,
             registration_deadline__gte=timezone.localdate(),
         )
-        .annotate(candidate_count=Count("applications"))
+        .annotate(candidate_count=Count("applications__id_number", distinct=True))
         .filter(candidate_count__lt=F("max_candidates"))
         .select_related("cert_type")
         .order_by("exam_date", "name")[:4]
@@ -506,6 +500,8 @@ class CertificateIssueForm(forms.Form):
         training_class = cleaned.get("training_class")
         learner = cleaned.get("learner")
         if training_class and learner:
+            if not training_class.final_results_locked:
+                raise forms.ValidationError("Bảng điểm cuối khóa chưa được chốt.")
             result = FinalCourseResult.objects.filter(training_class=training_class, learner=learner).first()
             if result is None:
                 raise forms.ValidationError("Học viên chưa có kết quả cuối khóa trong lớp này.")
@@ -733,6 +729,7 @@ def certificate_list(request):
             "course_id": course_id,
             "class_id": class_id,
             "status": status,
+            "has_active_filters": bool(keyword or course_id or class_id or status),
             "total_eligible": len(rows),
             "total_issued": Certificate.objects.filter(status=Certificate.Status.ISSUED).count(),
         },
@@ -795,17 +792,21 @@ def certificate_issue(request, result_id=None):
         ).order_by("-issued_at", "-pk").first()
 
     has_passing_result = bool(
-        result and result.score >= training_class.course.pass_threshold
+        result
+        and not result.is_absent
+        and result.score is not None
+        and result.score >= training_class.course.pass_threshold
     )
+    results_locked = bool(training_class and training_class.final_results_locked)
     checks = [
         {
             "label": "Kết quả đã chốt",
             "description": (
                 "Bảng điểm đã được chốt; kết quả đủ cơ sở xét cấp."
-                if result
-                else "Chưa có kết quả cuối khóa trong lớp này."
+                if results_locked
+                else "Bảng điểm cuối khóa chưa được chốt."
             ),
-            "passed": bool(result),
+            "passed": results_locked,
         },
         {
             "label": "Kết quả học tập đạt",
@@ -813,9 +814,13 @@ def certificate_issue(request, result_id=None):
                 f"Điểm {result.score} đạt ngưỡng {training_class.course.pass_threshold}."
                 if has_passing_result
                 else (
-                    f"Điểm {result.score} chưa đạt ngưỡng {training_class.course.pass_threshold}."
-                    if result
-                    else "Chưa có điểm để đối chiếu điều kiện."
+                    "Học viên được đánh dấu vắng, không đủ điều kiện cấp chứng nhận."
+                    if result and result.is_absent
+                    else (
+                        f"Điểm {result.score} chưa đạt ngưỡng {training_class.course.pass_threshold}."
+                        if result and result.score is not None
+                        else "Chưa có điểm để đối chiếu điều kiện."
+                    )
                 )
             ),
             "passed": has_passing_result,
@@ -1546,9 +1551,22 @@ def exam_certificate_list(request):
 
     from training.models import ExamApplication, ExamCertificate, ExamPeriod, ExamScore
 
+    published_passing_scores = ExamScore.objects.filter(
+        assignment__application_id=OuterRef("application_id"),
+        assignment__exam_room__exam_period_id=OuterRef("exam_period_id"),
+        score__isnull=False,
+        score__gte=5,
+        is_absent=False,
+        is_published=True,
+    ).order_by("-published_at", "-pk")
     qs = ExamCertificate.objects.select_related(
         "exam_period", "application", "issued_by"
-    ).prefetch_related("history__changed_by__groups", "replaced_certificate")
+    ).prefetch_related(
+        "history__changed_by__groups",
+        "replaced_certificate",
+    ).annotate(
+        certificate_score_id=Subquery(published_passing_scores.values("pk")[:1])
+    )
     keyword = (request.GET.get("q") or request.GET.get("keyword") or "").strip()
     period_id = request.GET.get("period") or request.GET.get("period_id")
     application_id = request.GET.get("application_id")
@@ -1569,20 +1587,15 @@ def exam_certificate_list(request):
         qs = qs.filter(status=status)
 
     certificates = list(qs.order_by("-issued_at", "-pk")) if status != "pending" else []
-    rows = [
-        {
-            "certificate": certificate,
-            "application": certificate.application,
-            "period": certificate.exam_period,
-            "status": certificate.status,
-            "is_pending": False,
-            "score": None,
-            "sort_date": certificate.issued_at,
-            "sort_id": certificate.pk,
-        }
+    certificate_score_ids = {
+        certificate.certificate_score_id
         for certificate in certificates
-    ]
-
+        if certificate.certificate_score_id is not None
+    }
+    certificate_scores = {
+        score.pk: score
+        for score in ExamScore.objects.filter(pk__in=certificate_score_ids)
+    }
     scores = ExamScore.objects.filter(
         assignment__application__status=ExamApplication.Status.VALID,
         assignment__exam_room__exam_period_id=F("assignment__application__exam_period_id"),
@@ -1610,6 +1623,20 @@ def exam_certificate_list(request):
         pair = (score.assignment.exam_room.exam_period_id, score.assignment.application_id)
         if score.score >= 5:
             eligible_scores.setdefault(pair, score)
+
+    rows = [
+        {
+            "certificate": certificate,
+            "application": certificate.application,
+            "period": certificate.exam_period,
+            "status": certificate.status,
+            "is_pending": False,
+            "score": certificate_scores.get(certificate.certificate_score_id),
+            "sort_date": certificate.issued_at,
+            "sort_id": certificate.pk,
+        }
+        for certificate in certificates
+    ]
 
     active_pairs = set(
         ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).values_list(
@@ -1756,11 +1783,7 @@ def exam_certificate_candidate_detail(request, period_id, application_id):
     )
 
 
-@login_required
-def exam_certificate_pdf(request, pk):
-    if not user_has_feature(request.user, "exam-certificates"):
-        raise PermissionDenied
-
+def _build_exam_certificate_pdf(certificate):
     from io import BytesIO
     from xml.sax.saxutils import escape
 
@@ -1770,14 +1793,9 @@ def exam_certificate_pdf(request, pk):
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-    from training.models import ExamCertificate, ExamScore
+    from training.models import ExamScore
     from training.public_exam_views import _register_public_pdf_font
 
-    certificate = get_object_or_404(
-        ExamCertificate.objects.select_related("exam_period", "application", "issued_by"),
-        pk=pk,
-        status=ExamCertificate.Status.ISSUED,
-    )
     score = ExamScore.objects.filter(
         assignment__exam_room__exam_period=certificate.exam_period,
         assignment__application=certificate.application,
@@ -1842,8 +1860,23 @@ def exam_certificate_pdf(request, pk):
         )
     )
     document.build(story)
+    return output.getvalue()
 
-    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+
+@login_required
+def exam_certificate_pdf(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamCertificate
+
+    certificate = get_object_or_404(
+        ExamCertificate.objects.select_related("exam_period", "application", "issued_by"),
+        pk=pk,
+        status=ExamCertificate.Status.ISSUED,
+    )
+    pdf_bytes = _build_exam_certificate_pdf(certificate)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{certificate.certificate_number}.pdf"'
     response["Cache-Control"] = "no-store, private"
     response["X-Content-Type-Options"] = "nosniff"
@@ -2416,6 +2449,13 @@ def class_transfer_history(request):
             "filter_form": filter_form,
             "page_obj": page_obj,
             "rows": rows,
+            "has_active_filters": bool(
+                filter_form.is_valid()
+                and (
+                    filter_form.cleaned_data.get("learner")
+                    or filter_form.cleaned_data.get("training_class")
+                )
+            ),
             "columns": [
                 {"key": "learner", "label": "Học viên"},
                 {"key": "source_class", "label": "Lớp cũ"},
@@ -2688,6 +2728,13 @@ def audit_log_list(request):
             "breadcrumbs": [{"label": "Nhật ký thao tác"}],
             "filter_form": form,
             "page_obj": page_obj,
+            "has_active_filters": bool(
+                form.is_valid()
+                and any(
+                    form.cleaned_data.get(field)
+                    for field in ("action", "actor", "from_date", "to_date")
+                )
+            ),
             "total_logs_count": total_logs_count,
             "create_actions_count": create_actions_count,
             "edit_actions_count": edit_actions_count,

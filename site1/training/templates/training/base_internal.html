@@ -7,7 +7,7 @@
   <title>{% block title %}{{ page_title|default:"Quản lý đào tạo và thi" }}{% endblock %} | CCE</title>
   <link rel="stylesheet" href="{% static 'unfold/fonts/material-symbols/styles.css' %}">
   <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}?v=edtech-rich-surfaces-20261111">
-  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=teacher-select-20261115">
+  <link rel="stylesheet" href="{% static 'training/css/cce-core.css' %}?v=shared-filter-modal-20261116">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -23,18 +23,19 @@
     <div class="cce-content-area">
       <header class="cce-topbar">
         <nav class="cce-breadcrumbs" aria-label="Đường dẫn điều hướng">
-          <a href="{% url 'home' %}">Trang chủ</a>
-          {% for crumb in breadcrumbs %}
-            <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
-            {% if crumb.url %}
-              <a href="{{ crumb.url }}">{{ crumb.label }}</a>
-            {% else %}
-              <span class="cce-breadcrumbs-current" aria-current="page">{{ crumb.label }}</span>
-            {% endif %}
-          {% empty %}
-            <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
+          {% if breadcrumbs %}
+            <a href="{% url 'dashboard' %}">Bảng điều khiển</a>
+            {% for crumb in breadcrumbs %}
+              <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
+              {% if crumb.url %}
+                <a href="{{ crumb.url }}">{{ crumb.label }}</a>
+              {% else %}
+                <span class="cce-breadcrumbs-current" aria-current="page">{{ crumb.label }}</span>
+              {% endif %}
+            {% endfor %}
+          {% else %}
             <span class="cce-breadcrumbs-current" aria-current="page">{% block breadcrumb_title %}{{ page_title|default:"Bảng điều khiển" }}{% endblock %}</span>
-          {% endfor %}
+          {% endif %}
         </nav>
 
         <div class="cce-topbar-actions">

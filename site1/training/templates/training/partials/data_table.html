@@ -41,7 +41,11 @@
       {% empty %}
         <tr>
           <td colspan="{% if hide_actions %}{{ columns|length }}{% else %}{{ columns|length|add:1 }}{% endif %}" class="cce-empty-state">
-            Không có dữ liệu
+            {% if empty_state_filtered %}
+              {% include "training/partials/search_empty_state.html" with message=empty_state_message reset_url=empty_state_reset_url %}
+            {% else %}
+              Không có dữ liệu
+            {% endif %}
           </td>
         </tr>
       {% endfor %}

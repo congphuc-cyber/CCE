@@ -306,4 +306,31 @@
       }
     });
   });
+
+  // Accessible Error Handling & Focus Management
+  const errorSummary = document.getElementById("error-summary");
+  const errorFields = document.querySelectorAll(".f.has-error input, .f.has-error select");
+  errorFields.forEach((el) => {
+    el.setAttribute("aria-invalid", "true");
+    const errorMsg = el.closest(".f")?.querySelector(".err");
+    if (errorMsg && errorMsg.id) {
+      el.setAttribute("aria-describedby", errorMsg.id);
+    }
+  });
+
+  if (errorFields.length > 0) {
+    errorFields[0].focus();
+  } else if (errorSummary) {
+    errorSummary.focus();
+  }
+
+  // Double Submit Prevention
+  const form = document.getElementById("exam-registration-form");
+  const submitBtn = document.getElementById("submit-btn");
+  if (form && submitBtn) {
+    form.addEventListener("submit", () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Đang gửi…";
+    });
+  }
 })();

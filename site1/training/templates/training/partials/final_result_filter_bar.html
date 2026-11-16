@@ -1,0 +1,114 @@
+<div class="cce-filter-bar cce-final-results-filter-bar">
+  <form method="get" class="cce-list-filter-form">
+    <div class="cce-list-filter-toolbar">
+      <div class="cce-list-filter-search">
+        <label for="final-results-keyword">Tìm lớp hoặc khóa học</label>
+        <input
+          class="cce-input"
+          type="search"
+          id="final-results-keyword"
+          name="keyword"
+          value="{{ keyword }}"
+          placeholder="Nhập tên lớp hoặc khóa học..."
+          enterkeyhint="search"
+        >
+      </div>
+
+      <div class="cce-filter-toolbar">
+        <button
+          class="cce-btn cce-list-filter-toggle"
+          type="button"
+          data-open-final-results-filter
+          aria-haspopup="dialog"
+          aria-controls="final-results-filter-dialog"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+          <span>Bộ lọc</span>
+        </button>
+        <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?">
+          <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+          <span>Đặt lại</span>
+        </a>
+      </div>
+    </div>
+
+    <dialog
+      class="cce-list-filter-dialog"
+      id="final-results-filter-dialog"
+      aria-labelledby="final-results-filter-title"
+      data-active-filters="{{ active_filters|yesno:'true,false' }}"
+    >
+      <div class="cce-list-filter-sheet">
+        <header class="cce-list-filter-header">
+          <div class="cce-list-filter-heading">
+            <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+            <h2 id="final-results-filter-title">Bộ lọc danh sách</h2>
+          </div>
+          <button
+            class="cce-list-filter-close"
+            type="button"
+            data-close-final-results-filter
+            aria-label="Đóng bộ lọc"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </header>
+
+        <div class="cce-list-filter-body">
+          {% for filter in filter_fields %}
+            <fieldset class="cce-list-filter-group">
+              <legend>
+                <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+                {{ filter.label }}
+              </legend>
+              <div class="cce-list-filter-options">
+                <label class="cce-list-filter-option{% if not filter.value %} is-selected{% endif %}">
+                  <input
+                    type="radio"
+                    name="{{ filter.name }}"
+                    value=""
+                    {% if not filter.value %}checked{% endif %}
+                    onchange="this.form.requestSubmit()"
+                  >
+                  <span>{{ filter.placeholder|default:"Tất cả" }}</span>
+                  {% if not filter.value %}
+                    <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                  {% endif %}
+                </label>
+                {% for opt in filter.options %}
+                  <label class="cce-list-filter-option{% if filter.value == opt.value %} is-selected{% endif %}">
+                    <input
+                      type="radio"
+                      name="{{ filter.name }}"
+                      value="{{ opt.value }}"
+                      {% if filter.value == opt.value %}checked{% endif %}
+                      onchange="this.form.requestSubmit()"
+                    >
+                    <span>{{ opt.label }}</span>
+                    {% if filter.value == opt.value %}
+                      <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                    {% endif %}
+                  </label>
+                {% endfor %}
+              </div>
+            </fieldset>
+          {% endfor %}
+        </div>
+
+        <footer class="cce-list-filter-footer">
+          {% if active_filters %}
+            <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?">
+              <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+              <span>Đặt lại</span>
+            </a>
+          {% else %}
+            <span>Chưa kích hoạt bộ lọc</span>
+          {% endif %}
+          <button class="cce-btn cce-btn-secondary" type="button" data-close-final-results-filter>
+            Đóng
+          </button>
+        </footer>
+      </div>
+    </dialog>
+  </form>
+</div>

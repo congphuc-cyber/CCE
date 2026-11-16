@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -536,12 +536,14 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "Giáo vụ")
         self.assertContains(response, FEATURE_ICONS["courses"])
         self.assertNotContains(response, "Quản lý khảo thí")
-        self.assertContains(response, "avatar-profile-gap-20261111")
+        self.assertContains(response, "admin-list-layout-20261116")
         self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
         self.assertContains(response, 'class="cce-admin-header-logout"')
         self.assertContains(response, 'class="cce-logout-button"')
         self.assertContains(response, 'class="cce-admin-search-actions"')
         self.assertContains(response, 'class="cce-admin-filter-add"')
+        self.assertContains(response, "filter-open-button")
+        self.assertNotContains(response, "Áp dụng lọc")
         self.assertContains(response, "Danh sách khóa học")
         self.assertContains(response, "Ngưỡng đạt")
         page = response.content.decode()
@@ -575,6 +577,149 @@ class PhaseFourTests(TestCase):
                 f'<a class="cce-nav-link is-active active" href="{path}" aria-current="page">',
             )
         self.assertFalse(self.education_user.is_staff)
+
+    def test_training_admin_lists_match_internal_page_heading_and_breadcrumbs(self):
+        self.client.force_login(self.education_user)
+        pages = (
+            (
+                "admin:training_course_changelist",
+                "Khóa học",
+                "Quản lý danh mục và ngưỡng đạt của các chương trình đào tạo.",
+            ),
+            (
+                "admin:training_trainingclass_changelist",
+                "Lớp học",
+                "Theo dõi lịch học, sĩ số và trạng thái các lớp đào tạo.",
+            ),
+            (
+                "admin:training_teacher_changelist",
+                "Giáo viên",
+                "Quản lý hồ sơ giáo viên và các lớp được phân công.",
+            ),
+            (
+                "admin:training_learner_changelist",
+                "Học viên",
+                "Quản lý hồ sơ học viên và tình trạng ghi danh.",
+            ),
+        )
+
+        for route_name, page_title, description in pages:
+            response = self.client.get(reverse(route_name))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "cce-admin-breadcrumbs")
+            self.assertContains(response, page_title)
+            self.assertContains(response, "cce-admin-page-header")
+            self.assertContains(response, description)
+
+    def test_course_filters_cover_class_presence_and_name(self):
+        self.client.force_login(self.education_user)
+        route = reverse("admin:training_course_changelist")
+        course_without_classes = Course.objects.create(
+            name="Khóa học chưa mở lớp",
+            pass_threshold=80,
+        )
+
+        response = self.client.get(route)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "filter-open-button")
+        self.assertContains(response, 'x-on:click="filterOpen = true"')
+        self.assertContains(response, "items-center justify-center")
+        self.assertContains(response, 'aria-label="Đặt lại bộ lọc"')
+        self.assertContains(response, "Tên khóa học")
+        self.assertNotContains(response, "Áp dụng lọc")
+        page = response.content.decode()
+        self.assertLess(
+            page.index("filter-open-button"),
+            page.index('aria-label="Đặt lại bộ lọc"'),
+        )
+
+        with_classes_response = self.client.get(route, {"class_presence": "with_classes"})
+        self.assertEqual(with_classes_response.status_code, 200)
+        self.assertEqual(
+            {course.pk for course in with_classes_response.context["cl"].result_list},
+            {self.course.pk},
+        )
+
+        without_classes_response = self.client.get(
+            route,
+            {"class_presence": "without_classes"},
+        )
+        self.assertEqual(without_classes_response.status_code, 200)
+        self.assertEqual(
+            {course.pk for course in without_classes_response.context["cl"].result_list},
+            {course_without_classes.pk},
+        )
+
+        by_name_response = self.client.get(route, {"name__exact": self.course.name})
+        self.assertEqual(by_name_response.status_code, 200)
+        self.assertEqual(
+            {course.pk for course in by_name_response.context["cl"].result_list},
+            {self.course.pk},
+        )
+
+    def test_teacher_search_form_uses_class_filter_without_search_button(self):
+        self.client.force_login(self.education_user)
+        response = self.client.get(reverse("admin:training_teacher_changelist"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "filter-open-button")
+        self.assertContains(response, "items-center justify-center")
+        self.assertContains(response, "Lớp phụ trách")
+        self.assertContains(response, "admin-list-layout-20261116")
+        self.assertNotContains(response, "Áp dụng lọc")
+        self.assertContains(response, "search.form.requestSubmit()")
+        self.assertContains(response, "cce-admin-search-actions--teacher")
+
+    def test_teacher_class_filter_returns_only_active_assignees(self):
+        assigned_teacher = Teacher.objects.create(full_name="Giáo viên đúng lớp")
+        other_teacher = Teacher.objects.create(full_name="Giáo viên lớp khác")
+        inactive_teacher = Teacher.objects.create(full_name="Giáo viên đã bỏ phân công")
+        other_class = TrainingClass.objects.create(
+            name="ATD-02",
+            course=self.course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Ba, 18:00",
+            max_students=2,
+        )
+        ClassAssignment.objects.create(
+            training_class=self.training_class,
+            teacher=assigned_teacher,
+        )
+        ClassAssignment.objects.create(
+            training_class=other_class,
+            teacher=other_teacher,
+        )
+        ClassAssignment.objects.create(
+            training_class=self.training_class,
+            teacher=inactive_teacher,
+            is_active=False,
+        )
+
+        self.client.force_login(self.education_user)
+        response = self.client.get(
+            reverse("admin:training_teacher_changelist"),
+            {"training_class": self.training_class.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {teacher.pk for teacher in response.context["cl"].result_list},
+            {assigned_teacher.pk},
+        )
+
+    def test_admin_search_without_matches_uses_shared_empty_state(self):
+        self.client.force_login(self.education_user)
+        response = self.client.get(
+            reverse("admin:training_course_changelist"),
+            {"q": "khong-co-khoa-hoc-nay"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="cce-empty-results cce-empty-results--search"')
+        self.assertContains(response, "search_off")
+        self.assertContains(response, "Không tìm thấy kết quả")
+        self.assertContains(response, "khong-co-khoa-hoc-nay")
+        self.assertNotContains(response, "cce-empty-results__action")
+        self.assertNotContains(response, "This page yielded into no results.")
 
     def test_training_admin_lists_use_shared_pagination_summary(self):
         for index in range(10):
@@ -753,7 +898,7 @@ class PhaseFourTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="cce-select cce-teacher-select"')
         self.assertContains(response, "Chọn giáo viên")
-        self.assertContains(response, "teacher-select-20261115")
+        self.assertContains(response, "shared-filter-modal-20261116")
         self.assertContains(response, teacher.full_name)
         self.assertNotContains(response, "teacher-search")
 
@@ -805,7 +950,7 @@ class PhaseFourTests(TestCase):
         self.client.force_login(self.education_user)
         detail_url = reverse("class-detail", args=(self.training_class.pk,))
         response = self.client.get(detail_url)
-        self.assertContains(response, "teacher-select-20261115")
+        self.assertContains(response, "shared-filter-modal-20261116")
         self.assertContains(response, "Ghi danh")
         self.assertContains(response, "Đóng lớp")
         self.assertContains(response, "required")
@@ -1219,7 +1364,8 @@ class ClassTransferTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["page_obj"].paginator.count, 0)
-        self.assertContains(response, "Không có dữ liệu")
+        self.assertContains(response, "Không tìm thấy kết quả")
+        self.assertNotContains(response, "cce-empty-results__action")
         self.assertNotContains(response, "Hãy chọn một lựa chọn hợp lệ.")
 
     def test_teacher_cannot_access_class_transfer_routes(self):
@@ -1268,6 +1414,21 @@ class PhaseFiveTests(TestCase):
         )
         self.assertContains(response, '<details class="cce-nav-group" open>')
         self.assertEqual(response.content.decode().count('id="nav-sidebar-apps"'), 1)
+
+    def test_account_admin_list_matches_internal_page_heading_and_breadcrumbs(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse("admin:auth_user_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cce-admin-breadcrumbs")
+        self.assertContains(response, "Bảng điều khiển")
+        self.assertContains(response, "Tài khoản")
+        self.assertContains(response, "cce-admin-page-header")
+        self.assertContains(
+            response,
+            "Quản lý tài khoản, vai trò truy cập và trạng thái hoạt động.",
+        )
+        self.assertContains(response, "stat-theme-admin-user")
 
     def test_account_admin_creates_and_updates_account_without_logging_password(self):
         self.client.force_login(self.admin_user)
@@ -2688,13 +2849,37 @@ class FinalCourseResultTests(TestCase):
         )
 
     def test_final_result_list_is_scoped_by_role_and_its_own_feature_permission(self):
+        other_course = Course.objects.create(
+            name="Tin học ứng dụng",
+            pass_threshold=75,
+        )
         other_class = TrainingClass.objects.create(
             name="ATD-KQ-OTHER",
-            course=self.course,
+            course=other_course,
             learning_format=TrainingClass.LearningFormat.ONLINE,
             schedule="Thứ Sáu, 18:00",
             max_students=5,
         )
+        partial_course = Course.objects.create(
+            name="Điện tử cơ bản",
+            pass_threshold=75,
+        )
+        partial_class = TrainingClass.objects.create(
+            name="ATD-KQ-PARTIAL",
+            course=partial_course,
+            learning_format=TrainingClass.LearningFormat.AT_CENTER,
+            schedule="Thứ Bảy, 18:00",
+            max_students=5,
+        )
+        for index in range(2):
+            learner = Learner.objects.create(full_name=f"Học viên công bố {index}")
+            Enrollment.objects.create(training_class=partial_class, learner=learner)
+            FinalCourseResult.objects.create(
+                training_class=partial_class,
+                learner=learner,
+                score=Decimal("80"),
+                is_published=index == 0,
+            )
         results = self._complete_and_lock_results()
         for result in results:
             result.is_published = True
@@ -2710,17 +2895,74 @@ class FinalCourseResultTests(TestCase):
         self.client.force_login(self.manager)
         manager_page = self.client.get(list_url)
         self.assertEqual(manager_page.status_code, 200)
-        self.assertEqual(manager_page.context["total_classes"], 2)
-        self.assertEqual(manager_page.context["completed_classes"], 1)
+        self.assertEqual(manager_page.context["total_classes"], 3)
+        self.assertEqual(manager_page.context["completed_classes"], 2)
         self.assertEqual(manager_page.context["locked_classes"], 1)
         self.assertEqual(manager_page.context["published_classes"], 1)
         self.assertContains(manager_page, "3/3 hoàn tất")
         self.assertContains(manager_page, "Đã chốt")
         self.assertContains(manager_page, "Đã công bố")
+        self.assertContains(manager_page, 'class="cce-list-filter-dialog"')
+        self.assertContains(manager_page, "data-open-final-results-filter")
+        self.assertContains(manager_page, "Bộ lọc")
+        self.assertContains(manager_page, 'name="keyword"')
+        self.assertNotContains(manager_page, "cce-final-results-search__submit")
+        self.assertContains(manager_page, "Trạng thái chốt")
+        self.assertContains(manager_page, "Trạng thái công bố")
+        self.assertNotContains(manager_page, "Áp dụng lọc")
+        self.assertContains(manager_page, 'data-active-filters="false"')
+        page = manager_page.content.decode()
+        search_position = page.index('id="final-results-keyword"')
+        self.assertLess(
+            search_position,
+            page.index("<dialog", search_position),
+        )
+        toolbar_start = page.index(
+            '<div class="cce-filter-toolbar">',
+            search_position,
+        )
+        self.assertLess(
+            page.index("data-open-final-results-filter", toolbar_start),
+            page.index('href="?"', toolbar_start),
+        )
+
         filtered_page = self.client.get(list_url, {"keyword": other_class.name})
         self.assertEqual(filtered_page.context["total_classes"], 1)
-        self.assertContains(filtered_page, other_class.name)
-        self.assertNotContains(filtered_page, self.training_class.name)
+        self.assertEqual(
+            [
+                row["training_class"].name
+                for row in filtered_page.context["page_obj"].object_list
+            ],
+            [other_class.name],
+        )
+        self.assertContains(filtered_page, 'data-active-filters="false"')
+
+        filter_requests = (
+            ({"course_id": self.course.pk}, {self.training_class.name}),
+            ({"class_id": other_class.pk}, {other_class.name}),
+            ({"lock_status": "locked"}, {self.training_class.name}),
+            (
+                {"lock_status": "unlocked"},
+                {other_class.name, partial_class.name},
+            ),
+            ({"publication_status": "published"}, {self.training_class.name}),
+            ({"publication_status": "partial"}, {partial_class.name}),
+            ({"publication_status": "unpublished"}, {other_class.name}),
+        )
+        for params, expected_classes in filter_requests:
+            with self.subTest(filters=params):
+                filtered = self.client.get(list_url, params)
+                self.assertEqual(filtered.status_code, 200)
+                self.assertEqual(filtered.context["total_classes"], len(expected_classes))
+                self.assertContains(filtered, 'data-active-filters="true"')
+                self.assertEqual(
+                    {
+                        row["training_class"].name
+                        for row in filtered.context["page_obj"].object_list
+                    },
+                    expected_classes,
+                )
+
         self.assertEqual(self.client.get(results_url).status_code, 200)
         self.assertFalse(user_has_feature(self.manager, "classes"))
         self.assertTrue(user_has_feature(self.manager, "final-results"))
@@ -2732,6 +2974,7 @@ class FinalCourseResultTests(TestCase):
         self.assertEqual(teacher_page.context["total_classes"], 1)
         self.assertContains(teacher_page, self.training_class.name)
         self.assertNotContains(teacher_page, other_class.name)
+        self.assertNotContains(teacher_page, other_course.name)
         self.assertEqual(self.client.get(results_url).status_code, 200)
         self.assertEqual(
             self.client.get(
@@ -3261,7 +3504,7 @@ class DemoDataCommandTests(TestCase):
             follow=True,
         )
         self.assertEqual(login_response.status_code, 200)
-        self.assertEqual(login_response.redirect_chain[-1][0], reverse("profile"))
+        self.assertEqual(login_response.redirect_chain[-1][0], reverse("home"))
 
         with patch.dict("os.environ", {"DEMO_TEST_PASSWORD": "demo-test-password"}):
             call_command("seed_demo_data")
@@ -3513,6 +3756,51 @@ class ExamPeriodCRUDTests(TestCase):
         r = self.client.get(reverse("exam-period-list"))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, period.name)
+        self.assertContains(r, "Bộ lọc")
+        self.assertContains(r, "Tên đợt thi &amp; Chứng chỉ")
+        self.assertContains(r, "Trạng thái")
+        self.assertNotContains(r, "Áp dụng lọc")
+        self.assertContains(r, 'data-active-filters="false"')
+
+    def test_period_filter_modal_filters_period_and_status(self):
+        matching_period = _make_exam_period(
+            self.course,
+            status=ExamPeriod.Status.DRAFT,
+            name="Đợt thi lọc theo chứng chỉ",
+        )
+        _make_exam_period(
+            self.course,
+            status=ExamPeriod.Status.PUBLISHED,
+            name="Đợt thi khác",
+        )
+
+        response = self.client.get(
+            reverse("exam-period-list"),
+            {
+                "q": "",
+                "period_id": matching_period.pk,
+                "status": ExamPeriod.Status.DRAFT,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [period.name for period in response.context["page_obj"].object_list],
+            [matching_period.name],
+        )
+        self.assertContains(response, 'data-active-filters="true"')
+
+    def test_period_search_without_matches_uses_shared_empty_state(self):
+        response = self.client.get(
+            reverse("exam-period-list"),
+            {"q": "khong-co-dot-thi-nay"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="cce-empty-results cce-empty-results--search"')
+        self.assertContains(response, "Không tìm thấy kết quả")
+        self.assertContains(response, "khong-co-dot-thi-nay")
+        self.assertNotContains(response, "cce-empty-results__action")
 
 
 # ---------------------------------------------------------------------------
@@ -3531,6 +3819,53 @@ class ExamApplicationTests(TestCase):
         uploaded = _io_module.BytesIO(content.encode("utf-8"))
         uploaded.name = "applications.csv"
         return uploaded
+
+    def test_application_list_shows_and_searches_by_email(self):
+        application = _make_application(self.period, full_name="Thí sinh có email")
+        application.email = "candidate@example.com"
+        application.save(update_fields=["email"])
+
+        response = self.client.get(reverse("exam-application-list"))
+        self.assertRegex(
+            response.content.decode(),
+            r"<th[^>]*>Email thí sinh</th>",
+        )
+        self.assertContains(response, "candidate@example.com")
+
+        response = self.client.get(
+            reverse("exam-application-list"),
+            {"q": "candidate@example.com"},
+        )
+        self.assertContains(response, "Thí sinh có email")
+        self.assertContains(response, "candidate@example.com")
+
+    def test_application_import_saves_email(self):
+        response = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Họ và tên,Số CCCD/CMND,Địa chỉ email\n"
+                "Thí sinh nhập email,098765432107,candidate@example.com\n"
+            ),
+            "exam_period": self.period.pk,
+        })
+
+        self.assertTrue(response.json()["ok"], response.json())
+        self.assertEqual(
+            self.period.applications.get().email,
+            "candidate@example.com",
+        )
+
+    def test_application_import_rejects_invalid_email(self):
+        response = self.client.post(reverse("exam-application-import"), {
+            "file": self._application_csv(
+                "Họ và tên,Số CCCD/CMND,Email\n"
+                "Thí sinh email sai,098765432106,not-an-email\n"
+            ),
+            "exam_period": self.period.pk,
+        })
+
+        self.assertFalse(response.json()["ok"])
+        self.assertIn("email", response.json()["errors"][0]["msg"])
+        self.assertEqual(self.period.applications.count(), 0)
 
     def test_application_import_preview_does_not_save_and_confirm_saves_once(self):
         url = reverse("exam-application-import")
@@ -3622,8 +3957,8 @@ class ExamApplicationTests(TestCase):
         preview = self.client.post(reverse("exam-application-import"), {
             "file": self._application_csv(
                 "Họ và tên,Số CCCD/CMND,Số điện thoại\n"
-                "Thí sinh lặp,098765432109,0901234569\n"
-                "Thí sinh lặp,098765432109,0901234569\n"
+                "Thí sinh đăng ký đầu,098765432109,0901234569\n"
+                "Tên khác cùng CCCD,098765432109,0909999999\n"
             ),
             "exam_period": self.period.pk,
             "preview": "1",
@@ -3714,10 +4049,27 @@ class ExamApplicationTests(TestCase):
     def test_application_list_shows_period_filter(self):
         r = self.client.get(reverse("exam-application-list"))
         self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'class="cce-list-filter-dialog"')
+        self.assertContains(r, "Lọc theo đợt thi")
+        self.assertContains(r, "Kênh đăng ký")
+        self.assertContains(r, "Trạng thái hồ sơ")
+        self.assertContains(r, "Bộ lọc")
+        self.assertNotContains(r, "Áp dụng lọc")
+        self.assertNotContains(r, 'id="id_status"')
+        self.assertContains(r, 'data-active-filters="false"')
+        page = r.content.decode()
+        self.assertLess(
+            page.index('id="exam-application-search"'),
+            page.index("<dialog"),
+        )
 
     def test_application_list_with_period_filter(self):
-        r = self.client.get(reverse("exam-application-list") + f"?period={self.period.pk}")
+        r = self.client.get(
+            reverse("exam-application-list"),
+            {"exam_period": self.period.pk},
+        )
         self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'data-active-filters="true"')
 
     def test_application_list_shows_app_data(self):
         app = _make_application(self.period, full_name="Phạm Văn Test")
@@ -3726,16 +4078,69 @@ class ExamApplicationTests(TestCase):
         )
         self.assertContains(r, "Phạm Văn Test")
 
-    def test_application_list_filter_status_has_no_new_choice(self):
+    def test_application_list_marks_preexisting_same_period_id_records_as_duplicates(self):
+        ExamApplication.objects.bulk_create([
+            ExamApplication(
+                exam_period=self.period,
+                full_name="Hồ sơ cũ thứ nhất",
+                id_number="123450009999",
+                status=ExamApplication.Status.NEW,
+            ),
+            ExamApplication(
+                exam_period=self.period,
+                full_name="Hồ sơ cũ thứ hai",
+                id_number="123450009999",
+                status=ExamApplication.Status.NEW,
+            ),
+        ])
+
+        response = self.client.get(reverse("exam-application-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["duplicate_count"], 1)
+        self.assertEqual(
+            set(
+                ExamApplication.objects.filter(
+                    exam_period=self.period,
+                    id_number="123450009999",
+                ).values_list("status", flat=True)
+            ),
+            {ExamApplication.Status.DUPLICATE},
+        )
+        self.assertContains(response, "Trùng lặp")
+
+    def test_application_list_filter_status_includes_new_and_filters_it(self):
         r = self.client.get(reverse("exam-application-list"))
         self.assertEqual(r.status_code, 200)
         form = r.context["filter_form"]
         status_choice_values = [c[0] for c in form.fields["status"].choices]
         status_choice_labels = [c[1] for c in form.fields["status"].choices]
-        self.assertNotIn("new", status_choice_values)
-        self.assertNotIn("Mới", status_choice_labels)
+        self.assertIn("new", status_choice_values)
+        self.assertIn("Mới nhận", status_choice_labels)
         self.assertIn("valid", status_choice_values)
         self.assertIn("duplicate", status_choice_values)
+
+        new_application = ExamApplication.objects.create(
+            exam_period=self.period,
+            full_name="Thí sinh mới nhận",
+            id_number="123456789031",
+            status=ExamApplication.Status.NEW,
+        )
+        ExamApplication.objects.create(
+            exam_period=self.period,
+            full_name="Thí sinh hợp lệ",
+            id_number="123456789032",
+            status=ExamApplication.Status.VALID,
+        )
+        filtered = self.client.get(
+            reverse("exam-application-list"),
+            {"status": ExamApplication.Status.NEW},
+        )
+        self.assertEqual(
+            [application.pk for application in filtered.context["page_obj"].object_list],
+            [new_application.pk],
+        )
+        self.assertContains(filtered, 'data-active-filters="true"')
 
     def test_application_list_filter_source_choices_and_filter(self):
         r = self.client.get(reverse("exam-application-list"))
@@ -3779,18 +4184,27 @@ class ExamApplicationTests(TestCase):
         self.assertTrue(ExamApplication.objects.filter(pk=a1.pk).exists())
         self.assertFalse(ExamApplication.objects.filter(pk=a2.pk).exists())
 
-    def test_deduplicate_different_names_not_duplicates(self):
-        """2 hồ sơ khác họ tên dù cùng CCCD thì KHÔNG phải là hồ sơ trùng."""
+    def test_deduplicate_groups_same_period_and_id_even_when_details_differ(self):
         a1 = _make_application(self.period, full_name="Nguyễn Văn A", id_number="333333333333")
         a2 = ExamApplication.objects.create(
             exam_period=self.period,
             full_name="Trần Thị B",
             id_number="333333333333",
+            phone="0900000000",
             status=ExamApplication.Status.VALID,
         )
-        r = self.client.get(reverse("exam-application-deduplicate"))
-        self.assertEqual(r.status_code, 200)
-        self.assertNotContains(r, "333333333333")
+        response = self.client.get(reverse("exam-application-deduplicate"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "333333333333")
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+
+        response = self.client.post(
+            reverse("exam-application-deduplicate"),
+            {"keep_id": a1.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ExamApplication.objects.filter(pk=a1.pk).exists())
+        self.assertFalse(ExamApplication.objects.filter(pk=a2.pk).exists())
 
     def test_deduplicate_transfers_room_assignment_and_score(self):
         """Khi xóa hồ sơ trùng đã có phòng thi và điểm, phòng thi và điểm phải được chuyển sang hồ sơ giữ lại thay vì báo lỗi ProtectedError."""
@@ -3873,6 +4287,83 @@ class ExamRoomTests(TestCase):
 
     def test_room_list_200(self):
         self.assertEqual(self.client.get(reverse("exam-room-list")).status_code, 200)
+
+    def test_room_list_uses_modal_filter_for_room_period_session_and_status(self):
+        response = self.client.get(reverse("exam-room-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="cce-list-filter-dialog"')
+        self.assertContains(response, "Phòng thi")
+        self.assertContains(response, "Đợt thi")
+        self.assertContains(response, "Ca thi")
+        self.assertContains(response, "Trạng thái")
+        self.assertContains(response, "Bộ lọc")
+        self.assertNotContains(response, "Áp dụng lọc")
+        self.assertContains(response, "Đầy phòng")
+        self.assertContains(response, "Còn chỗ")
+        self.assertContains(response, 'data-active-filters="false"')
+
+    def test_room_list_search_filters_by_room_name(self):
+        matching_room = _make_exam_room(self.period, name="Phòng A101")
+        _make_exam_room(self.period, name="Phòng B202")
+
+        response = self.client.get(
+            reverse("exam-room-list"),
+            {"q": "A101"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["room"].pk for item in response.context["rooms_data"]],
+            [matching_room.pk],
+        )
+        self.assertEqual(response.context["search_query"], "A101")
+        self.assertTrue(response.context["has_active_filters"])
+        self.assertFalse(response.context["active_filters"])
+
+    def test_room_list_filter_applies_room_period_session_and_full_status(self):
+        full_room = _make_exam_room(
+            self.period,
+            name="A101",
+            session="Ca 1 — Sáng (07:30–09:30)",
+            capacity=1,
+        )
+        available_room = _make_exam_room(
+            self.period,
+            name="B202",
+            session="Ca 2 — Sáng (09:30–11:30)",
+            capacity=2,
+        )
+        _make_assignment(full_room, self.app)
+
+        response = self.client.get(
+            reverse("exam-room-list"),
+            {
+                "room": full_room.pk,
+                "period": self.period.pk,
+                "session": full_room.session,
+                "status": "full",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["room"].pk for item in response.context["rooms_data"]],
+            [full_room.pk],
+        )
+        self.assertEqual(response.context["total_rooms"], 1)
+        self.assertEqual(response.context["total_capacity"], 1)
+        self.assertEqual(response.context["total_assigned"], 1)
+        self.assertContains(response, 'data-active-filters="true"')
+
+        available_response = self.client.get(
+            reverse("exam-room-list"),
+            {"status": "available"},
+        )
+        self.assertEqual(
+            [item["room"].pk for item in available_response.context["rooms_data"]],
+            [available_room.pk],
+        )
 
     def test_room_list_shows_room_name(self):
         room = _make_exam_room(self.period, name="B202")
@@ -4193,6 +4684,72 @@ class ExamScoreTests(TestCase):
     def test_score_entry_get_200(self):
         r = self.client.get(reverse("exam-score-entry", args=[self.room.pk]))
         self.assertEqual(r.status_code, 200)
+
+    def test_score_list_keeps_period_bar_and_uses_room_publish_filter_modal(self):
+        response = self.client.get(reverse("exam-score-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="filter-period" name="period"')
+        self.assertContains(response, "Tất cả đợt thi")
+        self.assertContains(response, "Bộ lọc")
+        self.assertContains(response, "Phòng thi")
+        self.assertContains(response, "Công bố")
+        self.assertNotContains(response, "Áp dụng lọc")
+        self.assertContains(response, 'data-active-filters="false"')
+
+    def test_score_list_filters_by_room_and_publication_state(self):
+        published_assignment = self.asgn
+        ExamScore.objects.create(
+            assignment=published_assignment,
+            score=Decimal("80"),
+            is_published=True,
+        )
+
+        unpublished_app = _make_application(
+            self.period,
+            id_number="001234567891",
+            full_name="Thí sinh chưa công bố",
+        )
+        unpublished_assignment = _make_assignment(self.room, unpublished_app)
+        ExamScore.objects.create(
+            assignment=unpublished_assignment,
+            score=Decimal("70"),
+            is_published=False,
+        )
+
+        missing_score_app = _make_application(
+            self.period,
+            id_number="001234567892",
+            full_name="Thí sinh chưa nhập",
+        )
+        missing_score_assignment = _make_assignment(self.room, missing_score_app)
+
+        url = reverse("exam-score-list")
+        common_filters = {"period": self.period.pk, "room": self.room.pk}
+        published_response = self.client.get(
+            url,
+            {**common_filters, "published": "published"},
+        )
+        unpublished_response = self.client.get(
+            url,
+            {**common_filters, "published": "unpublished"},
+        )
+
+        published_rows = published_response.context["page_obj"].object_list
+        unpublished_rows = unpublished_response.context["page_obj"].object_list
+        self.assertEqual(
+            [row["assignment"].pk for row in published_rows],
+            [published_assignment.pk],
+        )
+        self.assertEqual(
+            {row["assignment"].pk for row in unpublished_rows},
+            {unpublished_assignment.pk, missing_score_assignment.pk},
+        )
+        self.assertEqual(
+            published_response.context["selected_period"],
+            self.period,
+        )
+        self.assertContains(published_response, self.period.name)
 
     def test_score_entry_shows_candidate_name(self):
         r = self.client.get(reverse("exam-score-entry", args=[self.room.pk]))
@@ -5225,6 +5782,8 @@ class CertificateWorkflowTests(TestCase):
             max_students=30,
             status=TrainingClass.Status.CLOSED,
         )
+        self.training_class.final_results_locked_at = timezone.now()
+        self.training_class.save(update_fields=("final_results_locked_at",))
         self.learner = Learner.objects.create(
             full_name="Nguyễn Văn A",
             date_of_birth="1999-01-01",
@@ -5245,6 +5804,74 @@ class CertificateWorkflowTests(TestCase):
             status=Certificate.Status.ISSUED,
             issued_by=self.user,
             reason="Đạt kết quả cuối khóa.",
+        )
+
+    def test_certificate_issue_page_handles_incomplete_and_absent_results(self):
+        cases = (
+            ("Trần Thị Chưa Điểm", "123456789021", False),
+            ("Trần Thị Vắng", "123456789022", True),
+        )
+        for name, id_number, is_absent in cases:
+            with self.subTest(is_absent=is_absent):
+                learner = Learner.objects.create(
+                    full_name=name,
+                    date_of_birth="2001-02-02",
+                    id_number=id_number,
+                    phone="0909123457",
+                )
+                FinalCourseResult.objects.create(
+                    training_class=self.training_class,
+                    learner=learner,
+                    score=None,
+                    is_absent=is_absent,
+                )
+
+                response = self.client.get(
+                    reverse("certificate-issue"),
+                    {
+                        "training_class": self.training_class.pk,
+                        "learner": learner.pk,
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.context["can_issue"])
+                self.assertFalse(response.context["checks"][1]["passed"])
+                if is_absent:
+                    self.assertContains(response, "được đánh dấu vắng")
+                else:
+                    self.assertContains(response, "Chưa có điểm")
+
+    def test_certificate_issue_requires_final_results_to_be_locked(self):
+        self.training_class.final_results_locked_at = None
+        self.training_class.save(update_fields=("final_results_locked_at",))
+
+        response = self.client.get(
+            reverse("certificate-issue"),
+            {
+                "training_class": self.training_class.pk,
+                "learner": self.learner.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["checks"][0]["passed"])
+        self.assertFalse(response.context["can_issue"])
+        response = self.client.post(
+            reverse("certificate-issue"),
+            {
+                "training_class": self.training_class.pk,
+                "learner": self.learner.pk,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bảng điểm cuối khóa chưa được chốt.")
+        self.assertFalse(
+            Certificate.objects.filter(
+                training_class=self.training_class,
+                learner=self.learner,
+                status=Certificate.Status.ISSUED,
+            ).exclude(pk=self.certificate.pk).exists()
         )
 
     def test_certificate_issue_requires_pass_result(self):
@@ -5400,6 +6027,33 @@ class ExamCertificateWorkflowTests(TestCase):
         self.assertEqual(audit_entry.actor, self.user)
         self.assertEqual(audit_entry.new_values["status"], ExamCertificate.Status.ISSUED)
 
+    def test_exam_certificate_list_shows_score_for_issued_certificate(self):
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-LIST-SCORE",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+
+        response = self.client.get(reverse("exam-certificate-list"))
+
+        self.assertEqual(response.status_code, 200)
+        row = next(
+            item
+            for item in response.context["page_obj"].object_list
+            if item["certificate"] == certificate
+        )
+        self.assertEqual(row["score"], self.score)
+        self.assertContains(response, "8,50")
+        searched_response = self.client.get(
+            reverse("exam-certificate-list"),
+            {"keyword": certificate.certificate_number},
+        )
+        self.assertEqual(searched_response.status_code, 200)
+        searched_row = searched_response.context["page_obj"].object_list[0]
+        self.assertEqual(searched_row["score"], self.score)
+
     def test_certificate_menus_and_direct_views_follow_role_permissions(self):
         response = self.client.get(reverse("exam-certificate-list"))
         self.assertEqual(response.status_code, 200)
@@ -5528,7 +6182,7 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "92,00")
         self.assertContains(response, certificate.certificate_number)
         self.assertContains(response, "Thu hồi")
-        self.assertContains(response, "Xuất PDF")
+        self.assertContains(response, "Tải PDF")
         self.assertContains(response, reverse("exam-public-export-pdf"))
 
         pdf_response = self.client.get(reverse("exam-public-export-pdf"))
@@ -5708,6 +6362,106 @@ class PublicExamLookupTests(TestCase):
         self.assertNotContains(response, self.app.full_name)
         self.assertNotIn("public_exam_lookup_result", self.client.session)
 
+    def test_public_certificate_pdf_download_for_issued_certificate(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("95.00"),
+            is_published=True,
+        )
+        cert = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2027-8888",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=None,
+        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        lookup_page = self.client.get(reverse("exam-public-lookup"))
+        self.assertEqual(lookup_page.status_code, 200)
+        self.assertContains(lookup_page, "EXC-2027-8888")
+        self.assertContains(lookup_page, "Đã cấp")
+        self.assertContains(lookup_page, "Tải PDF")
+
+        # Extract signed token and verify PDF download
+        results = lookup_page.context["results"]
+        cert_item = results[0]["certificates"][0]
+        self.assertIsNotNone(cert_item.download_url)
+
+        dl_response = self.client.get(cert_item.download_url)
+        self.assertEqual(dl_response.status_code, 200)
+        self.assertEqual(dl_response["Content-Type"], "application/pdf")
+        self.assertIn('attachment; filename="chung-chi-EXC-2027-8888.pdf"', dl_response["Content-Disposition"])
+        self.assertTrue(dl_response.content.startswith(b"%PDF-"))
+
+        # AuditLog was logged
+        log = AuditLog.objects.filter(
+            action=AuditLog.Action.EXPORT,
+            object_type="ExamCertificate",
+            object_id=str(cert.pk),
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.actor_username, "Thí sinh công khai")
+
+    def test_public_certificate_pdf_rejects_revoked_or_tampered_token(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("95.00"),
+            is_published=True,
+        )
+        revoked_cert = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2027-REV01",
+            status=ExamCertificate.Status.REVOKED,
+            issued_by=None,
+        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        lookup_page = self.client.get(reverse("exam-public-lookup"))
+        self.assertContains(lookup_page, "EXC-2027-REV01")
+        self.assertContains(lookup_page, "Thu hồi")
+        self.assertContains(lookup_page, "Chứng chỉ đã bị thu hồi và không còn hiệu lực.")
+
+        # Tampered or revoked cert id cannot be downloaded
+        session_key = self.client.session.session_key
+        from training.public_exam_views import CERTIFICATE_DOWNLOAD_SIGNER
+        revoked_token = CERTIFICATE_DOWNLOAD_SIGNER.sign(f"{revoked_cert.pk}:{session_key}")
+        revoked_dl = self.client.get(f"{reverse('exam-public-certificate-pdf')}?token={revoked_token}")
+        self.assertEqual(revoked_dl.status_code, 404)
+
+        # Invalid token
+        bad_dl = self.client.get(f"{reverse('exam-public-certificate-pdf')}?token=invalid:token")
+        self.assertEqual(bad_dl.status_code, 404)
+
+        # No token
+        empty_dl = self.client.get(reverse("exam-public-certificate-pdf"))
+        self.assertEqual(empty_dl.status_code, 404)
+
+    def test_public_certificate_pdf_rejects_other_candidates_session(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("95.00"),
+            is_published=True,
+        )
+        cert = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2027-OTHER",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=None,
+        )
+        response = self.submit_lookup(self.client, "exam-public-lookup")
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        lookup_page = self.client.get(reverse("exam-public-lookup"))
+        cert_item = lookup_page.context["results"][0]["certificates"][0]
+        download_url = cert_item.download_url
+
+        # Another client with different session tries to use candidate A's download URL
+        other_client = Client()
+        other_response = other_client.get(download_url)
+        self.assertEqual(other_response.status_code, 404)
+
 class PublicExamRegistrationTests(TestCase):
     def setUp(self):
         self.course = _make_course()
@@ -5715,6 +6469,8 @@ class PublicExamRegistrationTests(TestCase):
             course=self.course,
             name="Đợt thi đăng ký trực tuyến",
         )
+        self.period.registration_deadline = timezone.localdate() + timedelta(days=30)
+        self.period.save(update_fields=("registration_deadline",))
 
     def valid_payload(self):
         return {
@@ -5730,10 +6486,16 @@ class PublicExamRegistrationTests(TestCase):
     def test_public_home_is_available_without_login_and_has_candidate_paths(self):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("exam-application-public-register"))
+        self.assertContains(response, reverse("exam-room-public-lookup"))
+        self.assertContains(response, reverse("exam-public-lookup"))
+        self.assertNotContains(response, reverse("login"))
+        self.assertNotContains(response, "Đăng nhập cán bộ")
+        self.assertContains(response, "Đăng ký thi và tra cứu kết quả")
         self.assertContains(response, "Đăng ký dự thi")
         self.assertContains(response, "Xem phòng thi")
         self.assertContains(response, "Tra cứu điểm và chứng chỉ")
-        self.assertContains(response, self.period.name)
+        self.assertContains(response, "Hãy dùng <b>đúng CCCD và email đã đăng ký</b> khi xem phòng thi hoặc tra cứu kết quả.")
 
     def test_registration_form_is_public_and_posts_online_application(self):
         response = self.client.get(reverse("exam-application-public-register"))
@@ -5778,7 +6540,7 @@ class PublicExamRegistrationTests(TestCase):
         self.assertContains(response, self.course.name)
         self.assertContains(
             response,
-            f'href="{reverse("exam-application-public-register")}"',
+            f'href="{reverse("home")}"',
         )
         self.assertContains(response, "Tải phiếu đăng ký (PDF)")
         self.assertContains(
@@ -5823,6 +6585,53 @@ class PublicExamRegistrationTests(TestCase):
         application = ExamApplication.objects.get(id_number="123456789012")
         self.assertEqual(application.date_of_birth.isoformat(), "2000-01-02")
 
+    def test_registration_with_same_id_and_period_is_saved_as_duplicate(self):
+        self.period.max_candidates = 2
+        self.period.save(update_fields=("max_candidates",))
+        existing = _make_application(
+            self.period,
+            full_name="Hồ sơ đã có",
+            id_number="123456789012",
+        )
+
+        response = self.client.post(
+            reverse("exam-application-public-register"),
+            self.valid_payload(),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("exam-application-public-success"),
+        )
+        duplicate = ExamApplication.objects.exclude(pk=existing.pk).get(
+            exam_period=self.period,
+            id_number="123456789012",
+        )
+        self.assertNotEqual(duplicate.pk, existing.pk)
+        self.assertEqual(duplicate.status, ExamApplication.Status.DUPLICATE)
+
+    def test_home_capacity_counts_unique_exam_identities(self):
+        self.period.max_candidates = 2
+        self.period.save(update_fields=("max_candidates",))
+        _make_application(
+            self.period,
+            full_name="Hồ sơ thứ nhất",
+            id_number="123456789012",
+        )
+        _make_application(
+            self.period,
+            full_name="Hồ sơ trùng CCCD",
+            id_number="123456789012",
+        )
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [period.pk for period in response.context["registration_periods"]],
+            [self.period.pk],
+        )
+
     def test_registration_rejects_an_exam_period_for_another_certificate_type(self):
         other_course = Course.objects.create(
             name="Chứng chỉ khác",
@@ -5832,6 +6641,8 @@ class PublicExamRegistrationTests(TestCase):
             course=other_course,
             name="Đợt thi chứng chỉ khác",
         )
+        other_period.registration_deadline = timezone.localdate() + timedelta(days=30)
+        other_period.save(update_fields=("registration_deadline",))
         payload = self.valid_payload()
         payload["exam_period"] = str(other_period.pk)
 

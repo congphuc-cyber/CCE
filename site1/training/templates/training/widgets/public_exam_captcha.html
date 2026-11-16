@@ -1,7 +1,15 @@
 {% spaceless %}
-  {% if audio %}
-    <a class="public-captcha-audio" title="Nghe mã CAPTCHA" href="{{ audio }}">Nghe mã CAPTCHA</a>
-  {% endif %}
-  <img src="{{ image }}" alt="Mã xác thực trong hình" class="captcha">
+  <div class="cap-box">
+    <div class="cap">
+      <img src="{{ image }}" alt="Mã xác thực trong hình" class="captcha" height="44">
+      <button type="button" class="cap-refresh js-captcha-refresh" title="Đổi mã xác thực khác" aria-label="Đổi mã xác thực khác">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        <span>Đổi mã</span>
+      </button>
+    </div>
+    {% if audio %}
+      <a class="public-captcha-audio" title="Nghe mã CAPTCHA" href="{{ audio }}">Nghe mã</a>
+    {% endif %}
+  </div>
   {% for widget in widget.subwidgets %}{% include widget.template_name %}{% endfor %}
 {% endspaceless %}

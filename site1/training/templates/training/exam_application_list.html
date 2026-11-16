@@ -1,10 +1,14 @@
 {% extends "training/base_internal.html" %}
-{% load ui_components %}
+{% load static ui_components %}
 
 {% block title %}Hồ sơ đăng ký dự thi{% endblock %}
 {% block breadcrumb_title %}Hồ sơ đăng ký{% endblock %}
 {% block page_title %}Hồ sơ đăng ký dự thi{% endblock %}
 {% block page_description %}{{ page_description|default:"Quản lý danh sách hồ sơ thí sinh đăng ký, sàng lọc hồ sơ hợp lệ và xử lý trùng lặp." }}{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'training/css/exam-application-list.css' %}?v=20261116-2">
+{% endblock %}
 
 {% block page_actions %}
   <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
@@ -32,7 +36,7 @@
     <div>
       <strong style="font-size:var(--font-size-base); color:var(--c-danger);">Phát hiện {{ duplicate_count }} hồ sơ trùng lặp cần xử lý</strong>
       <p style="margin:2px 0 0 0; font-size:var(--font-size-sm); color:var(--c-text-muted);">
-        Các hồ sơ trùng họ tên, số CCCD/CMND trong cùng đợt thi cần được xử lý: duyệt giữ lại 1 hồ sơ và xóa các bản ghi trùng lặp còn lại.
+        Các hồ sơ trùng số CCCD/CMND trong cùng đợt thi cần được xử lý: chọn giữ lại 1 hồ sơ và xóa các bản ghi còn lại.
       </p>
     </div>
   </div>
@@ -77,54 +81,35 @@
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách thí sinh đăng ký dự thi</h2>
   </div>
 
-  <div class="cce-filter-bar">
-    <form method="get" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:flex-end; width:100%;">
-      <div class="cce-filter-item">
-        <label for="id_q" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Tìm kiếm thí sinh</label>
-        {{ filter_form.q }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_exam_period" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Lọc theo đợt thi</label>
-        {{ filter_form.exam_period }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_source" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Kênh đăng ký</label>
-        {{ filter_form.source }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_status" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Trạng thái hồ sơ</label>
-        {{ filter_form.status }}
-      </div>
-      <div class="cce-filter-actions">
-        <button class="cce-btn cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">filter_alt</span>
-          <span>Áp dụng lọc</span>
-        </button>
-        <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?" style="display:inline-flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
-          <span>Đặt lại</span>
-        </a>
-      </div>
-    </form>
-  </div>
+  {% include "training/partials/exam_application_filter_bar.html" %}
 
   {% if page_obj.object_list %}
-    <div class="cce-table-wrap">
-      <table class="cce-table cce-table-centered cce-table-first-column-left" role="table">
+    <div class="cce-table-wrap cce-exam-application-table-wrap">
+      <table class="cce-table cce-table-centered cce-table-first-column-left cce-exam-applications-table" role="table">
+        <colgroup>
+          <col style="width:20%;">
+          <col style="width:20%;">
+          <col style="width:13%;">
+          <col style="width:18%;">
+          <col style="width:10%;">
+          <col style="width:11%;">
+          <col style="width:8%;">
+        </colgroup>
         <thead>
           <tr>
-            <th scope="col" style="min-width:220px;">Thí sinh & Liên hệ</th>
-            <th scope="col" style="min-width:160px;">Số CCCD / CMND</th>
-            <th scope="col" style="min-width:240px;">Đợt thi đăng ký</th>
-            <th scope="col" style="min-width:150px;">Kênh đăng ký</th>
-            <th scope="col" style="min-width:140px;">Thời điểm ĐK</th>
-            <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
+            <th scope="col">Thí sinh & Liên hệ</th>
+            <th scope="col">Email thí sinh</th>
+            <th scope="col">Số CCCD / CMND</th>
+            <th scope="col">Đợt thi đăng ký</th>
+            <th scope="col">Kênh đăng ký</th>
+            <th scope="col">Thời điểm ĐK</th>
+            <th scope="col" style="text-align:center;">Trạng thái</th>
           </tr>
         </thead>
         <tbody>
           {% for app in page_obj %}
             <tr {% if app.status == 'duplicate' %}style="background:var(--c-danger-soft);"{% endif %}>
-              <td>
+              <td data-label="Thí sinh & Liên hệ">
                 <div style="display:flex; align-items:center; gap:var(--space-2);">
                   <div style="width:36px; height:36px; border-radius:var(--radius-pill); background:var(--c-primary-soft); color:var(--c-primary); display:flex; align-items:center; justify-content:center; font-weight:var(--font-weight-bold); font-size:var(--font-size-sm); flex-shrink:0;">
                     {{ app.full_name|slice:":1"|upper }}
@@ -138,12 +123,17 @@
                   </div>
                 </div>
               </td>
-              <td>
+              <td data-label="Email thí sinh">
+                <span style="font-size:var(--font-size-sm); color:var(--c-text); overflow-wrap:anywhere;">
+                  {{ app.email|default:"Chưa có email" }}
+                </span>
+              </td>
+              <td data-label="Số CCCD / CMND">
                 <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); letter-spacing:0.5px; color:var(--c-text);">
                   {{ app.id_number }}
                 </span>
               </td>
-              <td>
+              <td data-label="Đợt thi đăng ký">
                 <div style="display:flex; flex-direction:column; gap:2px;">
                   <span style="font-weight:var(--font-weight-medium); color:var(--c-text);">{{ app.exam_period.name }}</span>
                   <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">
@@ -151,7 +141,7 @@
                   </span>
                 </div>
               </td>
-              <td>
+              <td data-label="Kênh đăng ký">
                 <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs);">
                   {% if app.source == 'google_form' %}
                     <span class="material-symbols-outlined" style="font-size:1.1rem; color:var(--c-accent);" aria-hidden="true">description</span>
@@ -168,13 +158,13 @@
                   {% endif %}
                 </div>
               </td>
-              <td>
+              <td data-label="Thời điểm ĐK">
                 <div style="display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-size-xs); color:var(--c-text-muted);">
                   <span class="material-symbols-outlined" style="font-size:0.95rem;" aria-hidden="true">schedule</span>
                   <span>{{ app.registered_at|date:"d/m/Y H:i" }}</span>
                 </div>
               </td>
-              <td style="text-align:center;">
+              <td data-label="Trạng thái" style="text-align:center;">
                 {% if app.status == 'new' %}
                   <span class="cce-badge cce-badge-new">Mới nhận</span>
                 {% elif app.status == 'valid' %}
@@ -192,16 +182,57 @@
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
-      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">person_search</span>
-      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Không tìm thấy hồ sơ nào</p>
-      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
-        Không có hồ sơ thí sinh nào khớp với tiêu chí tìm kiếm hoặc bộ lọc hiện tại.
-      </p>
-      <a class="cce-btn cce-btn-accent" href="{% url 'exam-application-import' %}">
-        + Nhập hồ sơ từ Google Form / File
-      </a>
-    </div>
+    {% if has_active_filters %}
+      {% url 'exam-application-list' as reset_url %}
+      {% include "training/partials/search_empty_state.html" with query=search_query reset_url=reset_url message="Không có hồ sơ thí sinh nào phù hợp với các tiêu chí đã chọn." %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
+        <span class="material-symbols-outlined cce-empty-icon" aria-hidden="true">person_add</span>
+        <p class="cce-empty-title">Chưa có hồ sơ đăng ký</p>
+        <p class="cce-empty-desc">Nhập hồ sơ từ Google Form hoặc file để bắt đầu quản lý danh sách thí sinh.</p>
+        <a class="cce-btn cce-btn-accent" href="{% url 'exam-application-import' %}">
+          <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+          <span>Nhập hồ sơ</span>
+        </a>
+      </div>
+    {% endif %}
   {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    var dialog = document.getElementById("exam-application-filter-dialog");
+    var openButton = document.querySelector("[data-open-exam-application-filter]");
+    var searchInput = document.getElementById("exam-application-search");
+
+    searchInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchInput.form.requestSubmit();
+      }
+    });
+
+    openButton.addEventListener("click", function () {
+      dialog.showModal();
+    });
+
+    dialog.querySelectorAll("[data-close-exam-application-filter]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        dialog.close();
+      });
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+
+    if (dialog.dataset.activeFilters === "true") {
+      dialog.showModal();
+    }
+  })();
+</script>
 {% endblock %}

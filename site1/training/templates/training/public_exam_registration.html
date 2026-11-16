@@ -1,66 +1,125 @@
-{% extends "training/base_public_exam.html" %}
+{% extends "training/base_candidate.html" %}
 {% load static %}
 
-{% block title %}Đăng ký dự thi{% endblock %}
-{% block meta_description %}Đăng ký dự thi trực tuyến với Trung tâm Kỹ thuật Điện toán.{% endblock %}
+{% block title %}Đăng ký dự thi | CCE{% endblock %}
+{% block meta_description %}Nhập thông tin cá nhân và chọn loại chứng chỉ, đợt thi để gửi hồ sơ đăng ký dự thi trực tuyến với Trung tâm Kỹ thuật Điện toán.{% endblock %}
 
 {% block content %}
-<section class="public-exam-panel">
-  <h1>Đăng ký dự thi</h1>
-  <p class="public-exam-lead">Nhập thông tin cá nhân và chọn đợt thi để gửi hồ sơ đăng ký.</p>
+<section class="card">
+  <div class="top">
+    <div class="ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+    </div>
+    <div>
+      <h1>Đăng ký dự thi</h1>
+      <p>Nhập thông tin cá nhân và chọn đợt thi để gửi hồ sơ đăng ký.</p>
+    </div>
+  </div>
 
-  {% if error_summary %}
-    <div class="public-form-error-summary" id="error-summary" role="alert" tabindex="-1" aria-labelledby="error-summary-title">
-      <h2 id="error-summary-title">Vui lòng kiểm tra thông tin đăng ký</h2>
-      <ul>
-        {% for field in form %}
-          {% for error in field.errors %}
-            <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
+  {% if error_summary or form.errors %}
+    <div class="error-summary" id="error-summary" role="alert" tabindex="-1">
+      <svg class="error-summary-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <div class="error-summary-body">
+        <h2>Vui lòng kiểm tra lại thông tin</h2>
+        <ul>
+          {% for field in form %}
+            {% for error in field.errors %}
+              <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
+            {% endfor %}
           {% endfor %}
-        {% endfor %}
-        {% for error in form.non_field_errors %}
-          <li>{{ error }}</li>
-        {% endfor %}
-      </ul>
+          {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
   {% endif %}
 
-  <form method="post" class="public-exam-form" novalidate>
+  <form method="post" action="" novalidate id="exam-registration-form">
     {% csrf_token %}
-    <fieldset>
-      <legend>Thông tin đăng ký</legend>
-      {% for field in form %}
-        <div class="public-exam-field">
-          <label class="cce-label" for="{{ field.id_for_label }}">{{ field.label }} <span class="public-required" aria-hidden="true">*</span></label>
-          {% if field.name == "date_of_birth" %}
-            {{ field }}
-          {% else %}
-            {{ field }}
-          {% endif %}
-          {% if field.help_text %}
-            <p class="cce-form-help"
-              {% if field.name == "exam_period" %}id="id_exam_period_help" aria-live="polite"{% endif %}>
-              {{ field.help_text }}
-            </p>
-          {% endif %}
-          {% for error in field.errors %}
-            <p class="cce-form-error" id="{{ field.auto_id }}-error">{{ error }}</p>
-          {% endfor %}
-        </div>
-      {% endfor %}
-    </fieldset>
-    {% for error in form.non_field_errors %}
-      <p class="cce-form-error" role="alert">{{ error }}</p>
-    {% endfor %}
-    <div class="public-exam-actions">
-      <button class="cce-btn cce-btn-primary" type="submit">Gửi đăng ký</button>
+    <h2 class="sec">Thông tin đăng ký</h2>
+
+    <div class="row">
+      <div class="f{% if form.cert_type.errors %} has-error{% endif %}">
+        <label for="{{ form.cert_type.id_for_label }}">{{ form.cert_type.label }}<i>*</i></label>
+        {{ form.cert_type }}
+        {% for error in form.cert_type.errors %}
+          <p class="err" id="{{ form.cert_type.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="f{% if form.exam_period.errors %} has-error{% endif %}">
+        <label for="{{ form.exam_period.id_for_label }}">{{ form.exam_period.label }}<i>*</i></label>
+        {{ form.exam_period }}
+        {% if form.exam_period.help_text %}
+          <p class="hint" id="id_exam_period_help" aria-live="polite">{{ form.exam_period.help_text }}</p>
+        {% endif %}
+        {% for error in form.exam_period.errors %}
+          <p class="err" id="{{ form.exam_period.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
     </div>
+
+    <div class="row">
+      <div class="f{% if form.full_name.errors %} has-error{% endif %}">
+        <label for="{{ form.full_name.id_for_label }}">{{ form.full_name.label }}<i>*</i></label>
+        {{ form.full_name }}
+        {% for error in form.full_name.errors %}
+          <p class="err" id="{{ form.full_name.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="f{% if form.date_of_birth.errors %} has-error{% endif %}">
+        <label for="{{ form.date_of_birth.id_for_label }}">{{ form.date_of_birth.label }}<i>*</i></label>
+        {{ form.date_of_birth }}
+        {% if form.date_of_birth.help_text %}
+          <p class="hint">{{ form.date_of_birth.help_text }}</p>
+        {% endif %}
+        {% for error in form.date_of_birth.errors %}
+          <p class="err" id="{{ form.date_of_birth.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="f{% if form.id_number.errors %} has-error{% endif %}">
+        <label for="{{ form.id_number.id_for_label }}">{{ form.id_number.label }}<i>*</i></label>
+        {{ form.id_number }}
+        {% for error in form.id_number.errors %}
+          <p class="err" id="{{ form.id_number.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="f{% if form.phone.errors %} has-error{% endif %}">
+        <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}<i>*</i></label>
+        {{ form.phone }}
+        {% for error in form.phone.errors %}
+          <p class="err" id="{{ form.phone.auto_id }}-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="f{% if form.email.errors %} has-error{% endif %}">
+      <label for="{{ form.email.id_for_label }}">{{ form.email.label }}<i>*</i></label>
+      {{ form.email }}
+      {% for error in form.email.errors %}
+        <p class="err" id="{{ form.email.auto_id }}-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    {% for error in form.non_field_errors %}
+      <p class="err" role="alert">{{ error }}</p>
+    {% endfor %}
+
+    <button class="go" type="submit" id="submit-btn">Gửi đăng ký</button>
   </form>
 </section>
-{% if error_summary %}
-  <script>
-    document.getElementById("error-summary").focus();
-  </script>
-{% endif %}
-<script src="{% static 'training/js/public-exam-registration.js' %}?v=public-date-picker-20261114-8" defer></script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'training/js/public-exam-registration.js' %}?v=20261116-v2" defer></script>
 {% endblock %}

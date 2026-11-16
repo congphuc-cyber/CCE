@@ -1,0 +1,47 @@
+{% load static %}
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Đăng ký dự thi | CCE{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Cổng thông tin thí sinh — Trung tâm Kỹ thuật Điện toán, Trường Đại học Bách Khoa — ĐHQG-HCM.{% endblock %}">
+  <link rel="stylesheet" href="{% static 'training/css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'training/css/public-registration.css' %}?v=20261116">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <a class="cce-skip-link" href="#main-content">Chuyển đến nội dung chính</a>
+
+  <header class="hd" role="banner">
+    <a class="br" href="{% url 'home' %}" aria-label="Trang chủ Trung tâm Kỹ thuật Điện toán">
+      <div class="mark" aria-hidden="true">CCE</div>
+      <div>
+        <b>Trung tâm Kỹ thuật Điện toán</b>
+        <span>Trường Đại học Bách Khoa — ĐHQG-HCM</span>
+      </div>
+    </a>
+    <span class="pill">Cổng thông tin thí sinh</span>
+  </header>
+
+  <main id="main-content" role="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="ft" role="contentinfo">
+    <div class="fb">
+      <div class="mark" aria-hidden="true">CCE</div>
+      <div>
+        <b>Trung tâm Kỹ thuật Điện toán</b><br>
+        Trường Đại học Bách Khoa — ĐHQG-HCM
+      </div>
+    </div>
+    <div class="fr">
+      Hệ thống quản lý đào tạo, thi và tra cứu chứng chỉ<br>
+      © {% now "Y" %} Trung tâm Kỹ thuật Điện toán. Bảo lưu mọi quyền.
+    </div>
+  </footer>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
