@@ -43,6 +43,7 @@ from training.models import (
     Course,
     Enrollment,
     EnrollmentTransferHistory,
+    EXAM_CERTIFICATE_MIN_SCORE,
     ExamApplication,
     ExamCertificate,
     ExamPeriod,
@@ -1231,7 +1232,7 @@ def _exam_certificate_period_ids_with_candidates_meeting_two_conditions():
             score and not score["is_absent"] and score["score"] is not None
         )
         has_passing_score = bool(
-            has_valid_score and score["score"] >= 5
+            has_valid_score and score["score"] >= EXAM_CERTIFICATE_MIN_SCORE
         )
         score_is_published = bool(score and score["is_published"])
         has_no_active_certificate = pair not in active_pairs
@@ -1309,8 +1310,10 @@ class ExamCertificateIssueForm(forms.Form):
                 raise forms.ValidationError("Thí sinh chưa có điểm trong đợt thi này.")
             if score.is_absent or score.score is None:
                 raise forms.ValidationError("Thí sinh chưa có điểm hợp lệ hoặc vắng thi.")
-            if score.score < 5:
-                raise forms.ValidationError("Thí sinh chưa đạt ngưỡng tối thiểu để cấp chứng chỉ.")
+            if score.score < EXAM_CERTIFICATE_MIN_SCORE:
+                raise forms.ValidationError(
+                    f"Thí sinh chưa đạt ngưỡng tối thiểu {EXAM_CERTIFICATE_MIN_SCORE} để cấp chứng chỉ."
+                )
             if not score.is_published:
                 raise forms.ValidationError("Điểm phải được công bố trước khi cấp chứng chỉ.")
             if ExamCertificate.objects.filter(exam_period=period, application=application, status=ExamCertificate.Status.ISSUED).exists():
@@ -1346,8 +1349,8 @@ def _exam_certificate_issue_checks(period, application):
                 "passed": False,
             },
             {
-                "label": "Đạt điểm tối thiểu 5",
-                "description": "Điểm thi phải đạt từ 5 trở lên.",
+                "label": f"Đạt điểm tối thiểu {EXAM_CERTIFICATE_MIN_SCORE}",
+                "description": f"Điểm thi phải đạt từ {EXAM_CERTIFICATE_MIN_SCORE} trở lên.",
                 "passed": False,
             },
             {
@@ -1402,17 +1405,19 @@ def _exam_certificate_issue_checks(period, application):
             "passed": has_valid_score,
         },
         {
-            "label": "Đạt điểm tối thiểu 5",
+            "label": f"Đạt điểm tối thiểu {EXAM_CERTIFICATE_MIN_SCORE}",
             "description": (
-                f"Điểm {score.score} đạt ngưỡng tối thiểu 5."
-                if has_valid_score and score.score >= 5
+                f"Điểm {score.score} đạt ngưỡng tối thiểu {EXAM_CERTIFICATE_MIN_SCORE}."
+                if has_valid_score and score.score >= EXAM_CERTIFICATE_MIN_SCORE
                 else (
-                    f"Điểm {score.score} chưa đạt ngưỡng tối thiểu 5."
+                    f"Điểm {score.score} chưa đạt ngưỡng tối thiểu {EXAM_CERTIFICATE_MIN_SCORE}."
                     if has_valid_score
                     else "Chưa có điểm hợp lệ để đối chiếu."
                 )
             ),
-            "passed": bool(has_valid_score and score.score >= 5),
+            "passed": bool(
+                has_valid_score and score.score >= EXAM_CERTIFICATE_MIN_SCORE
+            ),
         },
         {
             "label": "Điểm đã được công bố",
@@ -1606,10 +1611,16 @@ def exam_certificate_list(request):
         )
 
     eligible_scores = {}
+    scores_by_pair = {}
     for score in scores:
         pair = (score.assignment.exam_room.exam_period_id, score.assignment.application_id)
-        if score.score >= 5:
+        scores_by_pair.setdefault(pair, score)
+        if score.score >= EXAM_CERTIFICATE_MIN_SCORE:
             eligible_scores.setdefault(pair, score)
+
+    for row in rows:
+        pair = (row["period"].pk, row["application"].pk)
+        row["score"] = scores_by_pair.get(pair)
 
     active_pairs = set(
         ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).values_list(
@@ -1639,12 +1650,26 @@ def exam_certificate_list(request):
     page_obj = Paginator(rows, PAGE_SIZE).get_page(request.GET.get("page"))
 
     periods = ExamPeriod.objects.order_by("-exam_date")
-    published_scores = ExamScore.objects.filter(is_published=True, is_absent=False, score__isnull=False, score__gte=5)
+    published_scores = ExamScore.objects.filter(
+        is_published=True,
+        is_absent=False,
+        score__isnull=False,
+        score__gte=EXAM_CERTIFICATE_MIN_SCORE,
+    )
     total_eligible = published_scores.count()
     total_issued = ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).count()
     total_revoked = ExamCertificate.objects.filter(status=ExamCertificate.Status.REVOKED).count()
     if published_scores.exists():
-        pass_rate = round((published_scores.filter(score__gte=Decimal("5.0")).count() / published_scores.count()) * 100, 1)
+        pass_rate = round(
+            (
+                published_scores.filter(
+                    score__gte=EXAM_CERTIFICATE_MIN_SCORE
+                ).count()
+                / published_scores.count()
+            )
+            * 100,
+            1,
+        )
     else:
         pass_rate = 0
 

@@ -7,3 +7,4 @@ openpyxl==3.1.5
 reportlab==5.1.0
 sqlparse==0.6.1
 tzdata==2026.6
+psycopg[binary]

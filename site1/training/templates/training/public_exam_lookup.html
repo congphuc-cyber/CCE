@@ -47,7 +47,11 @@
       </section>
     {% endif %}
     <div class="public-exam-actions">
-      <a class="cce-btn cce-btn-primary" href="{% url 'exam-public-export-pdf' %}">Xuất PDF</a>
+      {% if can_export_pdf %}
+        <a class="cce-btn cce-btn-primary" href="{% url 'exam-public-export-pdf' %}">Xuất PDF</a>
+      {% else %}
+        <p role="status">Không thể xuất PDF vì không có chứng chỉ còn hiệu lực.</p>
+      {% endif %}
       <a class="cce-btn cce-btn-outline" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
     </div>
   {% else %}

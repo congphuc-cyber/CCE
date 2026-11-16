@@ -1,6 +1,6 @@
 import csv
 from decimal import Decimal
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -28,6 +28,7 @@ from training.access import (
 from training.admin import BaseModelAdmin
 from training.context_processors import ui_navigation
 from training.forms import CourseAdminForm, LearnerAdminForm, TrainingClassAdminForm
+from training.management.commands.seed_all_data import Command as SeedAllDataCommand
 from training.models import (
     AuditLog,
     Certificate,
@@ -536,7 +537,7 @@ class PhaseFourTests(TestCase):
         self.assertContains(response, "Giáo vụ")
         self.assertContains(response, FEATURE_ICONS["courses"])
         self.assertNotContains(response, "Quản lý khảo thí")
-        self.assertContains(response, "avatar-profile-gap-20261111")
+        self.assertContains(response, 'class="cce-sidebar-user-identity"')
         self.assertContains(response, "Hồ sơ &amp; Mật khẩu")
         self.assertContains(response, 'class="cce-admin-header-logout"')
         self.assertContains(response, 'class="cce-logout-button"')
@@ -3721,10 +3722,14 @@ class ExamApplicationTests(TestCase):
 
     def test_application_list_shows_app_data(self):
         app = _make_application(self.period, full_name="Phạm Văn Test")
+        app.email = "pham.test@example.com"
+        app.save(update_fields=["email"])
         r = self.client.get(
             reverse("exam-application-list") + f"?period={self.period.pk}"
         )
         self.assertContains(r, "Phạm Văn Test")
+        self.assertContains(r, '<th scope="col">Email</th>')
+        self.assertContains(r, "mailto:pham.test@example.com")
 
     def test_application_list_filter_status_has_no_new_choice(self):
         r = self.client.get(reverse("exam-application-list"))
@@ -3791,6 +3796,39 @@ class ExamApplicationTests(TestCase):
         r = self.client.get(reverse("exam-application-deduplicate"))
         self.assertEqual(r.status_code, 200)
         self.assertNotContains(r, "333333333333")
+
+    def test_flagged_duplicate_with_same_id_different_details_is_processed(self):
+        id_number = "333333333334"
+        keep_app = _make_application(
+            self.period,
+            full_name="Nguyễn Văn A",
+            id_number=id_number,
+            phone="0901234567",
+        )
+        duplicate_app = ExamApplication.objects.create(
+            exam_period=self.period,
+            full_name="Trần Thị B",
+            id_number=id_number,
+            phone="0907654321",
+            status=ExamApplication.Status.DUPLICATE,
+        )
+
+        list_page = self.client.get(reverse("exam-application-list"))
+        self.assertEqual(list_page.context["duplicate_count"], 1)
+
+        deduplicate_page = self.client.get(reverse("exam-application-deduplicate"))
+        self.assertContains(deduplicate_page, id_number)
+        self.assertContains(deduplicate_page, "Nguyễn Văn A")
+        self.assertContains(deduplicate_page, "Trần Thị B")
+
+        response = self.client.post(
+            reverse("exam-application-deduplicate"),
+            {"keep_id": keep_app.pk},
+        )
+
+        self.assertIn(response.status_code, (200, 302))
+        self.assertTrue(ExamApplication.objects.filter(pk=keep_app.pk).exists())
+        self.assertFalse(ExamApplication.objects.filter(pk=duplicate_app.pk).exists())
 
     def test_deduplicate_transfers_room_assignment_and_score(self):
         """Khi xóa hồ sơ trùng đã có phòng thi và điểm, phòng thi và điểm phải được chuyển sang hồ sơ giữ lại thay vì báo lỗi ProtectedError."""
@@ -5345,7 +5383,7 @@ class ExamCertificateWorkflowTests(TestCase):
         self.room = _make_exam_room(self.period, name="A201")
         self.app = _make_application(self.period, full_name="Nguyễn Văn C", id_number="987654321012")
         self.assignment = _make_assignment(self.room, self.app)
-        self.score = ExamScore.objects.create(assignment=self.assignment, score=Decimal("8.50"), is_published=True)
+        self.score = ExamScore.objects.create(assignment=self.assignment, score=Decimal("85.00"), is_published=True)
 
     def test_exam_certificate_issue_requires_published_pass_score(self):
         self.score.is_published = False
@@ -5357,6 +5395,53 @@ class ExamCertificateWorkflowTests(TestCase):
                 certificate_number="EXC-2026-0001",
                 status=ExamCertificate.Status.ISSUED,
             ).clean()
+
+    def test_exam_certificate_minimum_score_is_50(self):
+        response = self.client.get(
+            reverse(
+                "exam-certificate-candidate-detail",
+                args=[self.period.pk, self.app.pk],
+            )
+        )
+        self.assertContains(response, "Đạt điểm tối thiểu 50")
+
+        self.score.score = Decimal("49.99")
+        self.score.save(update_fields=["score"])
+        response = self.client.post(
+            reverse("exam-certificate-issue"),
+            {
+                "exam_period": self.period.pk,
+                "application": self.app.pk,
+            },
+        )
+        self.assertContains(
+            response,
+            "Thí sinh chưa đạt ngưỡng tối thiểu 50 để cấp chứng chỉ.",
+        )
+        self.assertFalse(
+            ExamCertificate.objects.filter(
+                exam_period=self.period,
+                application=self.app,
+            ).exists()
+        )
+
+        self.score.score = Decimal("50.00")
+        self.score.save(update_fields=["score"])
+        self.client.post(
+            reverse("exam-certificate-issue"),
+            {
+                "exam_period": self.period.pk,
+                "application": self.app.pk,
+            },
+            follow=True,
+        )
+        self.assertTrue(
+            ExamCertificate.objects.filter(
+                exam_period=self.period,
+                application=self.app,
+                status=ExamCertificate.Status.ISSUED,
+            ).exists()
+        )
 
     def test_exam_certificate_status_change_requires_reason(self):
         certificate = ExamCertificate.objects.create(
@@ -5399,6 +5484,33 @@ class ExamCertificateWorkflowTests(TestCase):
         )
         self.assertEqual(audit_entry.actor, self.user)
         self.assertEqual(audit_entry.new_values["status"], ExamCertificate.Status.ISSUED)
+
+    def test_exam_certificate_list_keeps_score_after_reissue(self):
+        ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-REVOKED",
+            status=ExamCertificate.Status.REVOKED,
+            issued_by=self.user,
+        )
+        ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2026-REISSUED",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=self.user,
+        )
+
+        response = self.client.get(reverse("exam-certificate-list"))
+
+        self.assertEqual(response.status_code, 200)
+        certificate_rows = [
+            row for row in response.context["page_obj"].object_list
+            if row["certificate"]
+        ]
+        self.assertEqual(len(certificate_rows), 2)
+        self.assertTrue(all(row["score"] == self.score for row in certificate_rows))
+        self.assertContains(response, 'class="exam-certificate-score"')
 
     def test_certificate_menus_and_direct_views_follow_role_permissions(self):
         response = self.client.get(reverse("exam-certificate-list"))
@@ -5528,13 +5640,27 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "92,00")
         self.assertContains(response, certificate.certificate_number)
         self.assertContains(response, "Thu hồi")
+        self.assertNotContains(response, "Xuất PDF")
+        self.assertContains(response, "không có chứng chỉ còn hiệu lực")
+
+        pdf_response = self.client.get(reverse("exam-public-export-pdf"))
+        self.assertRedirects(pdf_response, reverse("exam-public-lookup"))
+
+    def test_score_pdf_remains_available_before_certificate_issue(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("92.00"),
+            is_published=True,
+        )
+
+        response = self.submit_lookup(self.client, "exam-public-lookup")
+        self.assertRedirects(response, reverse("exam-public-lookup"))
+        response = self.client.get(reverse("exam-public-lookup"))
         self.assertContains(response, "Xuất PDF")
-        self.assertContains(response, reverse("exam-public-export-pdf"))
 
         pdf_response = self.client.get(reverse("exam-public-export-pdf"))
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
-        self.assertIn("attachment;", pdf_response["Content-Disposition"])
         self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
 
     def test_replaced_certificate_is_not_presented_as_active(self):
@@ -5578,6 +5704,7 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "Đã thay thế")
         self.assertContains(response, "EXC-2027-0003")
         self.assertContains(response, "Đã cấp")
+        self.assertContains(response, "Xuất PDF")
 
     def test_unpublished_and_missing_records_have_the_same_no_result_response(self):
         ExamScore.objects.create(
@@ -5715,6 +5842,9 @@ class PublicExamRegistrationTests(TestCase):
             course=self.course,
             name="Đợt thi đăng ký trực tuyến",
         )
+        self.period.registration_deadline = timezone.localdate() + timedelta(days=14)
+        self.period.exam_date = timezone.localdate() + timedelta(days=15)
+        self.period.save(update_fields=["registration_deadline", "exam_date"])
 
     def valid_payload(self):
         return {
@@ -5832,6 +5962,9 @@ class PublicExamRegistrationTests(TestCase):
             course=other_course,
             name="Đợt thi chứng chỉ khác",
         )
+        other_period.registration_deadline = timezone.localdate() + timedelta(days=14)
+        other_period.exam_date = timezone.localdate() + timedelta(days=15)
+        other_period.save(update_fields=["registration_deadline", "exam_date"])
         payload = self.valid_payload()
         payload["exam_period"] = str(other_period.pk)
 
@@ -5921,6 +6054,80 @@ class PublicExamRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Đợt thi đã đủ số lượng")
         self.assertEqual(ExamApplication.objects.count(), 1)
+
+
+class SeedAllDataTests(TestCase):
+    def test_exam_data_seeds_closed_periods_and_skips_draft_applications(self):
+        course = Course.objects.create(
+            name="Seed exam course",
+            pass_threshold=Decimal("65"),
+        )
+        closed_config = {
+            "name": "Seed closed exam period",
+            "exam_date": date(2026, 2, 22),
+            "reg": date(2026, 2, 7),
+            "ci": 0,
+            "max": 5,
+            "status": "closed",
+            "n": 2,
+            "dup": 0,
+            "scores": False,
+            "pub": False,
+            "mybk": False,
+        }
+        draft_config = {
+            **closed_config,
+            "name": "Seed draft exam period",
+            "exam_date": date(2027, 2, 22),
+            "reg": date(2027, 2, 7),
+            "status": "draft",
+        }
+        closed_period = ExamPeriod.objects.create(
+            name=closed_config["name"],
+            cert_type=course,
+            exam_date=closed_config["exam_date"],
+            registration_deadline=closed_config["reg"],
+            max_candidates=closed_config["max"],
+            status=ExamPeriod.Status.CLOSED,
+        )
+
+        with patch(
+            "training.management.commands.seed_all_data.EXAM_PERIODS_CONFIG",
+            [closed_config, draft_config],
+        ):
+            command = SeedAllDataCommand()
+            command._seed_exam_data([course], None)
+            first_application, second_application = list(
+                closed_period.applications.order_by("pk")
+            )
+            ExamApplication.objects.filter(pk=first_application.pk).update(
+                email="existing@example.test"
+            )
+            ExamApplication.objects.filter(pk=second_application.pk).update(email="")
+            command._seed_exam_data([course], None)
+
+        closed_period.refresh_from_db()
+        draft_period = ExamPeriod.objects.get(name=draft_config["name"])
+        first_application.refresh_from_db()
+        second_application.refresh_from_db()
+        self.assertEqual(closed_period.status, ExamPeriod.Status.CLOSED)
+        self.assertEqual(closed_period.applications.count(), 2)
+        self.assertEqual(first_application.email, "existing@example.test")
+        self.assertTrue(second_application.email.endswith("@example.test"))
+        self.assertEqual(draft_period.status, ExamPeriod.Status.DRAFT)
+        self.assertEqual(draft_period.applications.count(), 0)
+
+    def test_audit_export_entries_are_not_duplicated_when_rerun(self):
+        actor = User.objects.create_user(username="seed-audit-actor")
+        command = SeedAllDataCommand()
+
+        command._seed_audit_log(actor, [], [], [], [])
+        command._seed_audit_log(actor, [], [], [], [])
+
+        self.assertEqual(
+            AuditLog.objects.filter(action=AuditLog.Action.EXPORT).count(),
+            5,
+        )
 
 
 class WorkflowTestDataSeedTests(TestCase):

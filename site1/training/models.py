@@ -1,9 +1,14 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
+
+
+EXAM_CERTIFICATE_MIN_SCORE = Decimal("50")
 
 
 class Course(models.Model):
@@ -822,7 +827,11 @@ class ExamCertificate(models.Model):
             ).select_related("assignment__exam_room__exam_period").first()
             if not score:
                 raise ValidationError({"application": "Thí sinh chưa có điểm trong đợt thi này."})
-            if score.is_absent or score.score is None or score.score < 5:
+            if (
+                score.is_absent
+                or score.score is None
+                or score.score < EXAM_CERTIFICATE_MIN_SCORE
+            ):
                 raise ValidationError({"application": "Thí sinh chưa đạt hoặc điểm chưa được công bố."})
             if not score.is_published:
                 raise ValidationError({"application": "Điểm phải được công bố trước khi cấp chứng chỉ."})

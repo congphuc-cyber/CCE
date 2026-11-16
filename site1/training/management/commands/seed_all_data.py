@@ -6,6 +6,7 @@ Chay: python manage.py seed_all_data
 import random
 from decimal import Decimal
 from datetime import date, timedelta
+from django.db import transaction
 from django.utils import timezone
 
 from django.contrib.auth.models import Group, User
@@ -526,6 +527,11 @@ class Command(BaseCommand):
                 )
         self.stdout.write(f"  RoleFeaturePermissions: {RoleFeaturePermission.objects.count()}")
 
+    def _ensure_demo_application_email(self, application):
+        if not application.email:
+            application.email = f"thi.sinh.{application.id_number}@example.test"
+            application.save(update_fields=("email",))
+
     # ─────────────────────────────────────────────────────────────────
     def _seed_audit_log(self, actor, courses, classes, learners, teachers):
         if not actor:
@@ -591,6 +597,11 @@ class Command(BaseCommand):
             "Xuất dữ liệu phục vụ kiểm toán nội bộ",
         ]
         for i, label in enumerate(export_labels):
+            if AuditLog.objects.filter(
+                action=AuditLog.Action.EXPORT,
+                object_label=label,
+            ).exists():
+                continue
             AuditLog.objects.create(
                 actor=actor,
                 actor_username=actor.username,
@@ -607,6 +618,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  AuditLog: {AuditLog.objects.count()}")
 
     # ─────────────────────────────────────────────────────────────────
+    @transaction.atomic
     def _seed_exam_data(self, courses, actor):
         canbothi = User.objects.filter(username="cce_canbothi").first() or actor
         status_map = {
@@ -617,6 +629,12 @@ class Command(BaseCommand):
 
         for cfg in EXAM_PERIODS_CONFIG:
             course = courses[cfg["ci"] % len(courses)]
+            final_status = status_map[cfg["status"]]
+            seed_status = (
+                ExamPeriod.Status.PUBLISHED
+                if final_status == ExamPeriod.Status.CLOSED
+                else final_status
+            )
             period, _ = ExamPeriod.objects.get_or_create(
                 name=cfg["name"],
                 defaults={
@@ -625,25 +643,32 @@ class Command(BaseCommand):
                     "cert_type": course,
                     "score_scale": Decimal("100"),
                     "max_candidates": cfg["max"],
-                    "status": status_map[cfg["status"]],
+                    "status": seed_status,
                 },
             )
+            if period.status != seed_status:
+                period.status = seed_status
+                period.save(update_fields=("status",))
 
             # Ho so hop le
             apps = []
             ps = abs(hash(cfg["name"])) % 10000
-            for i in range(cfg["n"]):
+            application_count = 0 if cfg["status"] == "draft" else cfg["n"]
+            for i in range(application_count):
                 seed = ps * 1000 + i
+                id_number = rnd_cccd(ps, i)
                 app, _ = ExamApplication.objects.get_or_create(
                     exam_period=period,
-                    id_number=rnd_cccd(ps, i),
+                    id_number=id_number,
                     defaults={
                         "full_name": rnd_name(seed),
                         "phone": rnd_phone(seed),
+                        "email": f"thi.sinh.{id_number}@example.test",
                         "source": ["direct", "online", "partner"][i % 3],
                         "status": ExamApplication.Status.VALID,
                     },
                 )
+                self._ensure_demo_application_email(app)
                 apps.append(app)
 
             # Ho so trung lap — cung CCCD, ten khac
@@ -652,16 +677,18 @@ class Command(BaseCommand):
                     break
                 orig = apps[d]
                 ds = ps * 999 + d + 500
-                ExamApplication.objects.get_or_create(
+                duplicate, _ = ExamApplication.objects.get_or_create(
                     exam_period=period,
                     id_number=orig.id_number,
                     full_name=rnd_name(ds),
                     defaults={
                         "phone": rnd_phone(ds),
+                        "email": f"thi.sinh.{orig.id_number}@example.test",
                         "source": ["direct", "online", "partner"][d % 3],
                         "status": ExamApplication.Status.DUPLICATE,
                     },
                 )
+                self._ensure_demo_application_email(duplicate)
 
             # Phan phong thi
             valid_apps = [a for a in apps if a.status == ExamApplication.Status.VALID]
@@ -712,6 +739,10 @@ class Command(BaseCommand):
                         "notes": MYBK_NOTES[idx_mybk % len(MYBK_NOTES)],
                     },
                 )
+
+            if period.status != final_status:
+                period.status = final_status
+                period.save(update_fields=("status",))
 
         self.stdout.write(f"  ExamPeriods: {ExamPeriod.objects.count()}")
         self.stdout.write(

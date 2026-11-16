@@ -32,6 +32,8 @@ cd LMS-
 
 Chờ lệnh chạy xong. Script tự tạo môi trường Python `.venv`, cài các thư viện, tạo database, áp dụng migrations, tạo tài khoản quản trị và nạp dữ liệu mẫu.
 
+Nếu cấu hình dùng PostgreSQL, hãy khởi động PostgreSQL, tạo role/database và đặt các biến `DB_*` theo mục **PostgreSQL và nhập bộ dữ liệu mẫu** trước khi chạy setup. Django không tự đọc các biến database từ file `.env`.
+
 **3. Khởi động ứng dụng:**
 
 ```powershell
@@ -136,7 +138,7 @@ lmssss/
     │   └── settings/         # Cấu hình môi trường đã tách biệt
     │       ├── __init__.py   # Tự động nạp cấu hình theo DJANGO_ENV
     │       ├── base.py       # Cấu hình dùng chung & unfold settings
-    │       ├── dev.py        # Cấu hình phát triển (DEBUG=True, SQLite)
+    │       ├── dev.py        # Cấu hình phát triển (DEBUG=True)
     │       └── prod.py       # Cấu hình sản xuất bảo mật (DEBUG=False)
     └── training/             # App nghiệp vụ quản lý đào tạo & khảo thí
         ├── models.py         # 8 Models nghiệp vụ (khóa học, lớp học, học viên,...)
@@ -174,6 +176,126 @@ lmssss/
 | `BOOTSTRAP_SUPERUSER_PASSWORD` | *(cấu hình riêng ở môi trường local)* | Mật khẩu cho Superuser. Không dùng hoặc commit mật khẩu thật trong repository. |
 | `BOOTSTRAP_SUPERUSER_EMAIL` | `admin@cce.edu.vn` | Email liên hệ cho Superuser. |
 | `DEMO_TEST_PASSWORD` | *(tạo ngẫu nhiên nếu bỏ trống)* | Mật khẩu cho các tài khoản vai trò mẫu được tạo mới bằng `seed_demo_data`. |
+| `DB_NAME` | *(tùy cấu hình PostgreSQL)* | Tên database PostgreSQL. |
+| `DB_USER` | *(tùy cấu hình PostgreSQL)* | Role PostgreSQL Django dùng để kết nối. |
+| `DB_PASSWORD` | *(bắt buộc khi kết nối PostgreSQL)* | Mật khẩu role PostgreSQL; chỉ đặt trong môi trường, không commit vào Git. |
+| `DB_HOST` | `127.0.0.1` | Máy chủ PostgreSQL. |
+| `DB_PORT` | `5432` | Cổng PostgreSQL. |
+
+---
+
+## 🐘 PostgreSQL và nhập bộ dữ liệu mẫu
+
+### Cấu hình kết nối PostgreSQL
+
+Django lấy cấu hình database trong `site1/site1/settings/base.py`. Phần `DATABASES` cần đọc các biến `DB_*`, ví dụ:
+
+```python
+import os
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("DB_NAME", "cce_training"),
+        "USER": os.environ.get("DB_USER", "cce_app"),
+        "PASSWORD": os.environ["DB_PASSWORD"],
+        "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
+    }
+}
+```
+
+Đặt các biến môi trường sau trong **cùng cửa sổ PowerShell** dùng để chạy lệnh Django:
+
+```powershell
+$env:DB_NAME = "cce_training"
+$env:DB_USER = "cce_app"
+$env:DB_PASSWORD = "<mật-khẩu-PostgreSQL>"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "5432"
+```
+
+Tạo role và database trước trong pgAdmin (mở Query Tool trên database `postgres`, thay mật khẩu mẫu bằng mật khẩu của bạn):
+
+```sql
+CREATE ROLE cce_app LOGIN PASSWORD '<mật-khẩu-PostgreSQL>';
+```
+
+Chạy lệnh tạo database riêng:
+
+```sql
+CREATE DATABASE cce_training OWNER cce_app;
+```
+
+> Chạy hai câu lệnh trên riêng biệt; `CREATE DATABASE` không chạy bên trong transaction. Không đưa mật khẩu thật vào Git. File `.env` hiện không tự được Django nạp, vì vậy chỉ tạo `.env` chưa đủ để cấu hình `DB_*`.
+
+Từ thư mục gốc `LMS`, cài dependencies (bao gồm driver `psycopg`), áp dụng schema và kiểm tra kết nối:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r .\requirements\base.txt
+cd .\site1
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py migrate
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py check --database default
+```
+
+Trong block trên, đường dẫn Python ảo từ thư mục `site1` là `..\.venv\Scripts\python.exe` (không có dấu cách sau `..`). Nếu chưa tạo `.venv`, chạy `.\scripts\setup.ps1` từ thư mục gốc trước, sau khi đã đặt các biến môi trường.
+
+### Chuyển dữ liệu hiện có từ SQLite (nếu cần)
+
+Nếu muốn giữ dữ liệu trong `site1/db.sqlite3`, hãy sao lưu và xuất fixture khi Django trỏ tới SQLite. Trước khi xuất, tạm thời thay `DATABASES` trong `site1/site1/settings/base.py` bằng:
+
+```python
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+```
+
+Sau đó chạy từ thư mục gốc dự án `LMS`:
+
+```powershell
+cd .\site1
+Copy-Item .\db.sqlite3 .\db.sqlite3.bak
+$env:PYTHONUTF8 = "1"
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py dumpdata --natural-foreign --natural-primary `
+  --exclude contenttypes --exclude auth.permission --exclude admin.logentry `
+  --exclude sessions --indent 2 --output .\sqlite_export.json
+```
+
+Tiếp theo khôi phục cấu hình PostgreSQL trong `base.py`, đặt các biến `DB_*` ở trên, rồi chạy `migrate` trước khi nạp fixture:
+
+```powershell
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py migrate
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py loaddata .\sqlite_export.json
+```
+
+`dumpdata` và `loaddata` phải chạy ở hai thời điểm khác nhau: lần đầu trên SQLite, lần sau trên PostgreSQL. `-X utf8` giúp PowerShell không lỗi khi fixture có tiếng Việt. Nếu chỉ cần database PostgreSQL mới để nhập dữ liệu mẫu bên dưới, bỏ qua bước fixture SQLite.
+
+### Nhập dữ liệu mẫu bằng management command
+
+Lệnh `training/management/commands/import_sample_bulk_data.py` đọc các workbook Excel trong `sample_bulk_data` và nhập qua Django models, giữ liên kết giữa CCCD, lớp, ghi danh, giáo viên, đợt thi, phòng và điểm. Chạy sau khi đã áp dụng `migrate` trên database đích. Từ PowerShell đã cấu hình `DB_*`:
+
+```powershell
+cd .\site1
+$env:PYTHONUTF8 = "1"
+
+# Kiểm tra dữ liệu và quan hệ, không lưu thay đổi
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py import_sample_bulk_data --dry-run
+
+# Chỉ chạy sau khi dry-run thành công
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py import_sample_bulk_data
+```
+
+Mặc định lệnh đọc `..\sample_bulk_data`. Nếu bộ dữ liệu ở thư mục khác, truyền đường dẫn:
+
+```powershell
+& '..\.venv\Scripts\python.exe' -X utf8 manage.py import_sample_bulk_data `
+  --source "C:\duong-dan\sample_bulk_data" --dry-run
+```
+
+Lệnh chạy trong transaction; lỗi kiểm tra sẽ rollback toàn bộ lần import. Bản ghi khớp dữ liệu mẫu được bỏ qua khi chạy lại, còn bản ghi xung đột sẽ báo lỗi để tránh ghi đè dữ liệu hiện có. Dữ liệu mẫu gồm học viên, hồ sơ thi, lớp/ghi danh, giáo viên/phân công, đợt/phòng thi, điểm thi và điểm cuối khóa. Thư mục hiện không có dữ liệu chứng nhận/chứng chỉ để nhập.
 
 ---
 

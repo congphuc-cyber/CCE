@@ -276,6 +276,7 @@ def _render_lookup_page(
     state_title=None,
     state_message=None,
     results=None,
+    can_export_pdf=False,
     candidate_name=None,
     masked_id_number=None,
     no_results=False,
@@ -296,6 +297,7 @@ def _render_lookup_page(
             "state_title": state_title,
             "state_message": state_message,
             "results": results or [],
+            "can_export_pdf": can_export_pdf,
             "candidate_name": candidate_name,
             "masked_id_number": masked_id_number,
             "no_results": no_results,
@@ -406,6 +408,17 @@ def _published_exam_results(id_number, email):
             }
         )
     return results
+
+
+def _public_results_allow_pdf(results):
+    for result in results:
+        certificates = result["certificates"]
+        if certificates and not any(
+            certificate.status == ExamCertificate.Status.ISSUED
+            for certificate in certificates
+        ):
+            return False
+    return bool(results)
 
 
 def _public_room_assignments(id_number, email):
@@ -576,7 +589,7 @@ def _public_lookup_pdf(request, purpose):
         title = "Lịch thi và phòng thi"
     else:
         results = _published_exam_results(id_number, email)
-        if not results:
+        if not results or not _public_results_allow_pdf(results):
             return redirect(lookup_route)
         candidate = results[0]["application"]
         rows = []
@@ -695,6 +708,7 @@ def _public_lookup_page(request, purpose):
         purpose,
         step="results",
         results=results,
+        can_export_pdf=_public_results_allow_pdf(results),
         candidate_name=results[0]["application"].full_name if results else "",
         masked_id_number=masked_id,
         no_results=not results,

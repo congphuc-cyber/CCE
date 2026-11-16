@@ -24,6 +24,47 @@
   </div>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  .exam-application-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .exam-application-table th,
+  .exam-application-table td {
+    padding: 9px 8px;
+    overflow-wrap: anywhere;
+  }
+  .exam-application-table th {
+    white-space: normal;
+    line-height: 1.35;
+  }
+  .exam-application-table th:nth-child(1) { width: 20%; }
+  .exam-application-table th:nth-child(2) { width: 20%; }
+  .exam-application-table th:nth-child(3) { width: 13%; }
+  .exam-application-table th:nth-child(4) { width: 18%; }
+  .exam-application-table th:nth-child(5) { width: 10%; }
+  .exam-application-table th:nth-child(6) { width: 10%; }
+  .exam-application-table th:nth-child(7) { width: 9%; }
+  .exam-application-table td:nth-child(5) > div,
+  .exam-application-table td:nth-child(6) > div {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .exam-application-table td:nth-child(7) .cce-badge {
+    white-space: normal;
+  }
+  @media (max-width: 1100px) {
+    .exam-application-table th,
+    .exam-application-table td {
+      padding: 8px 5px;
+      font-size: var(--font-size-xs);
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 {# ── Alert cảnh báo hồ sơ trùng ──────────────────────────────────── #}
 {% if duplicate_count > 0 %}
@@ -32,7 +73,7 @@
     <div>
       <strong style="font-size:var(--font-size-base); color:var(--c-danger);">Phát hiện {{ duplicate_count }} hồ sơ trùng lặp cần xử lý</strong>
       <p style="margin:2px 0 0 0; font-size:var(--font-size-sm); color:var(--c-text-muted);">
-        Các hồ sơ trùng họ tên, số CCCD/CMND trong cùng đợt thi cần được xử lý: duyệt giữ lại 1 hồ sơ và xóa các bản ghi trùng lặp còn lại.
+        Các hồ sơ trùng số CCCD/CMND trong cùng đợt thi cần được xử lý: chọn hồ sơ cần giữ lại và xóa các bản ghi còn lại.
       </p>
     </div>
   </div>
@@ -78,7 +119,7 @@
   </div>
 
   <div class="cce-filter-bar">
-    <form method="get" style="display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:flex-end; width:100%;">
+    <form method="get" class="cce-exam-application-filter-form">
       <div class="cce-filter-item">
         <label for="id_q" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Tìm kiếm thí sinh</label>
         {{ filter_form.q }}
@@ -110,15 +151,16 @@
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
-      <table class="cce-table cce-table-centered cce-table-first-column-left" role="table">
+      <table class="cce-table cce-table-centered cce-table-first-column-left exam-application-table" role="table">
         <thead>
           <tr>
-            <th scope="col" style="min-width:220px;">Thí sinh & Liên hệ</th>
-            <th scope="col" style="min-width:160px;">Số CCCD / CMND</th>
-            <th scope="col" style="min-width:240px;">Đợt thi đăng ký</th>
-            <th scope="col" style="min-width:150px;">Kênh đăng ký</th>
-            <th scope="col" style="min-width:140px;">Thời điểm ĐK</th>
-            <th scope="col" style="min-width:120px; text-align:center;">Trạng thái</th>
+            <th scope="col">Thí sinh & Liên hệ</th>
+            <th scope="col">Email</th>
+            <th scope="col">Số CCCD / CMND</th>
+            <th scope="col">Đợt thi đăng ký</th>
+            <th scope="col">Kênh đăng ký</th>
+            <th scope="col">Thời điểm ĐK</th>
+            <th scope="col" style="text-align:center;">Trạng thái</th>
           </tr>
         </thead>
         <tbody>
@@ -137,6 +179,13 @@
                     </div>
                   </div>
                 </div>
+              </td>
+              <td>
+                {% if app.email %}
+                  <a href="mailto:{{ app.email }}">{{ app.email }}</a>
+                {% else %}
+                  —
+                {% endif %}
               </td>
               <td>
                 <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); letter-spacing:0.5px; color:var(--c-text);">
