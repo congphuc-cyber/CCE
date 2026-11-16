@@ -129,7 +129,13 @@
       {% endfor %}
 
       <div class="acts">
-        <a class="btn pri" id="export-pdf-btn" href="{% url 'exam-public-export-pdf' %}" download="ket-qua-diem-chung-chi.pdf">Tải PDF</a>
+        {% for item in results %}
+          {% for cert in item.certificates %}
+            {% if cert.status == "issued" and cert.download_url %}
+              <a class="btn pri cert-download-btn" href="{{ cert.download_url }}" download="chung-chi-{{ cert.certificate_number }}.pdf">Tải PDF</a>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
         <a class="btn" href="{% url 'exam-public-lookup' %}?new=1">Tra cứu thông tin khác</a>
         <a class="btn" href="{% url 'home' %}">Về trang chủ</a>
       </div>

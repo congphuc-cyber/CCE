@@ -6192,8 +6192,8 @@ class PublicExamLookupTests(TestCase):
         self.assertContains(response, "92,00")
         self.assertContains(response, certificate.certificate_number)
         self.assertContains(response, "Thu hồi")
-        self.assertContains(response, "Tải PDF")
-        self.assertContains(response, reverse("exam-public-export-pdf"))
+        self.assertNotContains(response, "Tải kết quả tra cứu PDF")
+        self.assertNotContains(response, reverse("exam-public-export-pdf"))
 
         pdf_response = self.client.get(reverse("exam-public-export-pdf"))
         self.assertEqual(pdf_response.status_code, 200)
@@ -6201,7 +6201,7 @@ class PublicExamLookupTests(TestCase):
         self.assertIn("attachment;", pdf_response["Content-Disposition"])
         self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
 
-    def test_replaced_certificate_is_not_presented_as_active(self):
+    def test_public_lookup_shows_replacement_certificate_as_issued(self):
         second_period = _make_exam_period(name="Đợt thi tháng 02/2027")
         second_room = _make_exam_room(second_period, name="D404")
         second_application = _make_application(
@@ -6238,10 +6238,41 @@ class PublicExamLookupTests(TestCase):
         self.assertRedirects(response, reverse("exam-public-lookup"))
         response = self.client.get(reverse("exam-public-lookup"))
 
-        self.assertContains(response, "EXC-2027-0002")
-        self.assertContains(response, "Đã thay thế")
-        self.assertContains(response, "EXC-2027-0003")
+        self.assertNotContains(
+            response,
+            f'<span class="cert-num">{replaced_certificate.certificate_number}</span>',
+        )
+        self.assertNotContains(response, "Đã thay thế")
+        self.assertContains(
+            response,
+            f'<span class="cert-num">{replacement_certificate.certificate_number}</span>',
+        )
         self.assertContains(response, "Đã cấp")
+
+        result = next(item for item in response.context["results"] if item["period"] == second_period)
+        self.assertEqual(len(result["certificates"]), 1)
+        replacement = result["certificates"][0]
+        self.assertEqual(
+            replacement.certificate_number,
+            replacement_certificate.certificate_number,
+        )
+        self.assertIsNotNone(replacement.download_url)
+        self.assertContains(response, replacement.download_url)
+        actions_html = response.content.decode().split('<div class="acts">')[-1]
+        self.assertIn(replacement.download_url, actions_html)
+
+        from training.public_exam_views import CERTIFICATE_DOWNLOAD_SIGNER
+        replaced_token = CERTIFICATE_DOWNLOAD_SIGNER.sign(
+            f"{replaced_certificate.pk}:{self.client.session.session_key}"
+        )
+        replaced_response = self.client.get(
+            f"{reverse('exam-public-certificate-pdf')}?token={replaced_token}"
+        )
+        self.assertEqual(replaced_response.status_code, 404)
+
+        replacement_response = self.client.get(replacement.download_url)
+        self.assertEqual(replacement_response.status_code, 200)
+        self.assertEqual(replacement_response["Content-Type"], "application/pdf")
 
     def test_unpublished_and_missing_records_have_the_same_no_result_response(self):
         ExamScore.objects.create(
@@ -6391,12 +6422,18 @@ class PublicExamLookupTests(TestCase):
         self.assertEqual(lookup_page.status_code, 200)
         self.assertContains(lookup_page, "EXC-2027-8888")
         self.assertContains(lookup_page, "Đã cấp")
-        self.assertContains(lookup_page, "Tải PDF")
+        self.assertContains(lookup_page, 'class="btn pri cert-download-btn"')
+        self.assertNotContains(lookup_page, "Tải kết quả tra cứu PDF")
 
         # Extract signed token and verify PDF download
         results = lookup_page.context["results"]
         cert_item = results[0]["certificates"][0]
         self.assertIsNotNone(cert_item.download_url)
+        cert_html = lookup_page.content.decode()
+        actions_html = cert_html.split('<div class="acts">')[-1]
+        self.assertIn(cert_item.download_url, actions_html)
+        self.assertIn("Tra cứu thông tin khác", actions_html)
+        self.assertIn("Về trang chủ", actions_html)
 
         dl_response = self.client.get(cert_item.download_url)
         self.assertEqual(dl_response.status_code, 200)
@@ -6412,6 +6449,41 @@ class PublicExamLookupTests(TestCase):
         ).first()
         self.assertIsNotNone(log)
         self.assertEqual(log.actor_username, "Thí sinh công khai")
+
+    def test_public_certificate_download_matches_exam_certificate_pdf(self):
+        ExamScore.objects.create(
+            assignment=self.assignment,
+            score=Decimal("95.00"),
+            is_published=True,
+        )
+        certificate = ExamCertificate.objects.create(
+            exam_period=self.period,
+            application=self.app,
+            certificate_number="EXC-2027-SHARED",
+            status=ExamCertificate.Status.ISSUED,
+            issued_by=None,
+        )
+        self.submit_lookup(self.client, "exam-public-lookup")
+        lookup_page = self.client.get(reverse("exam-public-lookup"))
+        certificate_url = lookup_page.context["results"][0]["certificates"][0].download_url
+
+        exam_user, _ = _make_exam_user(username="exam-pdf-shared")
+        exam_client = Client()
+        exam_client.force_login(exam_user)
+        pdf_bytes = b"%PDF-shared-certificate"
+        with patch("training.views._build_exam_certificate_pdf", return_value=pdf_bytes):
+            public_response = self.client.get(certificate_url)
+            exam_response = exam_client.get(
+                reverse("exam-certificate-pdf", args=[certificate.pk])
+            )
+
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(exam_response.status_code, 200)
+        self.assertEqual(public_response.content, exam_response.content)
+        self.assertEqual(
+            public_response["Content-Disposition"],
+            exam_response["Content-Disposition"],
+        )
 
     def test_public_certificate_pdf_rejects_revoked_or_tampered_token(self):
         ExamScore.objects.create(

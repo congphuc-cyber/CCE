@@ -24,7 +24,14 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import (
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from training.models import (
     AuditLog,
@@ -38,7 +45,7 @@ from training.public_exam_forms import (
     PublicExamLookupRequestForm,
     PublicExamRegistrationForm,
 )
-from training.views import _build_exam_certificate_pdf
+from training.views import _exam_certificate_pdf_response
 
 
 REGISTRATION_SUCCESS_SESSION_KEY = "public_exam_registration_id"
@@ -405,7 +412,7 @@ def _published_exam_results(id_number, email, session_key=None):
 
     application_ids = {score.assignment.application_id for score in score_rows}
     period_ids = {score.assignment.exam_room.exam_period_id for score in score_rows}
-    certificates = (
+    certificates = list(
         ExamCertificate.objects.filter(
             application_id__in=application_ids,
             exam_period_id__in=period_ids,
@@ -415,6 +422,8 @@ def _published_exam_results(id_number, email, session_key=None):
     )
     certificates_by_pair = {}
     for certificate in certificates:
+        if certificate.status == ExamCertificate.Status.REPLACED:
+            continue
         if session_key and certificate.status == ExamCertificate.Status.ISSUED:
             token = CERTIFICATE_DOWNLOAD_SIGNER.sign(f"{certificate.pk}:{session_key}")
             certificate.download_url = f"{reverse('exam-public-certificate-pdf')}?token={token}"
@@ -513,60 +522,312 @@ def _register_public_pdf_font():
 def _public_lookup_pdf_response(title, candidate, masked_id_number, purpose, rows):
     font_name = _register_public_pdf_font()
     styles = getSampleStyleSheet()
+    navy = colors.HexColor("#173B57")
+    ink = colors.HexColor("#19344A")
+    muted = colors.HexColor("#587186")
+    accent = colors.HexColor("#24A99A")
+    border = colors.HexColor("#D7E2EA")
+    pale = colors.HexColor("#F3F7FA")
+    white = colors.white
+    content_width = A4[0] - 34 * mm
+
+    brand_mark_style = ParagraphStyle(
+        "PublicExamBrandMark",
+        fontName="PublicExamSans-Bold",
+        fontSize=14,
+        leading=17,
+        textColor=white,
+        alignment=1,
+    )
+    brand_name_style = ParagraphStyle(
+        "PublicExamBrandName",
+        fontName="PublicExamSans-Bold",
+        fontSize=9,
+        leading=12,
+        textColor=white,
+    )
+    brand_school_style = ParagraphStyle(
+        "PublicExamBrandSchool",
+        fontName=font_name,
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#DCE8EF"),
+    )
+    kicker_style = ParagraphStyle(
+        "PublicExamKicker",
+        fontName="PublicExamSans-Bold",
+        fontSize=8,
+        leading=10,
+        textColor=accent,
+        spaceAfter=2 * mm,
+    )
     title_style = ParagraphStyle(
         "PublicExamTitle",
         parent=styles["Title"],
         fontName="PublicExamSans-Bold",
-        fontSize=17,
-        leading=22,
-        textColor=colors.HexColor("#173b57"),
+        fontSize=21,
+        leading=26,
+        textColor=navy,
         alignment=0,
-        spaceAfter=8 * mm,
-    )
-    section_style = ParagraphStyle(
-        "PublicExamSection",
-        parent=styles["Heading2"],
-        fontName="PublicExamSans-Bold",
-        fontSize=12,
-        leading=17,
-        textColor=colors.HexColor("#173b57"),
-        spaceBefore=4 * mm,
         spaceAfter=2 * mm,
     )
-    body_style = ParagraphStyle(
-        "PublicExamBody",
+    subtitle_style = ParagraphStyle(
+        "PublicExamSubtitle",
         parent=styles["BodyText"],
         fontName=font_name,
-        fontSize=10,
+        fontSize=9,
+        leading=13,
+        textColor=muted,
+        spaceAfter=5 * mm,
+    )
+    info_label_style = ParagraphStyle(
+        "PublicExamInfoLabel",
+        fontName="PublicExamSans-Bold",
+        fontSize=7,
+        leading=9,
+        textColor=muted,
+    )
+    info_value_style = ParagraphStyle(
+        "PublicExamInfoValue",
+        fontName="PublicExamSans-Bold",
+        fontSize=11,
         leading=15,
-        textColor=colors.HexColor("#19344a"),
-        spaceAfter=2 * mm,
+        textColor=ink,
+    )
+    exam_label_style = ParagraphStyle(
+        "PublicExamCardLabel",
+        fontName="PublicExamSans-Bold",
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#B7DCD8"),
+    )
+    exam_title_style = ParagraphStyle(
+        "PublicExamCardTitle",
+        fontName="PublicExamSans-Bold",
+        fontSize=11,
+        leading=15,
+        textColor=white,
+    )
+    detail_label_style = ParagraphStyle(
+        "PublicExamDetailLabel",
+        fontName="PublicExamSans-Bold",
+        fontSize=7,
+        leading=9,
+        textColor=muted,
+    )
+    detail_value_style = ParagraphStyle(
+        "PublicExamDetailValue",
+        fontName="PublicExamSans-Bold",
+        fontSize=9.5,
+        leading=13,
+        textColor=ink,
     )
 
+    brand_copy = Table(
+        [
+            [Paragraph("TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN", brand_name_style)],
+            [Paragraph("TRƯỜNG ĐẠI HỌC BÁCH KHOA - ĐHQG-HCM", brand_school_style)],
+        ],
+        colWidths=[content_width - 30 * mm],
+    )
+    brand = Table(
+        [[Paragraph("CCE", brand_mark_style), brand_copy]],
+        colWidths=[25 * mm, content_width - 25 * mm],
+    )
+    brand.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), navy),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, 0), 5 * mm),
+                ("RIGHTPADDING", (0, 0), (0, 0), 2 * mm),
+                ("LEFTPADDING", (1, 0), (1, 0), 1 * mm),
+                ("RIGHTPADDING", (1, 0), (1, 0), 4 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm),
+            ]
+        )
+    )
+    brand_accent = Table([[""]], colWidths=[content_width], rowHeights=[1.5 * mm])
+    brand_accent.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), accent)]))
+
+    subtitles = {
+        "rooms": "Thời gian, địa điểm và ca thi đã được xếp cho thí sinh.",
+        "registration": "Thông tin xác nhận hồ sơ đăng ký dự thi trực tuyến.",
+        "results": "Thông tin kết quả thi đã được công bố.",
+    }
     story = [
+        brand,
+        brand_accent,
+        Spacer(1, 8 * mm),
         Paragraph(escape(title), title_style),
-        Paragraph(f"Thí sinh: {escape(candidate.full_name)}", body_style),
-        Paragraph(f"CCCD: {escape(masked_id_number)}", body_style),
-        Spacer(1, 3 * mm),
+        Paragraph(escape(subtitles.get(purpose, "")), subtitle_style),
     ]
+
+    candidate_info = Table(
+        [
+            [
+                Paragraph("THÍ SINH", info_label_style),
+                Paragraph("CCCD", info_label_style),
+            ],
+            [
+                Paragraph(escape(str(candidate.full_name)), info_value_style),
+                Paragraph(escape(str(masked_id_number)), info_value_style),
+            ],
+        ],
+        colWidths=[content_width * 0.68, content_width * 0.32],
+    )
+    candidate_info.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), pale),
+                ("BOX", (0, 0), (-1, -1), 0.7, border),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, border),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("TOPPADDING", (0, 0), (-1, 0), 3 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 1 * mm),
+                ("TOPPADDING", (0, 1), (-1, 1), 0),
+                ("BOTTOMPADDING", (0, 1), (-1, 1), 3 * mm),
+            ]
+        )
+    )
+    story.extend(
+        [
+            Paragraph("THÔNG TIN THÍ SINH", kicker_style),
+            candidate_info,
+            Spacer(1, 7 * mm),
+        ]
+    )
+
+    def detail_card(detail):
+        if ":" in detail:
+            label, value = detail.split(":", 1)
+        else:
+            label, value = "Loại chứng chỉ", detail
+        card = Table(
+            [
+                [Paragraph(escape(label.strip().upper()), detail_label_style)],
+                [Paragraph(escape(value.strip()), detail_value_style)],
+            ],
+            colWidths=[(content_width - 16 * mm) / 2],
+        )
+        card.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), pale),
+                    ("BOX", (0, 0), (-1, -1), 0.5, border),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 3 * mm),
+                    ("TOPPADDING", (0, 0), (0, 0), 2.5 * mm),
+                    ("BOTTOMPADDING", (0, 0), (0, 0), 0.5 * mm),
+                    ("TOPPADDING", (0, 1), (0, 1), 0),
+                    ("BOTTOMPADDING", (0, 1), (0, 1), 2.5 * mm),
+                ]
+            )
+        )
+        return card
+
     for row in rows:
-        story.append(Paragraph(escape(row["title"]), section_style))
-        for detail in row["details"]:
-            story.append(Paragraph(escape(detail), body_style))
-        story.append(Spacer(1, 2 * mm))
+        exam_header = Table(
+            [[
+                Paragraph("ĐỢT THI", exam_label_style),
+                Paragraph(escape(str(row["title"])), exam_title_style),
+            ]],
+            colWidths=[22 * mm, content_width - 22 * mm],
+        )
+        exam_header.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), navy),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 4 * mm),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 1 * mm),
+                    ("LEFTPADDING", (1, 0), (1, 0), 1 * mm),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 4 * mm),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3 * mm),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+                ]
+            )
+        )
+
+        details = [detail_card(detail) for detail in row["details"]]
+        if len(details) % 2:
+            details.append("")
+        detail_rows = [
+            details[index:index + 2]
+            for index in range(0, len(details), 2)
+        ]
+        detail_grid = Table(
+            detail_rows,
+            colWidths=[(content_width - 16 * mm) / 2] * 2,
+        )
+        detail_grid.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (0, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (0, -1), 2 * mm),
+                    ("LEFTPADDING", (1, 0), (1, -1), 2 * mm),
+                    ("RIGHTPADDING", (1, 0), (1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1.5 * mm),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+                ]
+            )
+        )
+        exam_card = Table(
+            [[exam_header], [detail_grid]],
+            colWidths=[content_width],
+        )
+        exam_card.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 0.7, border),
+                    ("LEFTPADDING", (0, 0), (-1, 0), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, 0), 0),
+                    ("TOPPADDING", (0, 0), (-1, 0), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 0),
+                    ("LEFTPADDING", (0, 1), (-1, 1), 6 * mm),
+                    ("RIGHTPADDING", (0, 1), (-1, 1), 6 * mm),
+                    ("TOPPADDING", (0, 1), (-1, 1), 3 * mm),
+                    ("BOTTOMPADDING", (0, 1), (-1, 1), 3 * mm),
+                ]
+            )
+        )
+        story.append(KeepTogether([exam_card, Spacer(1, 5 * mm)]))
 
     output = BytesIO()
     document = SimpleDocTemplate(
         output,
         pagesize=A4,
-        rightMargin=20 * mm,
-        leftMargin=20 * mm,
-        topMargin=18 * mm,
-        bottomMargin=18 * mm,
+        rightMargin=17 * mm,
+        leftMargin=17 * mm,
+        topMargin=15 * mm,
+        bottomMargin=19 * mm,
         title=title,
         author="Trung tâm Kỹ thuật Điện toán",
     )
-    document.build(story)
+
+    def draw_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFillColor(navy)
+        canvas.rect(0, A4[1] - 2 * mm, A4[0], 2 * mm, stroke=0, fill=1)
+        canvas.setStrokeColor(border)
+        canvas.setLineWidth(0.6)
+        canvas.line(17 * mm, 14 * mm, A4[0] - 17 * mm, 14 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont(font_name, 7)
+        canvas.drawString(
+            17 * mm,
+            9 * mm,
+            "TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN | ĐHQG-HCM",
+        )
+        canvas.drawRightString(A4[0] - 17 * mm, 9 * mm, f"Trang {doc.page}")
+        canvas.restoreState()
+
+    document.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
 
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
     filename = {
@@ -865,11 +1126,4 @@ def exam_public_certificate_pdf(request):
         reason=f"Thí sinh tải PDF chứng chỉ {certificate.certificate_number}",
     )
 
-    pdf_bytes = _build_exam_certificate_pdf(certificate)
-    response = HttpResponse(pdf_bytes, content_type="application/pdf")
-    response["Content-Disposition"] = (
-        f'attachment; filename="chung-chi-{certificate.certificate_number}.pdf"'
-    )
-    response["Cache-Control"] = "no-store, private"
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
+    return _exam_certificate_pdf_response(certificate)
