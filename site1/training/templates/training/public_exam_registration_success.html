@@ -1,31 +1,91 @@
-{% extends "training/base_public_exam.html" %}
+{% extends "training/base_candidate.html" %}
 
-{% block title %}Đăng ký thành công{% endblock %}
+{% block title %}Đã nhận hồ sơ đăng ký | CCE{% endblock %}
 {% block meta_description %}Xác nhận hồ sơ đăng ký dự thi đã được gửi đến Trung tâm Kỹ thuật Điện toán.{% endblock %}
 
 {% block content %}
-<section class="public-exam-panel">
-  <h1>Đăng ký dự thi</h1>
-  {% include "training/partials/public_state.html" with state="success" title="Đã nhận hồ sơ đăng ký" message="Thông tin đăng ký của bạn đã được gửi đến Trung tâm." period=application.exam_period %}
-  <dl class="public-state-details">
+<section class="card card-sm">
+  <div class="top">
+    <div class="ic ic-success" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>
+    </div>
+    <div>
+      <h1>Đã nhận hồ sơ đăng ký</h1>
+      <p>Thông tin đăng ký của bạn đã được gửi đến Trung tâm.</p>
+    </div>
+  </div>
+
+  <dl class="info">
+    <div>
+      <dt>Thí sinh</dt>
+      <dd>{{ application.full_name }}</dd>
+    </div>
     <div>
       <dt>Loại chứng chỉ</dt>
       <dd>{{ application.exam_period.cert_type.name }}</dd>
     </div>
     <div>
-      <dt>Thí sinh</dt>
-      <dd>{{ application.full_name }}</dd>
+      <dt>Đợt thi</dt>
+      <dd>{{ application.exam_period.name }}</dd>
+    </div>
+    <div>
+      <dt>Ngày thi</dt>
+      <dd>{{ application.exam_period.exam_date|date:"d/m/Y" }}</dd>
     </div>
   </dl>
-  <div class="public-exam-actions">
-    <a class="cce-btn cce-btn-secondary"
-       href="{% url 'exam-application-public-export-pdf' %}">
-      Tải phiếu đăng ký (PDF)
-    </a>
-    <a class="cce-btn cce-btn-primary"
-       href="{% url 'exam-application-public-register' %}">
-      Về trang chủ
-    </a>
+
+  <div class="acts">
+    <a class="btn pri" id="download-pdf-btn" href="{% url 'exam-application-public-export-pdf' %}" download="phieu-xac-nhan-dang-ky-du-thi.pdf">Tải phiếu đăng ký (PDF)</a>
+    <a class="btn" href="{% url 'home' %}">Về trang chủ</a>
   </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var pdfBtn = document.getElementById("download-pdf-btn");
+  if (!pdfBtn) return;
+
+  var cachedBlob = null;
+  pdfBtn.addEventListener("click", async function (e) {
+    e.preventDefault();
+
+    if (cachedBlob) {
+      var blobUrl = window.URL.createObjectURL(cachedBlob);
+      var link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = "phieu-xac-nhan-dang-ky-du-thi.pdf";
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      link.remove();
+      return;
+    }
+
+    try {
+      var response = await fetch(pdfBtn.href);
+      if (response.ok) {
+        cachedBlob = await response.blob();
+        var blobUrl = window.URL.createObjectURL(cachedBlob);
+        var link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = "phieu-xac-nhan-dang-ky-du-thi.pdf";
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(blobUrl);
+        link.remove();
+      }
+    } catch (err) {
+      var iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = pdfBtn.href;
+      document.body.appendChild(iframe);
+      setTimeout(function () {
+        iframe.remove();
+      }, 5000);
+    }
+  });
+});
+</script>
 {% endblock %}

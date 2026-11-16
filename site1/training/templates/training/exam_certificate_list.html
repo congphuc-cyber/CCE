@@ -180,7 +180,7 @@
     <div class="cce-filter-actions">
       <button class="cce-btn cce-btn-primary" type="submit">
         <span class="material-symbols-outlined" aria-hidden="true">search</span>
-        Tìm kiếm
+        Áp dụng lọc
       </button>
       <a class="cce-btn cce-btn-secondary cce-btn-reset" href="{% url 'exam-certificate-list' %}">
         <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
@@ -459,11 +459,16 @@
     </div>
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="chứng chỉ" %}
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-8); text-align:center;">
-      <span class="material-symbols-outlined" style="font-size:3rem; color:var(--c-primary-light);">workspace_premium</span>
-      <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Không có chứng chỉ phù hợp</p>
-      <p style="color:var(--c-text-muted);">Thử thay đổi tiêu chí tìm kiếm hoặc bộ lọc.</p>
-    </div>
+    {% if keyword or period_id or application_id or status %}
+      {% url 'exam-certificate-list' as reset_url %}
+      {% include "training/partials/search_empty_state.html" with query=keyword reset_url=reset_url message="Không có chứng chỉ nào phù hợp với các tiêu chí đã chọn." %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8); text-align:center;">
+        <span class="material-symbols-outlined" style="font-size:3rem; color:var(--c-primary-light);" aria-hidden="true">workspace_premium</span>
+        <p style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có chứng chỉ khảo thí</p>
+        <p style="color:var(--c-text-muted);">Chứng chỉ đủ điều kiện cấp sẽ xuất hiện tại đây.</p>
+      </div>
+    {% endif %}
   {% endif %}
 </section>
 

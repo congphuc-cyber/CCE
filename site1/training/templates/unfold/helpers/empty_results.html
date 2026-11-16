@@ -1,0 +1,20 @@
+{% load admin_urls %}
+{% url cl.opts|admin_urlname:"add" as add_url %}
+
+{% if cl.query or cl.has_active_filters %}
+  {% include "training/partials/search_empty_state.html" with query=cl.query reset_url="?" message="Thử từ khóa khác hoặc xóa bớt bộ lọc." %}
+{% else %}
+  <div class="cce-empty-results" role="status">
+    <span class="material-symbols-outlined cce-empty-results__icon" aria-hidden="true">inventory_2</span>
+    <div class="cce-empty-results__content">
+      <h2 class="cce-empty-results__title">Chưa có dữ liệu</h2>
+      <p class="cce-empty-results__message">Danh sách hiện chưa có bản ghi nào.</p>
+      {% if has_add_permission %}
+        <a class="cce-btn cce-btn-primary cce-empty-results__action" href="{% add_preserved_filters add_url is_popup to_field %}">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <span>Thêm {{ cl.opts.verbose_name }}</span>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}

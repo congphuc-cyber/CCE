@@ -660,14 +660,26 @@ class ExamApplication(models.Model):
                 {"exam_period": "Đợt thi đã đóng, không thể tiếp nhận thêm hồ sơ đăng ký."}
             )
         if self.exam_period_id and self.exam_period.max_candidates:
-            existing = self.exam_period.applications.exclude(pk=self.pk).count()
-            if existing >= self.exam_period.max_candidates:
+            existing = type(self).objects.filter(
+                exam_period_id=self.exam_period_id
+            ).exclude(pk=self.pk)
+            is_duplicate = existing.filter(id_number=self.id_number).exists()
+            unique_candidate_count = existing.values("id_number").distinct().count()
+            if (
+                unique_candidate_count >= self.exam_period.max_candidates
+                and not is_duplicate
+            ):
                 raise ValidationError(
                     {"exam_period": f"Đợt thi đã đạt số lượng hồ sơ tối đa ({self.exam_period.max_candidates})."}
                 )
 
     def save(self, *args, **kwargs):
         self.clean()
+        if self._state.adding and type(self).objects.filter(
+            exam_period_id=self.exam_period_id,
+            id_number=self.id_number,
+        ).exists():
+            self.status = self.Status.DUPLICATE
         super().save(*args, **kwargs)
 
 

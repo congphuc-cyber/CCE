@@ -60,7 +60,7 @@
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách chi tiết phòng thi</h2>
   </div>
 
-  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+  {% include "training/partials/exam_room_filter_bar.html" %}
 
   {% if rooms_data %}
     <div class="cce-table-wrap">
@@ -131,20 +131,20 @@
     </div>
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
-      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">meeting_room</span>
-      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Chưa có phòng thi nào</p>
-      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
-        {% if selected_period %}
-          Đợt thi "<strong>{{ selected_period.name }}</strong>" hiện chưa được tạo phòng thi nào. Nhấn nút bên dưới để tạo phòng thi đầu tiên.
-        {% else %}
-          Chưa có phòng thi nào trong hệ thống. Nhấn nút "Tạo phòng thi mới" để bắt đầu tạo phòng và xếp thí sinh.
-        {% endif %}
-      </p>
-      <button type="button" class="cce-btn cce-btn-accent" onclick="openCreateRoomModal()">
-        + Tạo phòng thi mới
-      </button>
-    </div>
+    {% if has_active_filters %}
+      {% url 'exam-room-list' as reset_url %}
+      {% include "training/partials/search_empty_state.html" with reset_url=reset_url message="Không có phòng thi nào phù hợp với các tiêu chí đã chọn." %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
+        <span class="material-symbols-outlined cce-empty-icon" aria-hidden="true">meeting_room</span>
+        <p class="cce-empty-title">Chưa có phòng thi</p>
+        <p class="cce-empty-desc">Tạo phòng thi để bắt đầu phân bổ thí sinh.</p>
+        <button type="button" class="cce-btn cce-btn-accent" onclick="openCreateRoomModal()">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <span>Tạo phòng thi</span>
+        </button>
+      </div>
+    {% endif %}
   {% endif %}
 </section>
 
@@ -207,6 +207,39 @@
 
 {% block extra_js %}
 <script>
+  (function () {
+    var dialog = document.getElementById("exam-room-filter-dialog");
+    var openButton = document.querySelector("[data-open-exam-room-filter]");
+    var searchInput = document.getElementById("exam-room-search");
+
+    searchInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchInput.form.requestSubmit();
+      }
+    });
+
+    openButton.addEventListener("click", function () {
+      dialog.showModal();
+    });
+
+    dialog.querySelectorAll("[data-close-exam-room-filter]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        dialog.close();
+      });
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+
+    if (dialog.dataset.activeFilters === "true") {
+      dialog.showModal();
+    }
+  })();
+
   function openCreateRoomModal() {
     const modal = document.getElementById('cceCreateRoomModal');
     if (modal) {

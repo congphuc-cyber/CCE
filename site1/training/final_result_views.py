@@ -73,20 +73,63 @@ def final_result_list(request):
     can_manage_results = _can_manage_final_results(request.user)
     roles = set(roles_for_user(request.user))
     if can_manage_results:
-        classes = TrainingClass.objects.all()
+        accessible_classes = TrainingClass.objects.all()
     elif "Giáo viên" in roles and user_has_feature(request.user, "final-results"):
-        classes = TrainingClass.objects.filter(
+        accessible_classes = TrainingClass.objects.filter(
             teacher_assignments__teacher__user=request.user,
             teacher_assignments__is_active=True,
         ).distinct()
     else:
         raise PermissionDenied
 
+    class_filter_values = list(
+        accessible_classes.select_related("course")
+        .order_by("course__name", "name")
+        .values_list("pk", "name", "course__name")
+    )
+    course_filter_values = list(
+        accessible_classes.order_by("course__name", "course_id")
+        .values_list("course_id", "course__name")
+        .distinct()
+    )
+    available_class_ids = {str(class_id) for class_id, _, _ in class_filter_values}
+    available_course_ids = {str(course_id) for course_id, _ in course_filter_values}
+
     keyword = request.GET.get("keyword", "").strip()
+    class_id = request.GET.get("class_id", "").strip()
+    course_id = request.GET.get("course_id", "").strip()
+    lock_status = request.GET.get("lock_status", "").strip()
+    publication_status = request.GET.get("publication_status", "").strip()
+
+    invalid_filters = []
+    if class_id and class_id not in available_class_ids:
+        class_id = ""
+        invalid_filters.append("Lớp lọc không hợp lệ.")
+    if course_id and course_id not in available_course_ids:
+        course_id = ""
+        invalid_filters.append("Khóa học lọc không hợp lệ.")
+    if lock_status not in {"", "locked", "unlocked"}:
+        lock_status = ""
+        invalid_filters.append("Trạng thái chốt không hợp lệ.")
+    if publication_status not in {"", "published", "partial", "unpublished"}:
+        publication_status = ""
+        invalid_filters.append("Trạng thái công bố không hợp lệ.")
+    for error in invalid_filters:
+        messages.error(request, error)
+
+    classes = accessible_classes
     if keyword:
         classes = classes.filter(
             Q(name__icontains=keyword) | Q(course__name__icontains=keyword)
         )
+    if class_id:
+        classes = classes.filter(pk=class_id)
+    if course_id:
+        classes = classes.filter(course_id=course_id)
+    if lock_status == "locked":
+        classes = classes.filter(final_results_locked_at__isnull=False)
+    elif lock_status == "unlocked":
+        classes = classes.filter(final_results_locked_at__isnull=True)
 
     enrolled_learner = Q(
         final_results__learner__enrollments__training_class_id=F("pk")
@@ -114,6 +157,18 @@ def final_result_list(request):
         )
         .order_by("name", "pk")
     )
+    if publication_status == "published":
+        classes = classes.filter(
+            final_result_enrolled_count__gt=0,
+            final_result_published_count__gte=F("final_result_enrolled_count"),
+        )
+    elif publication_status == "partial":
+        classes = classes.filter(
+            final_result_published_count__gt=0,
+            final_result_published_count__lt=F("final_result_enrolled_count"),
+        )
+    elif publication_status == "unpublished":
+        classes = classes.filter(final_result_published_count=0)
 
     total_classes = classes.count()
     completed_classes = classes.filter(
@@ -160,14 +215,54 @@ def final_result_list(request):
             "breadcrumbs": [{"label": "Điểm cuối khóa"}],
             "page_obj": page_obj,
             "keyword": keyword,
+            "active_filters": bool(
+                class_id or course_id or lock_status or publication_status
+            ),
             "filter_fields": [
                 {
-                    "name": "keyword",
-                    "label": "Tìm lớp hoặc khóa học",
-                    "type": "text",
-                    "placeholder": "Nhập tên lớp hoặc khóa học...",
-                    "value": keyword,
-                }
+                    "name": "course_id",
+                    "label": "Khóa học",
+                    "placeholder": "Tất cả khóa học",
+                    "value": course_id,
+                    "options": [
+                        {"value": str(option_id), "label": option_name}
+                        for option_id, option_name in course_filter_values
+                    ],
+                },
+                {
+                    "name": "class_id",
+                    "label": "Lớp",
+                    "placeholder": "Tất cả lớp",
+                    "value": class_id,
+                    "options": [
+                        {
+                            "value": str(option_id),
+                            "label": f"{course_name} — {class_name}",
+                        }
+                        for option_id, class_name, course_name in class_filter_values
+                    ],
+                },
+                {
+                    "name": "lock_status",
+                    "label": "Trạng thái chốt",
+                    "placeholder": "Tất cả trạng thái",
+                    "value": lock_status,
+                    "options": [
+                        {"value": "locked", "label": "Đã chốt"},
+                        {"value": "unlocked", "label": "Chưa chốt"},
+                    ],
+                },
+                {
+                    "name": "publication_status",
+                    "label": "Trạng thái công bố",
+                    "placeholder": "Tất cả trạng thái",
+                    "value": publication_status,
+                    "options": [
+                        {"value": "published", "label": "Đã công bố"},
+                        {"value": "partial", "label": "Một phần"},
+                        {"value": "unpublished", "label": "Chưa công bố"},
+                    ],
+                },
             ],
             "total_classes": total_classes,
             "completed_classes": completed_classes,

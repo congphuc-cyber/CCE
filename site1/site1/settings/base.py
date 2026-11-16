@@ -126,7 +126,7 @@ UNFOLD = {
     },
     "STYLES": [
         lambda request: static("training/css/tokens.css") + "?v=shared-sidebar-20261114",
-        lambda request: static("training/css/cce-core.css") + "?v=class-actions-colors-20261115",
-        lambda request: static("training/css/cce-unfold.css") + "?v=weekday-row-20261115-v3",
+        lambda request: static("training/css/cce-core.css") + "?v=admin-list-layout-20261116-accounts",
+        lambda request: static("training/css/cce-unfold.css") + "?v=admin-list-layout-20261116-accounts",
     ],
 }

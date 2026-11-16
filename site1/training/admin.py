@@ -59,6 +59,7 @@ class BaseModelAdmin(UnfoldModelAdmin):
     change_list_template = "training/admin/change_list.html"
     allow_delete = False
     change_list_title = "Danh sách"
+    change_list_description = ""
     list_per_page = PAGE_SIZE
     list_max_show_all = PAGE_SIZE
     show_full_result_count = False
@@ -116,7 +117,11 @@ class BaseModelAdmin(UnfoldModelAdmin):
         )
 
     def changelist_view(self, request, extra_context=None):
-        context = {**(extra_context or {}), "title": self.change_list_title}
+        context = {
+            **(extra_context or {}),
+            "title": self.change_list_title,
+            "change_list_description": self.change_list_description,
+        }
         return super().changelist_view(request, extra_context=context)
 
     def save_model(self, request, obj, form, change):
@@ -153,10 +158,30 @@ class CourseAdmin(BaseModelAdmin):
     feature_key = "courses"
     form = CourseAdminForm
     change_list_title = "Danh sách khóa học"
+    change_list_description = "Quản lý danh mục và ngưỡng đạt của các chương trình đào tạo."
     list_display = ("name", "threshold_display", "class_count_display", "edit_action")
     list_display_links = None
     search_fields = ("name",)
     ordering = ("name",)
+
+    class CourseClassPresenceFilter(SimpleListFilter):
+        title = "Tình trạng lớp"
+        parameter_name = "class_presence"
+
+        def lookups(self, request, model_admin):
+            return (
+                ("with_classes", "Có lớp"),
+                ("without_classes", "Chưa có lớp"),
+            )
+
+        def queryset(self, request, queryset):
+            if self.value() == "with_classes":
+                return queryset.filter(classes__isnull=False).distinct()
+            if self.value() == "without_classes":
+                return queryset.filter(classes__isnull=True)
+            return queryset
+
+    list_filter = (CourseClassPresenceFilter, "name")
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_class_count=Count("classes", distinct=True))
@@ -182,6 +207,7 @@ class TrainingClassAdmin(BaseModelAdmin):
     feature_key = "classes"
     form = TrainingClassAdminForm
     change_list_title = "Danh sách lớp học"
+    change_list_description = "Theo dõi lịch học, sĩ số và trạng thái các lớp đào tạo."
     list_display = (
         "name",
         "course",
@@ -259,6 +285,8 @@ class TeacherAdmin(BaseModelAdmin):
     allow_delete = True
     form = TeacherAdminForm
     change_list_title = "Danh sách giáo viên"
+    change_list_description = "Quản lý hồ sơ giáo viên và các lớp được phân công."
+    list_filter_sheet = True
     list_display = (
         "full_name",
         "phone_display",
@@ -269,8 +297,35 @@ class TeacherAdmin(BaseModelAdmin):
     )
     list_display_links = None
     actions = None
-    search_fields = ("full_name", "phone", "email")
     ordering = ("full_name",)
+
+    class ResponsibleClassFilter(SimpleListFilter):
+        title = "Lớp phụ trách"
+        parameter_name = "training_class"
+
+        def lookups(self, request, model_admin):
+            classes = (
+                TrainingClass.objects.select_related("course")
+                .order_by("name")
+            )
+            return [
+                (
+                    str(training_class.pk),
+                    f"{training_class.name} — {training_class.course.name}",
+                )
+                for training_class in classes
+            ]
+
+        def queryset(self, request, queryset):
+            if self.value():
+                return queryset.filter(
+                    teacher_assignments__training_class_id=self.value(),
+                    teacher_assignments__is_active=True,
+                ).distinct()
+            return queryset
+
+    list_filter = (ResponsibleClassFilter,)
+    search_fields = ("full_name", "phone", "email")
 
     @admin.display(description="SĐT", ordering="phone")
     def phone_display(self, obj):
@@ -328,6 +383,7 @@ class LearnerAdmin(BaseModelAdmin):
     feature_key = "learners"
     allow_delete = True
     change_list_title = "Danh sách học viên"
+    change_list_description = "Quản lý hồ sơ học viên và tình trạng ghi danh."
     form = LearnerAdminForm
     change_list_template = "training/admin/learner_change_list.html"
     change_form_template = "training/admin/learner_change_form.html"
@@ -424,6 +480,7 @@ class AccountAdmin(BaseModelAdmin):
     feature_key = "accounts"
     form = AccountAdminForm
     change_list_title = "Danh sách tài khoản"
+    change_list_description = "Quản lý tài khoản, vai trò truy cập và trạng thái hoạt động."
     list_display = (
         "full_name_display",
         "username",

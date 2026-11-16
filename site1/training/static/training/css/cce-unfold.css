@@ -45,6 +45,43 @@ body.change-list {
   background-color: var(--c-bg) !important;
 }
 
+body.change-list.model-course #main,
+body.change-list.model-trainingclass #main,
+body.change-list.model-teacher #main,
+body.change-list.model-learner #main,
+body.change-list.model-user #main {
+  background-color: var(--c-bg) !important;
+}
+
+.cce-admin-breadcrumbs {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.cce-admin-breadcrumbs .cce-breadcrumbs-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cce-admin-page-header {
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.cce-admin-page-header h1 {
+  color: var(--c-primary);
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-tight);
+}
+
+body.change-list.model-course .cce-admin-search-actions,
+body.change-list.model-trainingclass .cce-admin-search-actions,
+body.change-list.model-teacher .cce-admin-search-actions,
+body.change-list.model-learner .cce-admin-search-actions,
+body.change-list.model-user .cce-admin-search-actions {
+  background-color: var(--c-surface);
+}
+
 #page > .relative.z-60 > .fixed,
 #nav-sidebar {
   width: 260px !important;
@@ -111,6 +148,20 @@ div[id="nav-sidebar"] {
 
 .cce-admin-search-actions #changelist-search {
   flex: 0 1 auto;
+}
+
+.cce-admin-search-actions--teacher #toolbar {
+  flex: 0 1 360px;
+  width: min(360px, calc(100vw - 48px));
+  min-width: 0;
+}
+
+.cce-admin-search-actions--teacher #changelist-search {
+  width: 100%;
+}
+
+.cce-admin-search-actions--teacher #searchbar-submit {
+  display: none;
 }
 
 .cce-admin-filter-add {

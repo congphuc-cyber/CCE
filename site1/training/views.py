@@ -12,7 +12,7 @@ from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
@@ -133,18 +133,12 @@ AUDIT_OBJECT_TYPE_LABELS = {
 
 
 def get_home(request):
-    if request.user.is_authenticated:
-        if user_has_feature(request.user, "dashboard"):
-            return redirect("dashboard")
-        if user_has_feature(request.user, "my-classes"):
-            return redirect("my-class-list")
-        return redirect("profile")
     registration_periods = (
         ExamPeriod.objects.filter(
             status=ExamPeriod.Status.PUBLISHED,
             registration_deadline__gte=timezone.localdate(),
         )
-        .annotate(candidate_count=Count("applications"))
+        .annotate(candidate_count=Count("applications__id_number", distinct=True))
         .filter(candidate_count__lt=F("max_candidates"))
         .select_related("cert_type")
         .order_by("exam_date", "name")[:4]
@@ -186,6 +180,10 @@ class CCELoginView(LoginView):
             return reverse("role-permissions")
         if user_has_feature(self.request.user, "audit-log"):
             return reverse("audit-log-list")
+        for role_name in roles_for_user(self.request.user):
+            for item in ROLE_MENUS.get(role_name, {}).get("items", ()):
+                if user_has_feature(self.request.user, item["key"]):
+                    return reverse(item["url_name"])
         return super().get_success_url()
 
 
@@ -507,6 +505,8 @@ class CertificateIssueForm(forms.Form):
         training_class = cleaned.get("training_class")
         learner = cleaned.get("learner")
         if training_class and learner:
+            if not training_class.final_results_locked:
+                raise forms.ValidationError("Bảng điểm cuối khóa chưa được chốt.")
             result = FinalCourseResult.objects.filter(training_class=training_class, learner=learner).first()
             if result is None:
                 raise forms.ValidationError("Học viên chưa có kết quả cuối khóa trong lớp này.")
@@ -734,6 +734,7 @@ def certificate_list(request):
             "course_id": course_id,
             "class_id": class_id,
             "status": status,
+            "has_active_filters": bool(keyword or course_id or class_id or status),
             "total_eligible": len(rows),
             "total_issued": Certificate.objects.filter(status=Certificate.Status.ISSUED).count(),
         },
@@ -796,17 +797,21 @@ def certificate_issue(request, result_id=None):
         ).order_by("-issued_at", "-pk").first()
 
     has_passing_result = bool(
-        result and result.score >= training_class.course.pass_threshold
+        result
+        and not result.is_absent
+        and result.score is not None
+        and result.score >= training_class.course.pass_threshold
     )
+    results_locked = bool(training_class and training_class.final_results_locked)
     checks = [
         {
             "label": "Kết quả đã chốt",
             "description": (
                 "Bảng điểm đã được chốt; kết quả đủ cơ sở xét cấp."
-                if result
-                else "Chưa có kết quả cuối khóa trong lớp này."
+                if results_locked
+                else "Bảng điểm cuối khóa chưa được chốt."
             ),
-            "passed": bool(result),
+            "passed": results_locked,
         },
         {
             "label": "Kết quả học tập đạt",
@@ -814,9 +819,13 @@ def certificate_issue(request, result_id=None):
                 f"Điểm {result.score} đạt ngưỡng {training_class.course.pass_threshold}."
                 if has_passing_result
                 else (
-                    f"Điểm {result.score} chưa đạt ngưỡng {training_class.course.pass_threshold}."
-                    if result
-                    else "Chưa có điểm để đối chiếu điều kiện."
+                    "Học viên được đánh dấu vắng, không đủ điều kiện cấp chứng nhận."
+                    if result and result.is_absent
+                    else (
+                        f"Điểm {result.score} chưa đạt ngưỡng {training_class.course.pass_threshold}."
+                        if result and result.score is not None
+                        else "Chưa có điểm để đối chiếu điều kiện."
+                    )
                 )
             ),
             "passed": has_passing_result,
@@ -1551,9 +1560,22 @@ def exam_certificate_list(request):
 
     from training.models import ExamApplication, ExamCertificate, ExamPeriod, ExamScore
 
+    published_passing_scores = ExamScore.objects.filter(
+        assignment__application_id=OuterRef("application_id"),
+        assignment__exam_room__exam_period_id=OuterRef("exam_period_id"),
+        score__isnull=False,
+        score__gte=5,
+        is_absent=False,
+        is_published=True,
+    ).order_by("-published_at", "-pk")
     qs = ExamCertificate.objects.select_related(
         "exam_period", "application", "issued_by"
-    ).prefetch_related("history__changed_by__groups", "replaced_certificate")
+    ).prefetch_related(
+        "history__changed_by__groups",
+        "replaced_certificate",
+    ).annotate(
+        certificate_score_id=Subquery(published_passing_scores.values("pk")[:1])
+    )
     keyword = (request.GET.get("q") or request.GET.get("keyword") or "").strip()
     period_id = request.GET.get("period") or request.GET.get("period_id")
     application_id = request.GET.get("application_id")
@@ -1574,20 +1596,15 @@ def exam_certificate_list(request):
         qs = qs.filter(status=status)
 
     certificates = list(qs.order_by("-issued_at", "-pk")) if status != "pending" else []
-    rows = [
-        {
-            "certificate": certificate,
-            "application": certificate.application,
-            "period": certificate.exam_period,
-            "status": certificate.status,
-            "is_pending": False,
-            "score": None,
-            "sort_date": certificate.issued_at,
-            "sort_id": certificate.pk,
-        }
+    certificate_score_ids = {
+        certificate.certificate_score_id
         for certificate in certificates
-    ]
-
+        if certificate.certificate_score_id is not None
+    }
+    certificate_scores = {
+        score.pk: score
+        for score in ExamScore.objects.filter(pk__in=certificate_score_ids)
+    }
     scores = ExamScore.objects.filter(
         assignment__application__status=ExamApplication.Status.VALID,
         assignment__exam_room__exam_period_id=F("assignment__application__exam_period_id"),
@@ -1618,9 +1635,25 @@ def exam_certificate_list(request):
         if score.score >= EXAM_CERTIFICATE_MIN_SCORE:
             eligible_scores.setdefault(pair, score)
 
+<<<<<<< HEAD
     for row in rows:
         pair = (row["period"].pk, row["application"].pk)
         row["score"] = scores_by_pair.get(pair)
+=======
+    rows = [
+        {
+            "certificate": certificate,
+            "application": certificate.application,
+            "period": certificate.exam_period,
+            "status": certificate.status,
+            "is_pending": False,
+            "score": certificate_scores.get(certificate.certificate_score_id),
+            "sort_date": certificate.issued_at,
+            "sort_id": certificate.pk,
+        }
+        for certificate in certificates
+    ]
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
     active_pairs = set(
         ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).values_list(
@@ -1781,28 +1814,20 @@ def exam_certificate_candidate_detail(request, period_id, application_id):
     )
 
 
-@login_required
-def exam_certificate_pdf(request, pk):
-    if not user_has_feature(request.user, "exam-certificates"):
-        raise PermissionDenied
-
+def _build_exam_certificate_pdf(certificate):
     from io import BytesIO
     from xml.sax.saxutils import escape
 
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-    from training.models import ExamCertificate, ExamScore
+    from reportlab.pdfgen import canvas
+    from reportlab.platypus import Paragraph
+    from training.models import ExamScore
     from training.public_exam_views import _register_public_pdf_font
 
-    certificate = get_object_or_404(
-        ExamCertificate.objects.select_related("exam_period", "application", "issued_by"),
-        pk=pk,
-        status=ExamCertificate.Status.ISSUED,
-    )
     score = ExamScore.objects.filter(
         assignment__exam_room__exam_period=certificate.exam_period,
         assignment__application=certificate.application,
@@ -1811,68 +1836,256 @@ def exam_certificate_pdf(request, pk):
         score__isnull=False,
     ).order_by("-published_at", "-pk").first()
     font_name = _register_public_pdf_font()
-    styles = getSampleStyleSheet()
-    body_style = ParagraphStyle(
-        "ExamCertificatePdfBody",
-        parent=styles["BodyText"],
-        fontName=font_name,
-        fontSize=13,
-        leading=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor("#19344a"),
-        spaceAfter=4 * mm,
-    )
-    title_style = ParagraphStyle(
-        "ExamCertificatePdfTitle",
-        parent=styles["Title"],
-        fontName="PublicExamSans-Bold",
-        fontSize=22,
-        leading=28,
-        textColor=colors.HexColor("#183d57"),
-        alignment=TA_CENTER,
-        spaceAfter=12 * mm,
-    )
-    output = BytesIO()
-    document = SimpleDocTemplate(
-        output,
-        pagesize=A4,
-        rightMargin=24 * mm,
-        leftMargin=24 * mm,
-        topMargin=30 * mm,
-        bottomMargin=24 * mm,
-        title=f"Chứng chỉ {certificate.certificate_number}",
-        author="Trung tâm Kỹ thuật Điện toán",
-    )
-    story = [
-        Spacer(1, 16 * mm),
-        Paragraph("TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN", body_style),
-        Paragraph("CHỨNG CHỈ KHẢO THÍ", title_style),
-        Paragraph("Trân trọng chứng nhận", body_style),
-        Paragraph(escape(certificate.application.full_name), title_style),
-        Paragraph(
-            f"đã đạt yêu cầu trong đợt thi <b>{escape(certificate.exam_period.name)}</b>",
-            body_style,
-        ),
-        Paragraph(
-            f"Số chứng chỉ: {escape(certificate.certificate_number)}",
-            body_style,
-        ),
-    ]
-    if score and score.score is not None:
-        story.append(Paragraph(f"Điểm thi: {escape(str(score.score))}", body_style))
-    story.append(
-        Paragraph(
-            f"Ngày cấp: {timezone.localtime(certificate.issued_at).strftime('%d/%m/%Y')}",
-            body_style,
-        )
-    )
-    document.build(story)
+    navy = colors.HexColor("#173B57")
+    ink = colors.HexColor("#19344A")
+    muted = colors.HexColor("#587186")
+    teal = colors.HexColor("#238F84")
+    gold = colors.HexColor("#C29A59")
+    border = colors.HexColor("#D7E0E7")
+    pale = colors.HexColor("#F4F7F9")
+    white = colors.white
 
-    response = HttpResponse(output.getvalue(), content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{certificate.certificate_number}.pdf"'
+    output = BytesIO()
+    page = canvas.Canvas(output, pagesize=A4, pageCompression=1)
+    page.setTitle(f"Chứng chỉ {certificate.certificate_number}")
+    page.setAuthor("Trung tâm Kỹ thuật Điện toán")
+    page_width, page_height = A4
+    center_x = page_width / 2
+    content_width = page_width - 50 * mm
+    content_left = (page_width - content_width) / 2
+
+    page.setFillColor(white)
+    page.rect(0, 0, page_width, page_height, stroke=0, fill=1)
+    page.setStrokeColor(navy)
+    page.setLineWidth(1.25)
+    page.roundRect(
+        12 * mm,
+        12 * mm,
+        page_width - 24 * mm,
+        page_height - 24 * mm,
+        4 * mm,
+        stroke=1,
+        fill=0,
+    )
+    page.setStrokeColor(gold)
+    page.setLineWidth(0.65)
+    page.roundRect(
+        15 * mm,
+        15 * mm,
+        page_width - 30 * mm,
+        page_height - 30 * mm,
+        3 * mm,
+        stroke=1,
+        fill=0,
+    )
+
+    badge_width = 25 * mm
+    badge_height = 15 * mm
+    badge_x = center_x - badge_width / 2
+    badge_y = page_height - 43 * mm
+    page.setFillColor(navy)
+    page.roundRect(
+        badge_x,
+        badge_y,
+        badge_width,
+        badge_height,
+        3 * mm,
+        stroke=0,
+        fill=1,
+    )
+    page.setFillColor(white)
+    page.setFont("PublicExamSans-Bold", 12)
+    page.drawCentredString(center_x, badge_y + 4.8 * mm, "CCE")
+
+    page.setFillColor(muted)
+    page.setFont("PublicExamSans-Bold", 9.5)
+    page.drawCentredString(
+        center_x,
+        page_height - 55 * mm,
+        "TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN",
+    )
+    page.setFont(font_name, 8)
+    page.drawCentredString(
+        center_x,
+        page_height - 61 * mm,
+        "TRƯỜNG ĐẠI HỌC BÁCH KHOA - ĐHQG-HCM",
+    )
+
+    page.setFillColor(navy)
+    page.setFont("PublicExamSans-Bold", 23)
+    page.drawCentredString(
+        center_x,
+        page_height - 83 * mm,
+        "CHỨNG CHỈ KHẢO THÍ",
+    )
+    divider_y = page_height - 91 * mm
+    page.setStrokeColor(gold)
+    page.setLineWidth(0.8)
+    page.line(center_x - 25 * mm, divider_y, center_x - 2 * mm, divider_y)
+    page.line(center_x + 2 * mm, divider_y, center_x + 25 * mm, divider_y)
+    page.saveState()
+    page.translate(center_x, divider_y)
+    page.rotate(45)
+    page.setFillColor(teal)
+    page.rect(-1.3 * mm, -1.3 * mm, 2.6 * mm, 2.6 * mm, stroke=0, fill=1)
+    page.restoreState()
+
+    page.setFillColor(muted)
+    page.setFont(font_name, 11)
+    page.drawCentredString(
+        center_x,
+        page_height - 108 * mm,
+        "Trân trọng chứng nhận",
+    )
+
+    candidate_name = str(certificate.application.full_name)
+    name_style = ParagraphStyle(
+        "ExamCertificatePdfRecipient",
+        fontName="PublicExamSans-Bold",
+        fontSize=26,
+        leading=32,
+        alignment=TA_CENTER,
+        textColor=navy,
+    )
+    name_paragraph = Paragraph(escape(candidate_name), name_style)
+    name_top = page_height - 122 * mm
+    _, name_height = name_paragraph.wrap(content_width, 42 * mm)
+    name_paragraph.drawOn(page, content_left, name_top - name_height)
+
+    page.setStrokeColor(teal)
+    page.setLineWidth(1)
+    name_bottom = name_top - name_height
+    line_y = name_bottom - 4 * mm
+    page.line(center_x - 27 * mm, line_y, center_x + 27 * mm, line_y)
+
+    statement_style = ParagraphStyle(
+        "ExamCertificatePdfStatement",
+        fontName=font_name,
+        fontSize=11,
+        leading=16,
+        alignment=TA_CENTER,
+        textColor=ink,
+    )
+    statement = Paragraph(
+        "đã đạt yêu cầu trong đợt thi<br/>"
+        f'<font name="PublicExamSans-Bold" color="#173B57">'
+        f"{escape(certificate.exam_period.name)}</font>",
+        statement_style,
+    )
+    statement_width = content_width
+    _, statement_height = statement.wrap(statement_width, 45 * mm)
+    statement_top = line_y - 13 * mm
+    statement.drawOn(
+        page,
+        center_x - statement_width / 2,
+        statement_top - statement_height,
+    )
+
+    number_panel_width = 112 * mm
+    number_panel_height = 22 * mm
+    number_panel_x = center_x - number_panel_width / 2
+    number_panel_y = statement_top - statement_height - 10 * mm - number_panel_height
+    page.setFillColor(pale)
+    page.setStrokeColor(border)
+    page.setLineWidth(0.7)
+    page.roundRect(
+        number_panel_x,
+        number_panel_y,
+        number_panel_width,
+        number_panel_height,
+        3 * mm,
+        stroke=1,
+        fill=1,
+    )
+    page.setFillColor(muted)
+    page.setFont("PublicExamSans-Bold", 7.5)
+    page.drawCentredString(
+        center_x,
+        number_panel_y + 14 * mm,
+        "SỐ CHỨNG CHỈ",
+    )
+    page.setFillColor(navy)
+    page.setFont("PublicExamSans-Bold", 11)
+    page.drawCentredString(
+        center_x,
+        number_panel_y + 6 * mm,
+        str(certificate.certificate_number),
+    )
+
+    metrics = []
+    if score and score.score is not None:
+        metrics.append(("ĐIỂM THI", str(score.score)))
+    metrics.append(
+        ("NGÀY CẤP", timezone.localtime(certificate.issued_at).strftime("%d/%m/%Y"))
+    )
+    metric_y = number_panel_y - 31 * mm
+    metric_height = 22 * mm
+    metric_gap = 6 * mm
+    metric_width = min(
+        78 * mm,
+        (content_width - metric_gap) / len(metrics),
+    )
+    metric_start_x = center_x - (
+        len(metrics) * metric_width + (len(metrics) - 1) * metric_gap
+    ) / 2
+    for index, (label, value) in enumerate(metrics):
+        x = metric_start_x + index * (metric_width + metric_gap)
+        page.setFillColor(white)
+        page.setStrokeColor(border)
+        page.roundRect(
+            x,
+            metric_y,
+            metric_width,
+            metric_height,
+            3 * mm,
+            stroke=1,
+            fill=1,
+        )
+        page.setFillColor(teal)
+        page.setFont("PublicExamSans-Bold", 7)
+        page.drawString(x + 5 * mm, metric_y + 14 * mm, label)
+        page.setFillColor(ink)
+        page.setFont("PublicExamSans-Bold", 11)
+        page.drawString(x + 5 * mm, metric_y + 6 * mm, value)
+
+    page.setFillColor(muted)
+    page.setFont(font_name, 7.5)
+    page.drawCentredString(
+        center_x,
+        22 * mm,
+        "TRUNG TÂM KỸ THUẬT ĐIỆN TOÁN | ĐHQG-HCM",
+    )
+    page.showPage()
+    page.save()
+    return output.getvalue()
+
+
+def _exam_certificate_pdf_response(certificate):
+    response = HttpResponse(
+        _build_exam_certificate_pdf(certificate),
+        content_type="application/pdf",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="chung-chi-{certificate.certificate_number}.pdf"'
+    )
     response["Cache-Control"] = "no-store, private"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+@login_required
+def exam_certificate_pdf(request, pk):
+    if not user_has_feature(request.user, "exam-certificates"):
+        raise PermissionDenied
+
+    from training.models import ExamCertificate
+
+    certificate = get_object_or_404(
+        ExamCertificate.objects.select_related("exam_period", "application", "issued_by"),
+        pk=pk,
+        status=ExamCertificate.Status.ISSUED,
+    )
+    return _exam_certificate_pdf_response(certificate)
 
 
 @login_required
@@ -2441,6 +2654,13 @@ def class_transfer_history(request):
             "filter_form": filter_form,
             "page_obj": page_obj,
             "rows": rows,
+            "has_active_filters": bool(
+                filter_form.is_valid()
+                and (
+                    filter_form.cleaned_data.get("learner")
+                    or filter_form.cleaned_data.get("training_class")
+                )
+            ),
             "columns": [
                 {"key": "learner", "label": "Học viên"},
                 {"key": "source_class", "label": "Lớp cũ"},
@@ -2713,6 +2933,13 @@ def audit_log_list(request):
             "breadcrumbs": [{"label": "Nhật ký thao tác"}],
             "filter_form": form,
             "page_obj": page_obj,
+            "has_active_filters": bool(
+                form.is_valid()
+                and any(
+                    form.cleaned_data.get(field)
+                    for field in ("action", "actor", "from_date", "to_date")
+                )
+            ),
             "total_logs_count": total_logs_count,
             "create_actions_count": create_actions_count,
             "edit_actions_count": edit_actions_count,

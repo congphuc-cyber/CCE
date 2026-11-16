@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -80,6 +80,7 @@ class ExamApplicationFilterForm(django_forms.Form):
         label="Trạng thái hồ sơ", required=False,
         choices=[
             ("", "Tất cả trạng thái"),
+            ("new", "Mới nhận"),
             ("valid", "Hợp lệ"),
             ("duplicate", "Trùng"),
         ],
@@ -103,9 +104,14 @@ def exam_period_list(request):
     qs = ExamPeriod.objects.select_related("cert_type").order_by("-exam_date", "name")
 
     q = request.GET.get("q", "").strip()
+    period_id = request.GET.get("period_id", "").strip()
     status_filter = request.GET.get("status", "")
+    if period_id and not period_id.isdigit():
+        period_id = ""
     if q:
         qs = qs.filter(name__icontains=q)
+    if period_id:
+        qs = qs.filter(pk=period_id)
     if status_filter:
         qs = qs.filter(status=status_filter)
 
@@ -127,10 +133,20 @@ def exam_period_list(request):
 
     filter_fields = [
         {
-            "name": "q",
-            "label": "Tìm kiếm",
-            "placeholder": "Tên đợt thi...",
-            "value": q,
+            "name": "period_id",
+            "label": "Tên đợt thi & Chứng chỉ",
+            "placeholder": "Tất cả đợt thi",
+            "value": period_id,
+            "options": [
+                {
+                    "value": str(period.pk),
+                    "label": f"{period.name} — {period.cert_type.name}",
+                }
+                for period in ExamPeriod.objects.select_related("cert_type").order_by(
+                    "name",
+                    "cert_type__name",
+                )
+            ],
         },
         {
             "name": "status",
@@ -152,6 +168,9 @@ def exam_period_list(request):
         "breadcrumbs": [{"label": "Đợt thi"}],
         "filter_fields": filter_fields,
         "page_obj": page_obj,
+        "search_query": q,
+        "active_filters": bool(period_id or status_filter),
+        "has_active_filters": bool(q or period_id or status_filter),
         "total_periods": total_periods,
         "draft_count": draft_count,
         "published_count": published_count,
@@ -283,13 +302,35 @@ def exam_period_toggle(request, pk):
 
 # ── Hồ sơ đăng ký dự thi ─────────────────────────────────────────────────────
 
+def _mark_existing_exam_application_duplicates():
+    duplicate_siblings = ExamApplication.objects.filter(
+        exam_period_id=OuterRef("exam_period_id"),
+        id_number=OuterRef("id_number"),
+    ).exclude(pk=OuterRef("pk"))
+    duplicate_ids = (
+        ExamApplication.objects
+        .filter(status__in=(ExamApplication.Status.NEW, ExamApplication.Status.VALID))
+        .annotate(has_duplicate=Exists(duplicate_siblings))
+        .filter(has_duplicate=True)
+        .values("pk")
+    )
+    return ExamApplication.objects.filter(pk__in=duplicate_ids).update(
+        status=ExamApplication.Status.DUPLICATE
+    )
+
+
 @login_required
 def exam_application_list(request):
     if not user_has_feature(request.user, "exam-applications"):
         raise PermissionDenied
 
+    _mark_existing_exam_application_duplicates()
     form = ExamApplicationFilterForm(request.GET or None)
     qs = ExamApplication.objects.select_related("exam_period")
+    q = ""
+    period = None
+    source_val = ""
+    status_val = ""
 
     if form.is_valid():
         q = form.cleaned_data.get("q", "")
@@ -298,7 +339,11 @@ def exam_application_list(request):
         status_val = form.cleaned_data.get("status", "")
         if q:
             from django.db.models import Q as _Q
-            qs = qs.filter(_Q(full_name__icontains=q) | _Q(id_number__icontains=q))
+            qs = qs.filter(
+                _Q(full_name__icontains=q)
+                | _Q(id_number__icontains=q)
+                | _Q(email__icontains=q)
+            )
         if period:
             qs = qs.filter(exam_period=period)
         if source_val:
@@ -310,6 +355,7 @@ def exam_application_list(request):
     total_applications = ExamApplication.objects.count()
     valid_count = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).count()
 
+<<<<<<< HEAD
     # Đếm hồ sơ đã được gắn trạng thái trùng và các bản ghi trùng hoàn toàn.
     from django.db.models import Count, Q
     exact_duplicate_groups = (
@@ -322,6 +368,14 @@ def exam_application_list(request):
                 filter=Q(status=ExamApplication.Status.DUPLICATE),
             ),
         )
+=======
+    # Tìm các nhóm hồ sơ trùng lặp theo đợt thi và số CCCD/CMND.
+    from django.db.models import Count
+    dup_group_tuples = (
+        ExamApplication.objects
+        .values("exam_period", "id_number")
+        .annotate(cnt=Count("id"))
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
         .filter(cnt__gt=1)
     )
     duplicate_count = ExamApplication.objects.filter(
@@ -336,13 +390,57 @@ def exam_application_list(request):
 
     page_obj = Paginator(qs, PAGE_SIZE).get_page(request.GET.get("page"))
 
+    filter_fields = [
+        {
+            "name": "exam_period",
+            "label": "Lọc theo đợt thi",
+            "placeholder": "Tất cả đợt thi",
+            "value": str(period.pk) if period else "",
+            "options": [
+                {
+                    "value": str(item.pk),
+                    "label": f"{item.name} — {item.cert_type.name}",
+                }
+                for item in form.fields["exam_period"].queryset.select_related(
+                    "cert_type"
+                )
+            ],
+        },
+        {
+            "name": "source",
+            "label": "Kênh đăng ký",
+            "placeholder": "Tất cả kênh",
+            "value": source_val,
+            "options": [
+                {"value": value, "label": label}
+                for value, label in form.fields["source"].choices
+                if value
+            ],
+        },
+        {
+            "name": "status",
+            "label": "Trạng thái hồ sơ",
+            "placeholder": "Tất cả trạng thái",
+            "value": status_val,
+            "options": [
+                {"value": value, "label": label}
+                for value, label in form.fields["status"].choices
+                if value
+            ],
+        },
+    ]
+
     return render(request, "training/exam_application_list.html", {
         "active_menu": "exam-applications",
         "page_title": "Hồ sơ đăng ký dự thi",
         "page_description": "Quản lý danh sách hồ sơ thí sinh đăng ký, sàng lọc hồ sơ hợp lệ và xử lý trùng lặp.",
         "breadcrumbs": [{"label": "Hồ sơ đăng ký dự thi"}],
         "filter_form": form,
+        "filter_fields": filter_fields,
         "page_obj": page_obj,
+        "search_query": q,
+        "active_filters": bool(period or source_val or status_val),
+        "has_active_filters": bool(q or period or source_val or status_val),
         "total_applications": total_applications,
         "valid_count": valid_count,
         "duplicate_count": duplicate_count,
@@ -480,15 +578,24 @@ def _parse_exam_application_csv(uploaded, period):
             for field in reader.fieldnames
         ]
     required_fields = {"Họ và tên", "Số CCCD/CMND"}
-    missing = required_fields - set(reader.fieldnames or [])
+    fieldnames = reader.fieldnames or []
+    missing = required_fields - set(fieldnames)
     if missing:
         return [], [{
             "row": 0,
             "msg": (
                 f"File thiếu cột: {', '.join(sorted(missing))}. "
-                "Cần có Họ và tên, Số CCCD/CMND; Số điện thoại có thể để trống."
+                "Cần có Họ và tên, Số CCCD/CMND; Số điện thoại và email có thể để trống."
             ),
         }], []
+    email_header = next(
+        (
+            field
+            for field in fieldnames
+            if field.casefold() in {"email", "địa chỉ email", "email address"}
+        ),
+        None,
+    )
 
     try:
         rows = list(reader)
@@ -500,15 +607,16 @@ def _parse_exam_application_csv(uploaded, period):
     errors = []
     to_create = []
     preview_rows = []
-    existing_application_keys = set(
-        period.applications.values_list("id_number", "full_name", "phone")
+    existing_id_numbers = set(
+        period.applications.values_list("id_number", flat=True)
     )
-    seen_application_keys = set()
+    seen_id_numbers = set()
     for row_number, row in enumerate(rows, start=2):
         row_period_name = (row.get("Tên đợt thi") or "").strip()
         full_name = (row.get("Họ và tên") or "").strip()
         id_number = (row.get("Số CCCD/CMND") or "").strip()
         phone = (row.get("Số điện thoại") or "").strip()
+        email = (row.get(email_header) or "").strip() if email_header else ""
 
         if row_period_name and row_period_name != period.name:
             errors.append({
@@ -528,18 +636,27 @@ def _parse_exam_application_csv(uploaded, period):
                 "msg": f"Số CCCD/CMND '{id_number}' không hợp lệ (phải gồm 9 hoặc 12 chữ số).",
             })
             continue
+        if email:
+            try:
+                django_forms.EmailField().clean(email)
+            except ValidationError:
+                errors.append({
+                    "row": row_number,
+                    "msg": f"Địa chỉ email '{email}' không hợp lệ.",
+                })
+                continue
 
-        application_key = (id_number, full_name, phone)
         is_duplicate = (
-            application_key in existing_application_keys
-            or application_key in seen_application_keys
+            id_number in existing_id_numbers
+            or id_number in seen_id_numbers
         )
-        seen_application_keys.add(application_key)
+        seen_id_numbers.add(id_number)
         to_create.append(ExamApplication(
             exam_period=period,
             full_name=full_name,
             phone=phone,
             id_number=id_number,
+            email=email,
             source=ExamApplication.Source.GOOGLE_FORM,
             status=(
                 ExamApplication.Status.DUPLICATE
@@ -559,7 +676,7 @@ def _parse_exam_application_csv(uploaded, period):
         })
 
     if not errors:
-        current_application_count = len(existing_application_keys)
+        current_application_count = len(existing_id_numbers)
         new_application_count = sum(
             application.status == ExamApplication.Status.VALID
             for application in to_create
@@ -585,12 +702,21 @@ def exam_application_deduplicate(request):
     if not user_has_feature(request.user, "exam-applications"):
         raise PermissionDenied
 
+    _mark_existing_exam_application_duplicates()
+
     if request.method == "POST":
         # 1. Thao tác xóa từng bản ghi được chọn
         delete_id = request.POST.get("delete_id")
         if delete_id:
             del_app = get_object_or_404(ExamApplication, pk=delete_id)
+<<<<<<< HEAD
             siblings = _duplicate_application_siblings(del_app)
+=======
+            siblings = ExamApplication.objects.filter(
+                exam_period=del_app.exam_period,
+                id_number=del_app.id_number,
+            ).exclude(pk=del_app.pk)
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
             with transaction.atomic():
                 # Chuyển phòng thi/điểm thi (nếu có) sang hồ sơ còn lại để bảo toàn dữ liệu
@@ -644,7 +770,14 @@ def exam_application_deduplicate(request):
             return redirect("exam-application-deduplicate")
 
         keep_app = get_object_or_404(ExamApplication, pk=keep_id)
+<<<<<<< HEAD
         siblings = _duplicate_application_siblings(keep_app)
+=======
+        siblings = ExamApplication.objects.filter(
+            exam_period=keep_app.exam_period,
+            id_number=keep_app.id_number,
+        ).exclude(pk=keep_app.pk)
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
         if not siblings.exists():
             messages.info(request, f"Hồ sơ của thí sinh '{keep_app.full_name}' không còn bản ghi trùng lặp nào.")
@@ -694,7 +827,11 @@ def exam_application_deduplicate(request):
         messages.success(request, f"Đã giữ lại hồ sơ #{keep_app.pk} của thí sinh '{keep_app.full_name}' và xóa {del_count} hồ sơ trùng lặp.")
         return redirect("exam-application-deduplicate")
 
+<<<<<<< HEAD
     # Hồ sơ đã gắn trạng thái trùng được nhóm theo đợt thi và CCCD.
+=======
+    # GET: nhóm hồ sơ trùng theo đợt thi và số CCCD/CMND.
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
     from django.db.models import Count
     flagged_group_keys = set(
         ExamApplication.objects
@@ -704,13 +841,14 @@ def exam_application_deduplicate(request):
     )
     exact_duplicate_groups = (
         ExamApplication.objects
-        .values("exam_period", "id_number", "full_name", "phone")
+        .values("exam_period", "id_number")
         .annotate(cnt=Count("id"))
         .filter(cnt__gt=1)
         .order_by("exam_period", "id_number", "full_name", "phone")
     )
 
     groups = []
+<<<<<<< HEAD
     for period_id, id_number in sorted(flagged_group_keys):
         members = list(
             ExamApplication.objects.filter(
@@ -757,6 +895,19 @@ def exam_application_deduplicate(request):
             group["members"][0].full_name,
         )
     )
+=======
+    for g in duplicate_groups_qs:
+        members = ExamApplication.objects.filter(
+            exam_period_id=g["exam_period"],
+            id_number=g["id_number"],
+        ).select_related("exam_period").prefetch_related("room_assignments__exam_room").order_by("-status", "registered_at")
+        if members.count() > 1:
+            groups.append({
+                "id_number": g["id_number"],
+                "exam_period": members.first().exam_period,
+                "members": members,
+            })
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
     page_obj = Paginator(groups, PAGE_SIZE).get_page(request.GET.get("page"))
 
@@ -837,7 +988,7 @@ class ExamRoomForm(django_forms.ModelForm):
 
 @login_required
 def exam_room_list(request):
-    """Danh sách phòng thi — lọc theo đợt thi."""
+    """Danh sách phòng thi — lọc theo phòng, đợt thi, ca thi và trạng thái."""
     if not user_has_feature(request.user, "exam-rooms"):
         raise PermissionDenied
 
@@ -874,15 +1025,36 @@ def exam_room_list(request):
     periods = ExamPeriod.objects.filter(status=ExamPeriod.Status.PUBLISHED).order_by("-exam_date")
     all_periods = ExamPeriod.objects.order_by("-exam_date")
     period_id = request.GET.get("period", "")
+    room_id = request.GET.get("room", "").strip()
+    session_filter = request.GET.get("session", "")
+    status_filter = request.GET.get("status", "")
+    if room_id and not room_id.isdigit():
+        room_id = ""
+    if status_filter not in ("full", "available"):
+        status_filter = ""
+    search_query = request.GET.get("q", "").strip()
+
     selected_period = None
     if period_id:
         selected_period = get_object_or_404(ExamPeriod, pk=period_id)
 
-    qs = ExamRoom.objects.select_related("exam_period")
+    from django.db.models import Count, F, Sum
+
+    qs = ExamRoom.objects.select_related("exam_period").annotate(
+        _assigned_count=Count("room_assignments")
+    )
     if selected_period:
         qs = qs.filter(exam_period=selected_period)
-
-    from django.db.models import Sum
+    if room_id:
+        qs = qs.filter(pk=room_id)
+    if search_query:
+        qs = qs.filter(name__icontains=search_query)
+    if session_filter:
+        qs = qs.filter(session=session_filter)
+    if status_filter == "full":
+        qs = qs.filter(_assigned_count__gte=F("capacity"))
+    elif status_filter == "available":
+        qs = qs.filter(_assigned_count__lt=F("capacity"))
 
     qs = qs.order_by("name")
     total_rooms = qs.count()
@@ -894,7 +1066,7 @@ def exam_room_list(request):
     page_obj = Paginator(qs, PAGE_SIZE).get_page(request.GET.get("page"))
     rooms_data = []
     for room in page_obj:
-        assigned = room.room_assignments.count()
+        assigned = room._assigned_count
         remaining = max(0, room.capacity - assigned)
         pct = round((assigned / room.capacity * 100), 1) if room.capacity else 0
         rooms_data.append({
@@ -914,7 +1086,30 @@ def exam_room_list(request):
         unassigned_qs = unassigned_qs.filter(exam_period=selected_period)
     total_unassigned = unassigned_qs.count()
 
+    room_options = ExamRoom.objects.select_related("exam_period").order_by(
+        "name",
+        "exam_period__name",
+    )
+    session_options = (
+        ExamRoom.objects.order_by()
+        .values_list("session", flat=True)
+        .distinct()
+        .order_by("session")
+    )
     filter_fields = [
+        {
+            "name": "room",
+            "label": "Phòng thi",
+            "placeholder": "Tất cả phòng thi",
+            "value": room_id,
+            "options": [
+                {
+                    "value": str(room.pk),
+                    "label": f"{room.name} — {room.exam_period.name}",
+                }
+                for room in room_options
+            ],
+        },
         {
             "name": "period",
             "label": "Đợt thi",
@@ -922,6 +1117,26 @@ def exam_room_list(request):
             "value": period_id,
             "options": [
                 {"value": str(p.pk), "label": p.name} for p in all_periods
+            ],
+        },
+        {
+            "name": "session",
+            "label": "Ca thi",
+            "placeholder": "Tất cả ca thi",
+            "value": session_filter,
+            "options": [
+                {"value": session, "label": session}
+                for session in session_options
+            ],
+        },
+        {
+            "name": "status",
+            "label": "Trạng thái",
+            "placeholder": "Tất cả trạng thái",
+            "value": status_filter,
+            "options": [
+                {"value": "full", "label": "Đầy phòng"},
+                {"value": "available", "label": "Còn chỗ"},
             ],
         },
     ]
@@ -939,6 +1154,13 @@ def exam_room_list(request):
         "rooms_data": rooms_data,
         "page_obj": page_obj,
         "selected_period": selected_period,
+        "active_filters": bool(
+            room_id or period_id or session_filter or status_filter
+        ),
+        "has_active_filters": bool(
+            search_query or room_id or period_id or session_filter or status_filter
+        ),
+        "search_query": search_query,
         "periods": periods,
         "all_periods": all_periods,
         "total_rooms": total_rooms,
@@ -1272,6 +1494,9 @@ def exam_score_list(request):
     periods = ExamPeriod.objects.order_by("-exam_date")
     period_id = request.GET.get("period", "")
     room_id = request.GET.get("room", "")
+    published_filter = request.GET.get("published", "")
+    if published_filter not in ("published", "unpublished"):
+        published_filter = ""
 
     selected_period = None
     selected_room = None
@@ -1288,6 +1513,10 @@ def exam_score_list(request):
         qs = qs.filter(exam_room__exam_period=selected_period)
     if selected_room:
         qs = qs.filter(exam_room=selected_room)
+    if published_filter == "published":
+        qs = qs.filter(score__is_published=True)
+    elif published_filter == "unpublished":
+        qs = qs.filter(Q(score__isnull=True) | Q(score__is_published=False))
 
     # Annotate with score info
     rows = []
@@ -1332,35 +1561,51 @@ def exam_score_list(request):
     scored_candidates = passed_count + failed_count
     pass_rate = round(passed_count / scored_candidates * 100, 1) if scored_candidates else 0
 
-    rooms_for_filter = []
+    rooms_for_filter = ExamRoom.objects.select_related("exam_period")
     if selected_period:
-        rooms_for_filter = ExamRoom.objects.filter(exam_period=selected_period)
+        rooms_for_filter = rooms_for_filter.filter(exam_period=selected_period)
 
     filter_fields = [
-        {
-            "name": "period",
-            "label": "Đợt thi",
-            "placeholder": "Tất cả đợt thi",
-            "value": period_id,
-            "options": [{"value": str(p.pk), "label": p.name} for p in periods],
-        },
         {
             "name": "room",
             "label": "Phòng thi",
             "placeholder": "Tất cả phòng",
             "value": room_id,
-            "options": [{"value": str(r.pk), "label": r.name} for r in rooms_for_filter],
+            "options": [
+                {
+                    "value": str(room.pk),
+                    "label": (
+                        room.name if selected_period
+                        else f"{room.name} — {room.exam_period.name}"
+                    ),
+                }
+                for room in rooms_for_filter.order_by("exam_period__exam_date", "name")
+            ],
+        },
+        {
+            "name": "published",
+            "label": "Công bố",
+            "placeholder": "Tất cả trạng thái",
+            "value": published_filter,
+            "options": [
+                {"value": "published", "label": "Đã công bố"},
+                {"value": "unpublished", "label": "Chưa công bố"},
+            ],
         },
     ]
 
     page_obj = Paginator(rows, PAGE_SIZE).get_page(request.GET.get("page"))
+    reset_filter_url = "?"
 
     return render(request, "training/exam_score_list.html", {
         "active_menu": "exam-scores",
         "page_title": "Danh sách điểm thi",
         "page_description": "Xem, nhập và quản lý điểm thi theo từng phòng và đợt thi.",
         "breadcrumbs": [{"label": "Điểm thi"}],
+        "periods": periods,
         "filter_fields": filter_fields,
+        "active_filters": bool(room_id or published_filter),
+        "reset_filter_url": reset_filter_url,
         "page_obj": page_obj,
         "total": total,
         "has_score_count": has_score_count,
@@ -1372,7 +1617,7 @@ def exam_score_list(request):
         "pass_rate": pass_rate,
         "selected_period": selected_period,
         "selected_room": selected_room,
-        "has_active_score_filters": bool(period_id or room_id),
+        "has_active_score_filters": bool(period_id or room_id or published_filter),
     })
 
 

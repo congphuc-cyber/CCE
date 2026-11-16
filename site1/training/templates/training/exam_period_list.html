@@ -46,7 +46,7 @@
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách kế hoạch các đợt thi</h2>
   </div>
 
-  {% include "training/partials/filter_bar.html" with filter_fields=filter_fields add_url="" %}
+  {% include "training/partials/exam_period_filter_bar.html" %}
 
   {% if page_obj.object_list %}
     <div class="cce-table-wrap">
@@ -165,16 +165,20 @@
     {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
 
   {% else %}
-    <div class="cce-empty-state" style="padding:var(--space-12) var(--space-6); text-align:center;">
-      <span class="material-symbols-outlined cce-empty-icon" style="font-size:3rem; color:var(--c-primary-light);">event_busy</span>
-      <p class="cce-empty-title" style="margin-top:var(--space-2); font-weight:var(--font-weight-bold); font-size:var(--font-size-lg);">Không tìm thấy đợt thi nào</p>
-      <p class="cce-empty-desc" style="max-width:440px; margin:0 auto var(--space-4) auto; color:var(--c-text-muted);">
-        Chưa có đợt thi nào phù hợp với bộ lọc hiện tại, hoặc chưa có kế hoạch khảo thí nào được tạo.
-      </p>
-      <a class="cce-btn cce-btn-accent" href="{% url 'exam-period-add' %}">
-        + Thêm đợt thi đầu tiên
-      </a>
-    </div>
+    {% if has_active_filters %}
+      {% url 'exam-period-list' as reset_url %}
+      {% include "training/partials/search_empty_state.html" with query=search_query reset_url=reset_url message="Không có đợt thi nào phù hợp với các tiêu chí đã chọn." %}
+    {% else %}
+      <div class="cce-empty-state" style="padding:var(--space-8) var(--space-4);">
+        <span class="material-symbols-outlined cce-empty-icon" aria-hidden="true">event</span>
+        <p class="cce-empty-title">Chưa có đợt thi</p>
+        <p class="cce-empty-desc">Tạo đợt thi để bắt đầu tiếp nhận và quản lý hồ sơ dự thi.</p>
+        <a class="cce-btn cce-btn-accent" href="{% url 'exam-period-add' %}">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <span>Tạo đợt thi</span>
+        </a>
+      </div>
+    {% endif %}
   {% endif %}
 </section>
 
@@ -209,6 +213,39 @@
 
 {% block extra_js %}
 <script>
+  (function () {
+    var dialog = document.getElementById("exam-period-filter-dialog");
+    var openButton = document.querySelector("[data-open-exam-period-filter]");
+    var searchInput = document.getElementById("exam-period-search");
+
+    searchInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchInput.form.requestSubmit();
+      }
+    });
+
+    openButton.addEventListener("click", function () {
+      dialog.showModal();
+    });
+
+    dialog.querySelectorAll("[data-close-exam-period-filter]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        dialog.close();
+      });
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+
+    if (dialog.dataset.activeFilters === "true") {
+      dialog.showModal();
+    }
+  })();
+
   function confirmStatusModal(actionUrl, actionType, periodName) {
     const modal = document.getElementById('cceStatusModal');
     const form = document.getElementById('cceModalForm');

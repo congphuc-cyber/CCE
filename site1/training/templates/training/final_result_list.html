@@ -33,7 +33,7 @@
     <div class="cce-card-header">
       <h2 class="cce-card-title" id="final-result-classes-heading">Danh sách lớp</h2>
     </div>
-    {% include "training/partials/filter_bar.html" with filter_fields=filter_fields %}
+    {% include "training/partials/final_result_filter_bar.html" %}
 
     {% if page_obj.object_list %}
       <div class="cce-table-wrap">
@@ -96,13 +96,51 @@
       </div>
       {% include "training/partials/pagination.html" with page_obj=page_obj count_label="lớp" %}
     {% else %}
-      <div class="cce-empty-state" style="padding:var(--space-8);">
-        {% if keyword %}
-          Không tìm thấy lớp hoặc khóa học phù hợp với từ khóa “{{ keyword }}”.
-        {% else %}
-          Chưa có lớp nào trong phạm vi được phân quyền.
-        {% endif %}
-      </div>
+      {% if keyword %}
+        {% url 'final-results-list' as reset_url %}
+        {% include "training/partials/search_empty_state.html" with query=keyword reset_url=reset_url message="Không có lớp hoặc khóa học nào khớp với từ khóa này." %}
+      {% else %}
+        <div class="cce-empty-state" style="padding:var(--space-8);">
+          <p>Chưa có lớp nào trong phạm vi được phân quyền.</p>
+        </div>
+      {% endif %}
     {% endif %}
   </section>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (function () {
+      var dialog = document.getElementById("final-results-filter-dialog");
+      var openButton = document.querySelector("[data-open-final-results-filter]");
+      var searchInput = document.getElementById("final-results-keyword");
+
+      searchInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          searchInput.form.requestSubmit();
+        }
+      });
+
+      openButton.addEventListener("click", function () {
+        dialog.showModal();
+      });
+
+      dialog.querySelectorAll("[data-close-final-results-filter]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          dialog.close();
+        });
+      });
+
+      dialog.addEventListener("click", function (event) {
+        if (event.target === dialog) {
+          dialog.close();
+        }
+      });
+
+      if (dialog.dataset.activeFilters === "true") {
+        dialog.showModal();
+      }
+    })();
+  </script>
 {% endblock %}

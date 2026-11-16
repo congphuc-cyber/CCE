@@ -17,6 +17,7 @@ urlpatterns = [
     ),
     path('admin/', role_admin_site.urls),
     path('', training.get_home, name='home'),
+    path('home/', training.get_home, name='home-alias'),
     path(
         'login/',
         training.CCELoginView.as_view(template_name='training/login.html'),
@@ -122,6 +123,7 @@ urlpatterns = [
     ),
     path('xem-phong-thi/pdf/', public_exams.exam_room_public_export_pdf, name='exam-room-public-export-pdf'),
     path('xem-phong-thi/', public_exams.exam_room_public_lookup, name='exam-room-public-lookup'),
+    path('tra-cuu/chung-chi/pdf/', public_exams.exam_public_certificate_pdf, name='exam-public-certificate-pdf'),
     path('tra-cuu/pdf/', public_exams.exam_public_export_pdf, name='exam-public-export-pdf'),
     path('tra-cuu/', public_exams.exam_public_lookup, name='exam-public-lookup'),
     path('ui-demo/', training.ui_demo, name='ui-demo'),

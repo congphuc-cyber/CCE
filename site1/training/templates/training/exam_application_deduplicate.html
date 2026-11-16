@@ -4,7 +4,11 @@
 {% block title %}Xử lý hồ sơ trùng{% endblock %}
 {% block breadcrumb_title %}Xử lý trùng{% endblock %}
 {% block page_title %}Xử lý hồ sơ trùng{% endblock %}
+<<<<<<< HEAD
 {% block page_description %}Rà soát các hồ sơ trùng CCCD/CMND trong cùng một đợt thi và chọn hồ sơ cần giữ lại.{% endblock %}
+=======
+{% block page_description %}Phát hiện hồ sơ có cùng số CCCD/CMND trong một đợt thi để chọn hồ sơ cần giữ lại.{% endblock %}
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
 {% block content %}
 
@@ -13,7 +17,7 @@
     <div style="font-size:3rem; margin-bottom:var(--space-4);">✅</div>
     <h3 style="color:var(--c-success); margin-bottom:var(--space-3);">Không phát hiện hồ sơ trùng</h3>
     <p style="color:var(--c-text-muted); margin-bottom:var(--space-5);">
-      Tất cả hồ sơ hiện tại đều hợp lệ — không có hồ sơ nào trùng lặp thông tin trong cùng một đợt thi.
+      Không có hồ sơ nào dùng chung số CCCD/CMND trong cùng một đợt thi.
     </p>
     <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-list' %}" style="display:inline-flex; align-items:center; gap:var(--space-2);">
       <span class="material-symbols-outlined" style="font-size:1.1rem;" aria-hidden="true">arrow_back</span>
@@ -25,7 +29,11 @@
   <div class="cce-alert cce-alert-info" role="alert" style="margin-bottom:var(--space-5); display:flex; align-items:center; gap:var(--space-3);">
     <span class="material-symbols-outlined" style="font-size:1.5rem; color:var(--c-primary); flex-shrink:0;">info</span>
     <div>
+<<<<<<< HEAD
       Phát hiện <strong>{{ page_obj.paginator.count }} nhóm hồ sơ trùng CCCD/CMND</strong>. Với từng nhóm, bạn có thể <strong>xóa trực tiếp từng bản ghi trùng</strong> hoặc chọn hồ sơ cần giữ lại.
+=======
+      Phát hiện <strong>{{ page_obj.paginator.count }} nhóm trùng lặp</strong> theo số CCCD/CMND và đợt thi. Chọn hồ sơ cần giữ lại; các hồ sơ còn lại trong nhóm sẽ được xóa.
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
     </div>
   </div>
 
@@ -39,8 +47,11 @@
               <span class="cce-badge cce-badge-duplicate">Trùng</span>
               <span style="font-weight:var(--font-weight-semibold); color:var(--c-text);">
                 CCCD/CMND: <code style="background:var(--c-surface-subtle); padding:2px 6px; border-radius:4px;">{{ group.id_number }}</code>
+<<<<<<< HEAD
+=======
+                — Đợt thi: {{ group.exam_period.name }}
+>>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
               </span>
-              <span style="color:var(--c-text-muted); font-size:var(--font-size-sm);">— Đợt thi: {{ group.exam_period.name }}</span>
             </div>
             <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); font-weight:var(--font-weight-medium);">
               {{ group.members|length }} bản ghi đăng ký
@@ -69,6 +80,7 @@
                              name="keep_id"
                              value="{{ member.pk }}"
                              id="keep-{{ member.pk }}"
+                             data-full-name="{{ member.full_name }}"
                              data-source="{{ member.get_source_display }}"
                              data-reg-time="{{ member.registered_at|date:'d/m/Y H:i:s' }}"
                              {% if forloop.first %}checked{% endif %}
@@ -130,7 +142,7 @@
             <span style="font-size:var(--font-size-xs); color:var(--c-text-muted);">Hoặc chọn 1 hồ sơ ở trên để giữ lại:</span>
             <button class="cce-btn cce-btn-primary cce-btn-sm"
                     type="button"
-                    onclick="confirmKeepGroup(this.form, '{{ group.full_name|escapejs }}', '{{ group.id_number|escapejs }}')"
+                    onclick="confirmKeepGroup(this.form, '{{ group.id_number|escapejs }}')"
                     style="display:inline-flex; align-items:center; gap:var(--space-1); padding:6px 14px; font-weight:var(--font-weight-medium);">
               <span class="material-symbols-outlined" style="font-size:1rem;">check_circle</span>
               <span>Giữ hồ sơ được chọn & Xóa các bản ghi trùng của thí sinh này</span>
@@ -200,7 +212,7 @@
     </div>
     <div class="cce-modal-body">
       <p style="font-size:var(--font-size-base); color:var(--c-text); margin:0 0 var(--space-3) 0;">
-        Bạn đang chọn giữ lại 1 hồ sơ và xóa tất cả các bản ghi trùng còn lại của thí sinh:
+        Bạn đang chọn giữ lại 1 hồ sơ và xóa các hồ sơ cùng CCCD/CMND trong đợt thi:
       </p>
       <div style="background:var(--c-surface-subtle); border:1px solid var(--c-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-4); font-size:var(--font-size-sm); display:flex; flex-direction:column; gap:6px;">
         <div><strong>Thí sinh:</strong> <span id="keepModalCandidateName" style="color:var(--c-primary-dark); font-weight:var(--font-weight-bold);"></span></div>
@@ -252,7 +264,7 @@
     }
   }
 
-  function confirmKeepGroup(form, groupName, idNumber) {
+  function confirmKeepGroup(form, idNumber) {
     const modal = document.getElementById('cceKeepRecordModal');
     if (!modal || !form) return;
 
@@ -267,7 +279,8 @@
     const source = checkedRadio.getAttribute('data-source') || '';
     const regTime = checkedRadio.getAttribute('data-reg-time') || '';
 
-    document.getElementById('keepModalCandidateName').textContent = groupName;
+    document.getElementById('keepModalCandidateName').textContent =
+      checkedRadio.getAttribute('data-full-name') || '';
     document.getElementById('keepModalIdNumber').textContent = idNumber;
     document.getElementById('keepModalAppId').textContent = '#' + appId;
     document.getElementById('keepModalSource').textContent = source;

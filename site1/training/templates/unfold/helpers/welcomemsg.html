@@ -15,13 +15,27 @@
         {% include "unfold/helpers/header_back_button.html" %}
     {% endif %}
 
-    <h1 class="overflow-visible leading-normal text-important flex items-center whitespace-nowrap xl:text-base py-1">
-        {% header_title %}
-
-        {% if cl and cl.full_result_count != cl.result_count and cl.paginator|class_name != "InfinitePaginator" %}
-            <span class="font-medium ms-2 text-subtle text-xs">
-                {% blocktranslate count counter=cl.result_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %} (<a href="?{% if cl.is_popup %}_popup=1{% endif %}">{% if cl.show_full_result_count %}{% blocktranslate with full_result_count=cl.full_result_count %}{{ full_result_count }} total{% endblocktranslate %}{% else %}{% translate "Show all" %}{% endif %}</a>)
+    {% if request.path == "/admin/training/course/" or request.path == "/admin/training/trainingclass/" or request.path == "/admin/training/teacher/" or request.path == "/admin/training/learner/" or request.path == "/admin/auth/user/" %}
+        <nav class="cce-breadcrumbs cce-admin-breadcrumbs" aria-label="Đường dẫn điều hướng">
+            <a href="{% url 'dashboard' %}">Bảng điều khiển</a>
+            <span class="cce-breadcrumbs-sep" aria-hidden="true">/</span>
+            <span class="cce-breadcrumbs-current" aria-current="page">
+                {% if request.path == "/admin/training/course/" %}Khóa học
+                {% elif request.path == "/admin/training/trainingclass/" %}Lớp học
+                {% elif request.path == "/admin/training/teacher/" %}Giáo viên
+                {% elif request.path == "/admin/training/learner/" %}Học viên
+                {% else %}Tài khoản{% endif %}
             </span>
-        {% endif %}
-    </h1>
+        </nav>
+    {% else %}
+        <h1 class="overflow-visible leading-normal text-important flex items-center whitespace-nowrap xl:text-base py-1">
+            {% header_title %}
+
+            {% if cl and cl.full_result_count != cl.result_count and cl.paginator|class_name != "InfinitePaginator" %}
+                <span class="font-medium ms-2 text-subtle text-xs">
+                    {% blocktranslate count counter=cl.result_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %} (<a href="?{% if cl.is_popup %}_popup=1{% endif %}">{% if cl.show_full_result_count %}{% blocktranslate with full_result_count=cl.full_result_count %}{{ full_result_count }} total{% endblocktranslate %}{% else %}{% translate "Show all" %}{% endif %}</a>)
+                </span>
+            {% endif %}
+        </h1>
+    {% endif %}
 </div>
