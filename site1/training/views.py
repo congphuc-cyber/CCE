@@ -179,6 +179,10 @@ class CCELoginView(LoginView):
             return reverse("role-permissions")
         if user_has_feature(self.request.user, "audit-log"):
             return reverse("audit-log-list")
+        for role_name in roles_for_user(self.request.user):
+            for item in ROLE_MENUS.get(role_name, {}).get("items", ()):
+                if user_has_feature(self.request.user, item["key"]):
+                    return reverse(item["url_name"])
         return super().get_success_url()
 
 

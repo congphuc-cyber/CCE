@@ -306,6 +306,16 @@ class PhaseThreeTests(TestCase):
         )
         self.assertRedirects(response, reverse("dashboard"))
 
+    def test_exam_officer_login_redirects_to_first_available_exam_page(self):
+        self.create_user(username="exam-user", role="Cán bộ thi")
+        response = self.client.post(
+            reverse("login"),
+            {"username": "exam-user", "password": "start-pass-4782"},
+        )
+
+        self.assertRedirects(response, reverse("exam-period-list"))
+        self.assertEqual(self.client.get(response.url).status_code, 200)
+
     def test_dashboard_requires_login_and_education_role(self):
         response = self.client.get(reverse("dashboard"))
         self.assertRedirects(
