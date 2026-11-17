@@ -4,11 +4,7 @@
 {% block title %}Xử lý hồ sơ trùng{% endblock %}
 {% block breadcrumb_title %}Xử lý trùng{% endblock %}
 {% block page_title %}Xử lý hồ sơ trùng{% endblock %}
-<<<<<<< HEAD
-{% block page_description %}Rà soát các hồ sơ trùng CCCD/CMND trong cùng một đợt thi và chọn hồ sơ cần giữ lại.{% endblock %}
-=======
-{% block page_description %}Phát hiện hồ sơ có cùng số CCCD/CMND trong một đợt thi để chọn hồ sơ cần giữ lại.{% endblock %}
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
+{% block page_description %}Rà soát hồ sơ trùng CCCD/CMND trong cùng đợt thi, xóa riêng từng bản ghi hoặc chọn hồ sơ cần giữ lại.{% endblock %}
 
 {% block content %}
 
@@ -29,11 +25,7 @@
   <div class="cce-alert cce-alert-info" role="alert" style="margin-bottom:var(--space-5); display:flex; align-items:center; gap:var(--space-3);">
     <span class="material-symbols-outlined" style="font-size:1.5rem; color:var(--c-primary); flex-shrink:0;">info</span>
     <div>
-<<<<<<< HEAD
-      Phát hiện <strong>{{ page_obj.paginator.count }} nhóm hồ sơ trùng CCCD/CMND</strong>. Với từng nhóm, bạn có thể <strong>xóa trực tiếp từng bản ghi trùng</strong> hoặc chọn hồ sơ cần giữ lại.
-=======
-      Phát hiện <strong>{{ page_obj.paginator.count }} nhóm trùng lặp</strong> theo số CCCD/CMND và đợt thi. Chọn hồ sơ cần giữ lại; các hồ sơ còn lại trong nhóm sẽ được xóa.
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
+      Phát hiện <strong>{{ page_obj.paginator.count }} nhóm hồ sơ trùng CCCD/CMND</strong> theo từng đợt thi. Bạn có thể xóa riêng từng bản ghi hoặc chọn hồ sơ cần giữ lại và xóa các hồ sơ còn lại trong nhóm.
     </div>
   </div>
 
@@ -47,10 +39,7 @@
               <span class="cce-badge cce-badge-duplicate">Trùng</span>
               <span style="font-weight:var(--font-weight-semibold); color:var(--c-text);">
                 CCCD/CMND: <code style="background:var(--c-surface-subtle); padding:2px 6px; border-radius:4px;">{{ group.id_number }}</code>
-<<<<<<< HEAD
-=======
                 — Đợt thi: {{ group.exam_period.name }}
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
               </span>
             </div>
             <div style="font-size:var(--font-size-xs); color:var(--c-text-muted); font-weight:var(--font-weight-medium);">

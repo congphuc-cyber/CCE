@@ -6,10 +6,6 @@
 {% block page_title %}Hồ sơ đăng ký dự thi{% endblock %}
 {% block page_description %}{{ page_description|default:"Quản lý danh sách hồ sơ thí sinh đăng ký, sàng lọc hồ sơ hợp lệ và xử lý trùng lặp." }}{% endblock %}
 
-{% block extra_head %}
-  <link rel="stylesheet" href="{% static 'training/css/exam-application-list.css' %}?v=20261116-2">
-{% endblock %}
-
 {% block page_actions %}
   <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
     <a class="cce-btn cce-btn-secondary" href="{% url 'exam-application-import' %}" style="display:inline-flex; align-items:center; gap:var(--space-1);">
@@ -29,6 +25,7 @@
 {% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{% static 'training/css/exam-application-list.css' %}?v=20261116-2">
 <style>
   .exam-application-table {
     width: 100%;
@@ -77,11 +74,7 @@
     <div>
       <strong style="font-size:var(--font-size-base); color:var(--c-danger);">Phát hiện {{ duplicate_count }} hồ sơ trùng lặp cần xử lý</strong>
       <p style="margin:2px 0 0 0; font-size:var(--font-size-sm); color:var(--c-text-muted);">
-<<<<<<< HEAD
-        Các hồ sơ trùng số CCCD/CMND trong cùng đợt thi cần được xử lý: chọn hồ sơ cần giữ lại và xóa các bản ghi còn lại.
-=======
-        Các hồ sơ trùng số CCCD/CMND trong cùng đợt thi cần được xử lý: chọn giữ lại 1 hồ sơ và xóa các bản ghi còn lại.
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
+        Các hồ sơ trùng CCCD/CMND trong cùng đợt thi cần được xử lý: chọn hồ sơ cần giữ lại và xóa các hồ sơ còn lại.
       </p>
     </div>
   </div>
@@ -126,46 +119,6 @@
     <h2 class="cce-card-title" style="font-size:var(--font-size-md);">Danh sách thí sinh đăng ký dự thi</h2>
   </div>
 
-<<<<<<< HEAD
-  <div class="cce-filter-bar">
-    <form method="get" class="cce-exam-application-filter-form">
-      <div class="cce-filter-item">
-        <label for="id_q" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Tìm kiếm thí sinh</label>
-        {{ filter_form.q }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_exam_period" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Lọc theo đợt thi</label>
-        {{ filter_form.exam_period }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_source" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Kênh đăng ký</label>
-        {{ filter_form.source }}
-      </div>
-      <div class="cce-filter-item">
-        <label for="id_status" style="font-size:var(--font-size-xs); font-weight:var(--font-weight-semibold); color:var(--c-text-muted); margin-bottom:var(--space-1); display:block;">Trạng thái hồ sơ</label>
-        {{ filter_form.status }}
-      </div>
-      <div class="cce-filter-actions">
-        <button class="cce-btn cce-btn-primary" type="submit" style="display:inline-flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">filter_alt</span>
-          <span>Áp dụng lọc</span>
-        </button>
-        <a class="cce-btn cce-btn-secondary cce-btn-reset" href="?" style="display:inline-flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">restart_alt</span>
-          <span>Đặt lại</span>
-        </a>
-      </div>
-    </form>
-  </div>
-
-  {% if page_obj.object_list %}
-    <div class="cce-table-wrap">
-      <table class="cce-table cce-table-centered cce-table-first-column-left exam-application-table" role="table">
-        <thead>
-          <tr>
-            <th scope="col">Thí sinh & Liên hệ</th>
-            <th scope="col">Email</th>
-=======
   {% include "training/partials/exam_application_filter_bar.html" %}
 
   {% if page_obj.object_list %}
@@ -184,7 +137,6 @@
           <tr>
             <th scope="col">Thí sinh & Liên hệ</th>
             <th scope="col">Email thí sinh</th>
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
             <th scope="col">Số CCCD / CMND</th>
             <th scope="col">Đợt thi đăng ký</th>
             <th scope="col">Kênh đăng ký</th>
@@ -209,23 +161,16 @@
                   </div>
                 </div>
               </td>
-<<<<<<< HEAD
-              <td>
-                {% if app.email %}
-                  <a href="mailto:{{ app.email }}">{{ app.email }}</a>
-                {% else %}
-                  —
-                {% endif %}
-              </td>
-              <td>
-=======
               <td data-label="Email thí sinh">
                 <span style="font-size:var(--font-size-sm); color:var(--c-text); overflow-wrap:anywhere;">
-                  {{ app.email|default:"Chưa có email" }}
+                  {% if app.email %}
+                    <a href="mailto:{{ app.email }}">{{ app.email }}</a>
+                  {% else %}
+                    Chưa có email
+                  {% endif %}
                 </span>
               </td>
               <td data-label="Số CCCD / CMND">
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
                 <span style="font-family:var(--font-family-mono); font-size:var(--font-size-sm); font-weight:var(--font-weight-semibold); letter-spacing:0.5px; color:var(--c-text);">
                   {{ app.id_number }}
                 </span>
