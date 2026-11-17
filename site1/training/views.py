@@ -1635,11 +1635,6 @@ def exam_certificate_list(request):
         if score.score >= EXAM_CERTIFICATE_MIN_SCORE:
             eligible_scores.setdefault(pair, score)
 
-<<<<<<< HEAD
-    for row in rows:
-        pair = (row["period"].pk, row["application"].pk)
-        row["score"] = scores_by_pair.get(pair)
-=======
     rows = [
         {
             "certificate": certificate,
@@ -1653,7 +1648,6 @@ def exam_certificate_list(request):
         }
         for certificate in certificates
     ]
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
     active_pairs = set(
         ExamCertificate.objects.filter(status=ExamCertificate.Status.ISSUED).values_list(

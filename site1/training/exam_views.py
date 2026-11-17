@@ -355,7 +355,6 @@ def exam_application_list(request):
     total_applications = ExamApplication.objects.count()
     valid_count = ExamApplication.objects.filter(status=ExamApplication.Status.VALID).count()
 
-<<<<<<< HEAD
     # Đếm hồ sơ đã được gắn trạng thái trùng và các bản ghi trùng hoàn toàn.
     from django.db.models import Count, Q
     exact_duplicate_groups = (
@@ -368,14 +367,6 @@ def exam_application_list(request):
                 filter=Q(status=ExamApplication.Status.DUPLICATE),
             ),
         )
-=======
-    # Tìm các nhóm hồ sơ trùng lặp theo đợt thi và số CCCD/CMND.
-    from django.db.models import Count
-    dup_group_tuples = (
-        ExamApplication.objects
-        .values("exam_period", "id_number")
-        .annotate(cnt=Count("id"))
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
         .filter(cnt__gt=1)
     )
     duplicate_count = ExamApplication.objects.filter(
@@ -709,14 +700,7 @@ def exam_application_deduplicate(request):
         delete_id = request.POST.get("delete_id")
         if delete_id:
             del_app = get_object_or_404(ExamApplication, pk=delete_id)
-<<<<<<< HEAD
             siblings = _duplicate_application_siblings(del_app)
-=======
-            siblings = ExamApplication.objects.filter(
-                exam_period=del_app.exam_period,
-                id_number=del_app.id_number,
-            ).exclude(pk=del_app.pk)
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
             with transaction.atomic():
                 # Chuyển phòng thi/điểm thi (nếu có) sang hồ sơ còn lại để bảo toàn dữ liệu
@@ -770,14 +754,7 @@ def exam_application_deduplicate(request):
             return redirect("exam-application-deduplicate")
 
         keep_app = get_object_or_404(ExamApplication, pk=keep_id)
-<<<<<<< HEAD
         siblings = _duplicate_application_siblings(keep_app)
-=======
-        siblings = ExamApplication.objects.filter(
-            exam_period=keep_app.exam_period,
-            id_number=keep_app.id_number,
-        ).exclude(pk=keep_app.pk)
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
         if not siblings.exists():
             messages.info(request, f"Hồ sơ của thí sinh '{keep_app.full_name}' không còn bản ghi trùng lặp nào.")
@@ -827,11 +804,7 @@ def exam_application_deduplicate(request):
         messages.success(request, f"Đã giữ lại hồ sơ #{keep_app.pk} của thí sinh '{keep_app.full_name}' và xóa {del_count} hồ sơ trùng lặp.")
         return redirect("exam-application-deduplicate")
 
-<<<<<<< HEAD
-    # Hồ sơ đã gắn trạng thái trùng được nhóm theo đợt thi và CCCD.
-=======
-    # GET: nhóm hồ sơ trùng theo đợt thi và số CCCD/CMND.
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
+    # Nhóm hồ sơ trùng theo đợt thi và số CCCD/CMND.
     from django.db.models import Count
     flagged_group_keys = set(
         ExamApplication.objects
@@ -848,7 +821,6 @@ def exam_application_deduplicate(request):
     )
 
     groups = []
-<<<<<<< HEAD
     for period_id, id_number in sorted(flagged_group_keys):
         members = list(
             ExamApplication.objects.filter(
@@ -865,29 +837,6 @@ def exam_application_deduplicate(request):
             "members": members,
         })
 
-    for group in exact_duplicate_groups:
-        if (
-            group["exam_period"],
-            group["id_number"],
-        ) in flagged_group_keys:
-            continue
-        members = list(
-            ExamApplication.objects.filter(
-                exam_period_id=group["exam_period"],
-                id_number=group["id_number"],
-                full_name=group["full_name"],
-                phone=group["phone"],
-            )
-            .select_related("exam_period")
-            .prefetch_related("room_assignments__exam_room")
-            .order_by("-status", "registered_at")
-        )
-        groups.append({
-            "id_number": group["id_number"],
-            "exam_period": members[0].exam_period,
-            "members": members,
-        })
-
     groups.sort(
         key=lambda group: (
             group["exam_period"].exam_date,
@@ -895,19 +844,6 @@ def exam_application_deduplicate(request):
             group["members"][0].full_name,
         )
     )
-=======
-    for g in duplicate_groups_qs:
-        members = ExamApplication.objects.filter(
-            exam_period_id=g["exam_period"],
-            id_number=g["id_number"],
-        ).select_related("exam_period").prefetch_related("room_assignments__exam_room").order_by("-status", "registered_at")
-        if members.count() > 1:
-            groups.append({
-                "id_number": g["id_number"],
-                "exam_period": members.first().exam_period,
-                "members": members,
-            })
->>>>>>> 8521082c9a96ff04ebafcfc47d2aa4ea004c995c
 
     page_obj = Paginator(groups, PAGE_SIZE).get_page(request.GET.get("page"))
 
