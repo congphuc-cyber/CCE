@@ -116,12 +116,12 @@ class PublicExamRegistrationForm(forms.Form):
         widget=PublicExamDatePickerInput(),
     )
     id_number = forms.CharField(
-        label="Số CCCD",
+        label="Số CCCD / CMND",
         max_length=12,
         validators=[
             RegexValidator(
                 regex=r"^[0-9]{12}$",
-                message="Số CCCD phải gồm đúng 12 chữ số.",
+                message="Số CCCD / CMND phải gồm đúng 12 chữ số.",
             )
         ],
         widget=forms.TextInput(

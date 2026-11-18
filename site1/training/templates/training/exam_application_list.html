@@ -207,9 +207,7 @@
                 </div>
               </td>
               <td data-label="Trạng thái" style="text-align:center;">
-                {% if app.status == 'new' %}
-                  <span class="cce-badge cce-badge-new">Mới nhận</span>
-                {% elif app.status == 'valid' %}
+                {% if app.status == 'valid' %}
                   <span class="cce-badge cce-badge-valid">Hợp lệ</span>
                 {% elif app.status == 'duplicate' %}
                   <span class="cce-badge cce-badge-duplicate" title="Hồ sơ bị trùng CCCD, vui lòng xử lý">Trùng lặp</span>

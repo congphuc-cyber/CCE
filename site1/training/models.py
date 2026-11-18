@@ -623,7 +623,6 @@ class ExamApplication(models.Model):
         DIRECT = "direct", "Tại cơ sở"
 
     class Status(models.TextChoices):
-        NEW = "new", "Mới"
         VALID = "valid", "Hợp lệ"
         DUPLICATE = "duplicate", "Trùng"
 
@@ -638,7 +637,12 @@ class ExamApplication(models.Model):
     email = models.EmailField("Địa chỉ email", blank=True)
     source = models.CharField("Nguồn", max_length=20, choices=Source.choices, default=Source.ONLINE)
     registered_at = models.DateTimeField("Ngày đăng ký", auto_now_add=True)
-    status = models.CharField("Trạng thái", max_length=20, choices=Status.choices, default=Status.NEW)
+    status = models.CharField(
+        "Trạng thái",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.VALID,
+    )
 
     class Meta:
         db_table = "home_examapplication"
@@ -675,11 +679,16 @@ class ExamApplication(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
-        if self._state.adding and type(self).objects.filter(
-            exam_period_id=self.exam_period_id,
-            id_number=self.id_number,
-        ).exists():
-            self.status = self.Status.DUPLICATE
+        if self._state.adding:
+            existing_applications = type(self).objects.filter(
+                exam_period_id=self.exam_period_id,
+                id_number=self.id_number,
+            )
+            if existing_applications.exists():
+                self.status = self.Status.DUPLICATE
+                existing_applications.update(status=self.Status.DUPLICATE)
+            elif self.status not in self.Status.values:
+                self.status = self.Status.VALID
         super().save(*args, **kwargs)
 
 

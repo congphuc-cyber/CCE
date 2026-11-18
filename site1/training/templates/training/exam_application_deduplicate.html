@@ -103,8 +103,7 @@
                       <div style="font-weight:var(--font-weight-medium); color:var(--c-text);">{{ member.registered_at|date:"d/m/Y H:i:s" }}</div>
                     </td>
                     <td>
-                      {% if member.status == 'new' %}<span class="cce-badge cce-badge-new">Mới</span>
-                      {% elif member.status == 'valid' %}<span class="cce-badge cce-badge-valid">Hợp lệ</span>
+                      {% if member.status == 'valid' %}<span class="cce-badge cce-badge-valid">Hợp lệ</span>
                       {% elif member.status == 'duplicate' %}<span class="cce-badge cce-badge-duplicate">Trùng</span>
                       {% endif %}
                       {% for asg in member.room_assignments.all %}

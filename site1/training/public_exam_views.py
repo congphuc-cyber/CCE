@@ -161,7 +161,10 @@ def exam_application_register(request):
                     ExamPeriod.objects.select_for_update().select_related("cert_type"),
                     pk=form.cleaned_data["exam_period"].pk,
                 )
-                state = unavailable_period_state(period)
+                state = unavailable_period_state(
+                    period,
+                    form.cleaned_data["id_number"],
+                )
                 if state:
                     return render_registration_closed(request, period, state)
 
@@ -173,7 +176,6 @@ def exam_application_register(request):
                     phone=form.cleaned_data["phone"],
                     email=form.cleaned_data["email"],
                     source=ExamApplication.Source.ONLINE,
-                    status=ExamApplication.Status.NEW,
                 )
                 application.save()
         except ValidationError as error:

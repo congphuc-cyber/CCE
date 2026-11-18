@@ -351,15 +351,10 @@
             <td>
               {% if app.status == 'duplicate' %}
                 <span class="cce-badge cce-badge-duplicate">Trùng</span>
-              {% elif app.status == 'new' %}
-                <span class="cce-badge cce-badge-new">Mới</span>
-              {% else %}
-                <span class="cce-badge cce-badge-draft">{{ app.status }}</span>
               {% endif %}
             </td>
             <td style="color:var(--c-text-muted); font-size:var(--font-size-sm);">
               {% if app.status == 'duplicate' %}Hồ sơ bị trùng CCCD trong đợt thi, cần xử lý trước.
-              {% elif app.status == 'new' %}Hồ sơ chưa được duyệt hợp lệ.
               {% endif %}
             </td>
           </tr>

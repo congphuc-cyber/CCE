@@ -80,7 +80,6 @@ class ExamApplicationFilterForm(django_forms.Form):
         label="Trạng thái hồ sơ", required=False,
         choices=[
             ("", "Tất cả trạng thái"),
-            ("new", "Mới nhận"),
             ("valid", "Hợp lệ"),
             ("duplicate", "Trùng"),
         ],
@@ -309,7 +308,7 @@ def _mark_existing_exam_application_duplicates():
     ).exclude(pk=OuterRef("pk"))
     duplicate_ids = (
         ExamApplication.objects
-        .filter(status__in=(ExamApplication.Status.NEW, ExamApplication.Status.VALID))
+        .filter(status=ExamApplication.Status.VALID)
         .annotate(has_duplicate=Exists(duplicate_siblings))
         .filter(has_duplicate=True)
         .values("pk")
@@ -376,7 +375,6 @@ def exam_application_list(request):
         max(0, group["cnt"] - 1 - group["flagged_count"])
         for group in exact_duplicate_groups
     )
-    new_count = ExamApplication.objects.filter(status=ExamApplication.Status.NEW).count()
     open_periods_count = ExamPeriod.objects.filter(status=ExamPeriod.Status.PUBLISHED).count()
 
     page_obj = Paginator(qs, PAGE_SIZE).get_page(request.GET.get("page"))
@@ -435,7 +433,6 @@ def exam_application_list(request):
         "total_applications": total_applications,
         "valid_count": valid_count,
         "duplicate_count": duplicate_count,
-        "new_count": new_count,
         "open_periods_count": open_periods_count,
     })
 
