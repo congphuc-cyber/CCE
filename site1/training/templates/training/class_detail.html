@@ -7,7 +7,7 @@
 {% block page_description %}Thông tin chi tiết lớp học, danh sách giảng viên phụ trách và học viên ghi danh.{% endblock %}
 
 {% block page_actions %}
-  {% if can_manage %}
+  {% if can_manage and training_class.status == "open" %}
     <div style="display:inline-flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
       <a class="cce-class-action-btn cce-btn-edit-action" href="{{ class_change_url }}">
         <span class="material-symbols-outlined">edit</span>
@@ -119,7 +119,7 @@
           <th scope="col">Họ và tên</th>
           <th scope="col">Số điện thoại</th>
           <th scope="col">Địa chỉ email</th>
-          {% if can_manage %}<th scope="col">Hành động</th>{% endif %}
+          {% if can_manage and training_class.status == "open" %}<th scope="col">Hành động</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -128,7 +128,7 @@
             <td>{{ learner.name }}</td>
             <td>{{ learner.phone }}</td>
             <td>{{ learner.email }}</td>
-            {% if can_manage %}
+            {% if can_manage and training_class.status == "open" %}
               <td style="white-space: nowrap;">
                 {% if not learner.can_cancel %}
                   <button class="cce-table-btn table-action-delete" type="button"
@@ -151,7 +151,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="{% if can_manage %}4{% else %}3{% endif %}" class="cce-empty-state">
+            <td colspan="{% if can_manage and training_class.status == 'open' %}4{% else %}3{% endif %}" class="cce-empty-state">
               Không có dữ liệu
             </td>
           </tr>
@@ -160,14 +160,14 @@
     </table>
   </div>
   {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
-  {% if can_manage %}
+  {% if can_manage and training_class.status == "open" %}
     {% for learner in learners %}
       {% if learner.can_cancel %}
         {% include "training/partials/confirm_modal.html" with modal_id=learner.cancel_modal_id modal_title="Xác nhận hủy ghi danh" modal_message=learner.cancel_confirmation_message confirm_label="Hủy ghi danh" confirm_action=learner.cancel_url %}
       {% endif %}
     {% endfor %}
   {% endif %}
-  {% if can_manage and has_blocked_enrollments %}
+  {% if can_manage and training_class.status == "open" and has_blocked_enrollments %}
     <div class="cce-modal-backdrop" id="enrollment-cancel-blocked-modal"
          role="dialog" aria-modal="true"
          aria-labelledby="enrollment-cancel-blocked-title"

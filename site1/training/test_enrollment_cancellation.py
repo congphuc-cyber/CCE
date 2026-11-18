@@ -139,7 +139,8 @@ class EnrollmentCancellationTests(TestCase):
         page_response = self.client.get(
             reverse("class-detail", args=(self.training_class.pk,))
         )
-        self.assertContains(page_response, "Lớp đã đóng nên không thể hủy ghi danh.")
+        self.assertNotContains(page_response, "Lớp đã đóng nên không thể hủy ghi danh.")
+        self.assertNotContains(page_response, "Không thể hủy ghi danh")
         self.assertNotContains(page_response, "Xác nhận hủy ghi danh")
 
         for name, score, is_absent in cases:

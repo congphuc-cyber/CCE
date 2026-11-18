@@ -585,17 +585,25 @@ class EnrollmentTransferForm(forms.Form):
             training_class=source_class,
         ).exists():
             self.add_error("source_class", "Học viên không được ghi danh trong lớp hiện tại.")
+        if source_class and source_class.status == TrainingClass.Status.CLOSED:
+            self.add_error(
+                "source_class",
+                "Lớp hiện tại đã đóng, không thể chuyển học viên.",
+            )
 
         if source_class and destination_class:
             if source_class.pk == destination_class.pk:
                 self.add_error("destination_class", "Lớp mới phải khác lớp hiện tại.")
+            elif destination_class.status == TrainingClass.Status.CLOSED:
+                self.add_error(
+                    "destination_class",
+                    "Lớp mới đã đóng, không thể nhận học viên.",
+                )
             elif learner and Enrollment.objects.filter(
                 learner=learner,
                 training_class=destination_class,
             ).exists():
                 self.add_error("destination_class", "Học viên này đã có trong lớp mới.")
-            elif destination_class.status == TrainingClass.Status.CLOSED:
-                self.add_error("destination_class", "Lớp mới đã đóng, không thể nhận học viên.")
             elif destination_class.enrolled_count >= destination_class.max_students:
                 self.add_error("destination_class", "Lớp mới đã đạt sĩ số tối đa.")
 

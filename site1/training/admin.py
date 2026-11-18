@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.contrib.auth import get_user_model
 from django.db.models import Count
+from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
@@ -244,6 +245,30 @@ class TrainingClassAdmin(BaseModelAdmin):
             .annotate(_enrolled_count=Count("enrollments", distinct=True))
         )
 
+    def changelist_view(self, request, extra_context=None):
+        context = {
+            **(extra_context or {}),
+            "show_closed_class_edit_popup": request.session.pop(
+                "closed_class_edit_popup",
+                False,
+            ),
+        }
+        return super().changelist_view(request, extra_context=context)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        if self.has_view_or_change_permission(request):
+            training_class = self.get_object(request, object_id)
+            if (
+                training_class is not None
+                and training_class.status == TrainingClass.Status.CLOSED
+            ):
+                changelist_url = reverse(
+                    f"{self.admin_site.name}:training_trainingclass_changelist"
+                )
+                request.session["closed_class_edit_popup"] = True
+                return redirect(changelist_url)
+        return super().change_view(request, object_id, form_url, extra_context)
+
     @admin.display(description="Hình thức")
     def format_display(self, obj):
         return obj.get_learning_format_display()
@@ -268,6 +293,13 @@ class TrainingClassAdmin(BaseModelAdmin):
 
     @admin.display(description="Sửa")
     def edit_action(self, obj):
+        if obj.status == TrainingClass.Status.CLOSED:
+            return format_html(
+                '<button class="cce-table-btn" type="button" '
+                'data-bs-target="#closed-class-edit-modal" aria-haspopup="dialog" '
+                'aria-label="Không thể sửa lớp {}">Sửa</button>',
+                obj.name,
+            )
         try:
             url = reverse(f"{self.admin_site.name}:training_trainingclass_change", args=(obj.pk,))
         except Exception:

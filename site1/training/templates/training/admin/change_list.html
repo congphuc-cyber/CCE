@@ -13,6 +13,59 @@
         </div>
     {% endif %}
     {{ block.super }}
+    {% if cl.opts.model_name == "trainingclass" %}
+        <div class="cce-modal-backdrop{% if show_closed_class_edit_popup %} is-open{% endif %}"
+             id="closed-class-edit-modal"
+             role="alertdialog"
+             aria-modal="true"
+             aria-hidden="{% if show_closed_class_edit_popup %}false{% else %}true{% endif %}"
+             aria-labelledby="closed-class-edit-title"
+             aria-describedby="closed-class-edit-description">
+            <section class="cce-modal-dialog">
+                <header class="cce-modal-header">
+                    <h2 class="cce-modal-title" id="closed-class-edit-title">Không thể sửa lớp</h2>
+                </header>
+                <div class="cce-modal-body">
+                    <p id="closed-class-edit-description">Lớp đã đóng nên không thể chỉnh sửa thông tin.</p>
+                </div>
+                <footer class="cce-modal-footer">
+                    <button class="cce-btn cce-btn-primary" id="closed-class-edit-close" type="button">
+                        Đã hiểu
+                    </button>
+                </footer>
+            </section>
+        </div>
+        <script>
+            (function () {
+                var modal = document.getElementById("closed-class-edit-modal");
+                var closeButton = document.getElementById("closed-class-edit-close");
+
+                function closeModal() {
+                    modal.classList.remove("is-open");
+                    modal.setAttribute("aria-hidden", "true");
+                }
+
+                document.querySelectorAll('[data-bs-target="#closed-class-edit-modal"]').forEach(function (button) {
+                    button.addEventListener("click", function () {
+                        modal.classList.add("is-open");
+                        modal.setAttribute("aria-hidden", "false");
+                        closeButton.focus();
+                    });
+                });
+                closeButton.addEventListener("click", closeModal);
+                modal.addEventListener("click", function (event) {
+                    if (event.target === modal) closeModal();
+                });
+                document.addEventListener("keydown", function (event) {
+                    if (modal.classList.contains("is-open") && event.key === "Escape") {
+                        event.preventDefault();
+                        closeModal();
+                    }
+                });
+                if (modal.classList.contains("is-open")) closeButton.focus();
+            })();
+        </script>
+    {% endif %}
 {% endblock %}
 
 {% block date_hierarchy %}

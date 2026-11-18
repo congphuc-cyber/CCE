@@ -33,6 +33,31 @@
 
 {% if has_enrollments %}
   {{ full_destination_class_ids|json_script:"full-destination-class-ids" }}
+  {{ closed_source_class_ids|json_script:"closed-source-class-ids" }}
+  {{ closed_destination_class_ids|json_script:"closed-destination-class-ids" }}
+  <div class="cce-modal-backdrop"
+       id="class-transfer-closed-modal"
+       role="alertdialog"
+       aria-modal="true"
+       aria-hidden="true"
+       aria-labelledby="class-transfer-closed-title"
+       aria-describedby="class-transfer-closed-description">
+    <section class="cce-modal-dialog">
+      <header class="cce-modal-header">
+        <h2 class="cce-modal-title" id="class-transfer-closed-title">
+          Không thể chuyển lớp
+        </h2>
+      </header>
+      <div class="cce-modal-body">
+        <p id="class-transfer-closed-description"></p>
+      </div>
+      <footer class="cce-modal-footer">
+        <button class="cce-btn cce-btn-primary" id="class-transfer-closed-close" type="button">
+          Đã hiểu
+        </button>
+      </footer>
+    </section>
+  </div>
   <div class="cce-modal-backdrop{% if show_full_capacity_popup %} is-open{% endif %}"
        id="class-transfer-capacity-modal"
        role="alertdialog"
@@ -72,13 +97,46 @@
         var fullClassIds = JSON.parse(
           document.getElementById('full-destination-class-ids').textContent
         );
+        var closedSourceClassIds = JSON.parse(
+          document.getElementById('closed-source-class-ids').textContent
+        );
+        var closedDestinationClassIds = JSON.parse(
+          document.getElementById('closed-destination-class-ids').textContent
+        );
         var modal = document.getElementById('class-transfer-capacity-modal');
         var className = document.getElementById('class-transfer-capacity-name');
         var closeButton = document.getElementById('class-transfer-capacity-close');
+        var closedModal = document.getElementById('class-transfer-closed-modal');
+        var closedDescription = document.getElementById('class-transfer-closed-description');
+        var closedCloseButton = document.getElementById('class-transfer-closed-close');
+
+        function openClosedModal(select, isSource) {
+          var selectedOption = select.options[select.selectedIndex];
+          if (!selectedOption) return;
+          closedDescription.textContent = isSource
+            ? 'Lớp hiện tại "' + selectedOption.textContent.trim()
+              + '" đã đóng, không thể chuyển học viên từ lớp này.'
+            : 'Lớp mới "' + selectedOption.textContent.trim()
+              + '" đã đóng, không thể nhận học viên.';
+          closedModal.classList.add('is-open');
+          closedModal.setAttribute('aria-hidden', 'false');
+          closedCloseButton.focus();
+        }
+
+        function closeClosedModal() {
+          closedModal.classList.remove('is-open');
+          closedModal.setAttribute('aria-hidden', 'true');
+          if (closedSourceClassIds.indexOf(sourceSelect.value) !== -1) {
+            sourceSelect.focus();
+          } else {
+            destinationSelect.focus();
+          }
+        }
 
         function openModal() {
           var selectedOption = destinationSelect.options[destinationSelect.selectedIndex];
           if (!selectedOption || destinationSelect.value === sourceSelect.value
+              || closedDestinationClassIds.indexOf(destinationSelect.value) !== -1
               || fullClassIds.indexOf(destinationSelect.value) === -1) {
             return;
           }
@@ -94,8 +152,18 @@
           destinationSelect.focus();
         }
 
-        destinationSelect.addEventListener('change', openModal);
+        destinationSelect.addEventListener('change', function() {
+          if (closedDestinationClassIds.indexOf(destinationSelect.value) !== -1) {
+            openClosedModal(destinationSelect, false);
+          } else {
+            openModal();
+          }
+        });
         closeButton.addEventListener('click', closeModal);
+        closedCloseButton.addEventListener('click', closeClosedModal);
+        closedModal.addEventListener('click', function(event) {
+          if (event.target === closedModal) closeClosedModal();
+        });
         modal.addEventListener('click', function(event) {
           if (event.target === modal) closeModal();
         });
@@ -116,7 +184,11 @@
             : '';
         });
 
-        if (modal.classList.contains('is-open')) {
+        if (closedSourceClassIds.indexOf(sourceSelect.value) !== -1) {
+          openClosedModal(sourceSelect, true);
+        } else if (closedDestinationClassIds.indexOf(destinationSelect.value) !== -1) {
+          openClosedModal(destinationSelect, false);
+        } else if (modal.classList.contains('is-open')) {
           openModal();
         }
       })();

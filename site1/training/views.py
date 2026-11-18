@@ -2570,6 +2570,16 @@ def class_transfer(request):
                 form.add_error("source_class", "Không tìm thấy lớp hiện tại.")
             elif destination_class is None:
                 form.add_error("destination_class", "Không tìm thấy lớp mới.")
+            elif source_class.status != TrainingClass.Status.OPEN:
+                form.add_error(
+                    "source_class",
+                    "Lớp hiện tại đã đóng, không thể chuyển học viên.",
+                )
+            elif destination_class.status != TrainingClass.Status.OPEN:
+                form.add_error(
+                    "destination_class",
+                    "Lớp mới đã đóng, không thể nhận học viên.",
+                )
             else:
                 enrollment = Enrollment.objects.select_for_update().filter(
                     learner=learner,
@@ -2587,11 +2597,6 @@ def class_transfer(request):
                     form.add_error(
                         "destination_class",
                         "Học viên này đã có trong lớp mới.",
-                    )
-                elif destination_class.status != TrainingClass.Status.OPEN:
-                    form.add_error(
-                        "destination_class",
-                        "Lớp mới đã đóng, không thể nhận học viên.",
                     )
                 elif destination_class.enrolled_count >= destination_class.max_students:
                     form.add_error(
@@ -2652,6 +2657,17 @@ def class_transfer(request):
         for item in destination_classes
         if item._enrollment_count >= item.max_students
     ]
+    source_classes = form.fields["source_class"].queryset
+    closed_source_class_ids = [
+        str(item.pk)
+        for item in source_classes
+        if item.status == TrainingClass.Status.CLOSED
+    ]
+    closed_destination_class_ids = [
+        str(item.pk)
+        for item in destination_classes
+        if item.status == TrainingClass.Status.CLOSED
+    ]
     return render(
         request,
         "training/class_transfer_form.html",
@@ -2666,6 +2682,8 @@ def class_transfer(request):
             "form": form,
             "has_enrollments": Enrollment.objects.exists(),
             "full_destination_class_ids": full_destination_class_ids,
+            "closed_source_class_ids": closed_source_class_ids,
+            "closed_destination_class_ids": closed_destination_class_ids,
             "show_full_capacity_popup": show_full_capacity_popup,
             "capacity_class_label": (
                 form.fields["destination_class"].label_from_instance(destination_class)
@@ -2755,6 +2773,10 @@ def class_transfer_history(request):
 @education_required
 def class_assignments(request, class_id):
     training_class = get_object_or_404(TrainingClass, pk=class_id)
+    if training_class.status == TrainingClass.Status.CLOSED:
+        messages.error(request, "Lớp đã đóng, chỉ có thể xem thông tin lớp.")
+        return redirect("class-detail", class_id=class_id)
+
     form = ClassAssignmentForm(
         request.POST if request.method == "POST" else None,
         training_class=training_class,
@@ -2803,6 +2825,11 @@ def class_assignments(request, class_id):
 @education_required
 @require_POST
 def remove_class_assignment(request, class_id, assignment_id):
+    training_class = get_object_or_404(TrainingClass, pk=class_id)
+    if training_class.status == TrainingClass.Status.CLOSED:
+        messages.error(request, "Lớp đã đóng, chỉ có thể xem thông tin lớp.")
+        return redirect("class-detail", class_id=class_id)
+
     assignment = get_object_or_404(
         ClassAssignment,
         pk=assignment_id,
