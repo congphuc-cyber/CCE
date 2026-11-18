@@ -112,7 +112,102 @@
     <h2 class="cce-card-title" id="class-learners-title">Học viên đã ghi danh ({{ training_class.enrolled_count }} / {{ training_class.max_students }})</h2>
   </div>
 
-  {% include "training/partials/data_table.html" with columns=columns rows=learners page_obj=page_obj hide_actions=True %}
+  <div class="cce-table-wrap">
+    <table class="cce-table cce-table-centered">
+      <thead>
+        <tr>
+          <th scope="col">Họ và tên</th>
+          <th scope="col">Số điện thoại</th>
+          <th scope="col">Địa chỉ email</th>
+          {% if can_manage %}<th scope="col">Hành động</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for learner in learners %}
+          <tr>
+            <td>{{ learner.name }}</td>
+            <td>{{ learner.phone }}</td>
+            <td>{{ learner.email }}</td>
+            {% if can_manage %}
+              <td style="white-space: nowrap;">
+                {% if learner.has_final_result %}
+                  <button class="cce-table-btn table-action-delete" type="button"
+                          data-bs-target="#enrollment-cancel-blocked-modal"
+                          data-modal-message="{{ learner.cancel_block_reason }}"
+                          aria-haspopup="dialog"
+                          aria-controls="enrollment-cancel-blocked-modal"
+                          aria-label="Không thể hủy ghi danh của {{ learner.name }}">
+                    Không thể hủy ghi danh
+                  </button>
+                {% else %}
+                  <button class="cce-table-btn table-action-delete" type="button"
+                          data-bs-target="#{{ learner.cancel_modal_id }}"
+                          aria-label="Hủy ghi danh của {{ learner.name }}">
+                    Hủy ghi danh
+                  </button>
+                {% endif %}
+              </td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% if can_manage %}4{% else %}3{% endif %}" class="cce-empty-state">
+              Không có dữ liệu
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
+  {% if can_manage %}
+    {% for learner in learners %}
+      {% if not learner.has_final_result %}
+        {% include "training/partials/confirm_modal.html" with modal_id=learner.cancel_modal_id modal_title="Xác nhận hủy ghi danh" modal_message=learner.cancel_confirmation_message confirm_label="Hủy ghi danh" confirm_action=learner.cancel_url %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if can_manage and has_blocked_enrollments %}
+    <div class="cce-modal-backdrop" id="enrollment-cancel-blocked-modal"
+         role="dialog" aria-modal="true"
+         aria-labelledby="enrollment-cancel-blocked-title"
+         aria-describedby="enrollment-cancel-blocked-message">
+      <div class="cce-modal-dialog">
+        <div class="cce-modal-header">
+          <h3 class="cce-modal-title" id="enrollment-cancel-blocked-title">
+            Không thể hủy ghi danh
+          </h3>
+          <button type="button" class="cce-btn cce-btn-danger-quiet cce-btn-sm"
+                  data-close-enrollment-cancel-blocked
+                  aria-label="Đóng">&times;</button>
+        </div>
+        <div class="cce-modal-body">
+          <p id="enrollment-cancel-blocked-message"></p>
+        </div>
+        <div class="cce-modal-footer">
+          <button type="button" class="cce-btn cce-btn-secondary"
+                  data-close-enrollment-cancel-blocked>Đã hiểu</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var modal = document.getElementById("enrollment-cancel-blocked-modal");
+        var message = document.getElementById("enrollment-cancel-blocked-message");
+        document.querySelectorAll('[data-bs-target="#enrollment-cancel-blocked-modal"]').forEach(function (button) {
+          button.addEventListener("click", function () {
+            message.textContent = button.dataset.modalMessage;
+            modal.classList.add("is-open");
+          });
+        });
+        modal.querySelectorAll("[data-close-enrollment-cancel-blocked]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            modal.classList.remove("is-open");
+          });
+        });
+      })();
+    </script>
+  {% endif %}
 </section>
 
 <!-- Modal for Closing Class with Mandatory Reason -->

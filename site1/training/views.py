@@ -12,7 +12,7 @@ from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
@@ -2307,7 +2307,26 @@ def class_detail(request, class_id):
         raise PermissionDenied
 
     can_manage = _can_manage_classes(request.user)
-    enrollments = training_class.enrollments.select_related("learner").order_by("learner__full_name")
+    enrollments = (
+        training_class.enrollments.select_related("learner")
+        .annotate(
+            has_final_score=Exists(
+                FinalCourseResult.objects.filter(
+                    training_class=training_class,
+                    learner_id=OuterRef("learner_id"),
+                    score__isnull=False,
+                )
+            ),
+            has_absence=Exists(
+                FinalCourseResult.objects.filter(
+                    training_class=training_class,
+                    learner_id=OuterRef("learner_id"),
+                    is_absent=True,
+                )
+            ),
+        )
+        .order_by("learner__full_name")
+    )
     page_obj = Paginator(enrollments, PAGE_SIZE).get_page(request.GET.get("page"))
     learners = [
         {
@@ -2315,6 +2334,21 @@ def class_detail(request, class_id):
             "name": enrollment.learner.full_name,
             "phone": enrollment.learner.phone,
             "email": enrollment.learner.email,
+            "has_final_result": enrollment.has_final_score or enrollment.has_absence,
+            "cancel_block_reason": (
+                "Học viên đã có điểm cuối khóa nên không thể hủy ghi danh."
+                if enrollment.has_final_score
+                else "Học viên đã được ghi nhận vắng nên không thể hủy ghi danh."
+            ),
+            "cancel_modal_id": f"cancel-enrollment-{enrollment.pk}",
+            "cancel_confirmation_message": (
+                f"Bạn có chắc chắn muốn hủy ghi danh {enrollment.learner.full_name} "
+                f"khỏi lớp {training_class.name}? Thao tác này không thể hoàn tác."
+            ),
+            "cancel_url": reverse(
+                "class-enrollment-cancel",
+                args=(training_class.pk, enrollment.pk),
+            ),
         }
         for enrollment in page_obj
     ]
@@ -2347,12 +2381,10 @@ def class_detail(request, class_id):
             "assignments": assignments,
             "teachers_page_obj": assignments,
             "learners": learners,
+            "has_blocked_enrollments": any(
+                learner["has_final_result"] for learner in learners
+            ),
             "page_obj": page_obj,
-            "columns": [
-                {"key": "name", "label": "Họ và tên"},
-                {"key": "phone", "label": "Số điện thoại"},
-                {"key": "email", "label": "Địa chỉ email"},
-            ],
             "can_manage": can_manage,
             "can_enroll": can_enroll,
             "class_change_url": reverse(
@@ -2455,6 +2487,44 @@ def enroll_learner(request, class_id):
             "class_detail_url": reverse("class-detail", args=(class_id,)),
         },
     )
+
+
+@education_required
+@require_POST
+def cancel_enrollment(request, class_id, enrollment_id):
+    with transaction.atomic():
+        enrollment = get_object_or_404(
+            Enrollment.objects.select_for_update().select_related(
+                "training_class",
+                "learner",
+            ),
+            pk=enrollment_id,
+            training_class_id=class_id,
+        )
+        has_final_result = FinalCourseResult.objects.filter(
+            training_class_id=class_id,
+            learner_id=enrollment.learner_id,
+        ).filter(Q(score__isnull=False) | Q(is_absent=True)).exists()
+        if has_final_result:
+            messages.error(
+                request,
+                "Không thể hủy ghi danh vì học viên đã có điểm cuối khóa hoặc được ghi nhận vắng.",
+            )
+            return redirect("class-detail", class_id=class_id)
+
+        old_values = snapshot_instance(enrollment)
+        object_label = f"{enrollment.learner.full_name} — {enrollment.training_class.name}"
+        record_audit(
+            request.user,
+            AuditLog.Action.DELETE,
+            enrollment,
+            old_values=old_values,
+            object_label=object_label,
+        )
+        enrollment.delete()
+
+    messages.success(request, "Đã hủy ghi danh học viên khỏi lớp.")
+    return redirect("class-detail", class_id=class_id)
 
 
 @education_required

@@ -63,6 +63,11 @@ urlpatterns = [
     path('classes/<int:class_id>/', training.class_detail, name='class-detail'),
     path('classes/<int:class_id>/close/', training.close_class, name='class-close'),
     path('classes/<int:class_id>/enroll/', training.enroll_learner, name='class-enroll'),
+    path(
+        'classes/<int:class_id>/enrollments/<int:enrollment_id>/cancel/',
+        training.cancel_enrollment,
+        name='class-enrollment-cancel',
+    ),
     path('classes/<int:class_id>/teachers/', training.class_assignments, name='class-assignments'),
     path(
         'classes/<int:class_id>/teachers/<int:assignment_id>/remove/',
