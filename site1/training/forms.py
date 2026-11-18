@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -203,6 +204,38 @@ class TrainingClassAdminForm(forms.ModelForm):
         if legacy_session == "":
             legacy_session = None
         return ordered_weekdays, session, legacy_session
+
+    @classmethod
+    def calculate_tenth_session_date(cls, start_date, schedule):
+        if not start_date:
+            return None
+
+        weekdays, _session, _legacy_session = cls._parse_schedule(schedule)
+        weekday_numbers = {
+            "mon": 0,
+            "tue": 1,
+            "wed": 2,
+            "thu": 3,
+            "fri": 4,
+            "sat": 5,
+            "sun": 6,
+        }
+        scheduled_weekdays = {
+            weekday_numbers[weekday]
+            for weekday in weekdays
+            if weekday in weekday_numbers
+        }
+        if not scheduled_weekdays:
+            return None
+
+        session_date = start_date
+        sessions_count = 0
+        while sessions_count < 10:
+            if session_date.weekday() in scheduled_weekdays:
+                sessions_count += 1
+                if sessions_count == 10:
+                    return session_date
+            session_date += timedelta(days=1)
 
     def clean_weekdays(self):
         weekdays = self.cleaned_data.get("weekdays", [])

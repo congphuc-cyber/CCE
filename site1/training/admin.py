@@ -215,6 +215,7 @@ class TrainingClassAdmin(BaseModelAdmin):
         "format_display",
         "schedule_display",
         "start_date_display",
+        "end_date_display",
         "capacity_display",
         "status_badge",
         "edit_action",
@@ -280,6 +281,14 @@ class TrainingClassAdmin(BaseModelAdmin):
     @admin.display(description="Ngày khai giảng", empty_value="Chưa có thông tin")
     def start_date_display(self, obj):
         return obj.start_date.strftime("%d/%m/%Y") if obj.start_date else None
+
+    @admin.display(description="Ngày kết thúc", empty_value="Chưa có thông tin")
+    def end_date_display(self, obj):
+        end_date = TrainingClassAdminForm.calculate_tenth_session_date(
+            obj.start_date,
+            obj.schedule,
+        )
+        return end_date.strftime("%d/%m/%Y") if end_date else None
 
     @admin.display(description="Sĩ số hiện tại / tối đa")
     def capacity_display(self, obj):
