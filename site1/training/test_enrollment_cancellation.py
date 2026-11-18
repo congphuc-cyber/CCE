@@ -125,3 +125,41 @@ class EnrollmentCancellationTests(TestCase):
                     response,
                     "Không thể hủy ghi danh vì học viên đã có điểm cuối khóa hoặc được ghi nhận vắng.",
                 )
+
+    def test_closed_class_prevents_cancellation_with_or_without_final_results(self):
+        cases = (
+            ("Học viên chưa có kết quả", None, False),
+            ("Học viên đã có điểm", Decimal("80"), False),
+            ("Học viên vắng", None, True),
+        )
+        self.training_class.status = TrainingClass.Status.CLOSED
+        self.training_class.save(update_fields=("status",))
+
+        self.create_enrollment("Học viên chưa có kết quả trên trang")
+        page_response = self.client.get(
+            reverse("class-detail", args=(self.training_class.pk,))
+        )
+        self.assertContains(page_response, "Lớp đã đóng nên không thể hủy ghi danh.")
+        self.assertNotContains(page_response, "Xác nhận hủy ghi danh")
+
+        for name, score, is_absent in cases:
+            with self.subTest(name=name):
+                learner, enrollment = self.create_enrollment(name)
+                if score is not None or is_absent:
+                    FinalCourseResult.objects.create(
+                        training_class=self.training_class,
+                        learner=learner,
+                        score=score,
+                        is_absent=is_absent,
+                    )
+
+                response = self.client.post(
+                    reverse(
+                        "class-enrollment-cancel",
+                        args=(self.training_class.pk, enrollment.pk),
+                    ),
+                    follow=True,
+                )
+
+                self.assertTrue(Enrollment.objects.filter(pk=enrollment.pk).exists())
+                self.assertContains(response, "Lớp đã đóng nên không thể hủy ghi danh.")

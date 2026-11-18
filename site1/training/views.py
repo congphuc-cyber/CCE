@@ -2335,10 +2335,18 @@ def class_detail(request, class_id):
             "phone": enrollment.learner.phone,
             "email": enrollment.learner.email,
             "has_final_result": enrollment.has_final_score or enrollment.has_absence,
+            "can_cancel": (
+                training_class.status == TrainingClass.Status.OPEN
+                and not (enrollment.has_final_score or enrollment.has_absence)
+            ),
             "cancel_block_reason": (
-                "Học viên đã có điểm cuối khóa nên không thể hủy ghi danh."
-                if enrollment.has_final_score
-                else "Học viên đã được ghi nhận vắng nên không thể hủy ghi danh."
+                "Lớp đã đóng nên không thể hủy ghi danh."
+                if training_class.status == TrainingClass.Status.CLOSED
+                else (
+                    "Học viên đã có điểm cuối khóa nên không thể hủy ghi danh."
+                    if enrollment.has_final_score
+                    else "Học viên đã được ghi nhận vắng nên không thể hủy ghi danh."
+                )
             ),
             "cancel_modal_id": f"cancel-enrollment-{enrollment.pk}",
             "cancel_confirmation_message": (
@@ -2382,7 +2390,7 @@ def class_detail(request, class_id):
             "teachers_page_obj": assignments,
             "learners": learners,
             "has_blocked_enrollments": any(
-                learner["has_final_result"] for learner in learners
+                not learner["can_cancel"] for learner in learners
             ),
             "page_obj": page_obj,
             "can_manage": can_manage,
@@ -2493,14 +2501,19 @@ def enroll_learner(request, class_id):
 @require_POST
 def cancel_enrollment(request, class_id, enrollment_id):
     with transaction.atomic():
+        training_class = get_object_or_404(
+            TrainingClass.objects.select_for_update(),
+            pk=class_id,
+        )
         enrollment = get_object_or_404(
-            Enrollment.objects.select_for_update().select_related(
-                "training_class",
-                "learner",
-            ),
+            Enrollment.objects.select_for_update().select_related("learner"),
             pk=enrollment_id,
             training_class_id=class_id,
         )
+        if training_class.status == TrainingClass.Status.CLOSED:
+            messages.error(request, "Lớp đã đóng nên không thể hủy ghi danh.")
+            return redirect("class-detail", class_id=class_id)
+
         has_final_result = FinalCourseResult.objects.filter(
             training_class_id=class_id,
             learner_id=enrollment.learner_id,

@@ -130,7 +130,7 @@
             <td>{{ learner.email }}</td>
             {% if can_manage %}
               <td style="white-space: nowrap;">
-                {% if learner.has_final_result %}
+                {% if not learner.can_cancel %}
                   <button class="cce-table-btn table-action-delete" type="button"
                           data-bs-target="#enrollment-cancel-blocked-modal"
                           data-modal-message="{{ learner.cancel_block_reason }}"
@@ -162,7 +162,7 @@
   {% include "training/partials/pagination.html" with page_obj=page_obj count_label="bản ghi" %}
   {% if can_manage %}
     {% for learner in learners %}
-      {% if not learner.has_final_result %}
+      {% if learner.can_cancel %}
         {% include "training/partials/confirm_modal.html" with modal_id=learner.cancel_modal_id modal_title="Xác nhận hủy ghi danh" modal_message=learner.cancel_confirmation_message confirm_label="Hủy ghi danh" confirm_action=learner.cancel_url %}
       {% endif %}
     {% endfor %}
